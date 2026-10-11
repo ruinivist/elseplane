@@ -11,11 +11,12 @@ import 'package:flutter/material.dart';
 abstract class CanvasElementModel<T extends CanvasElementData> extends ChangeNotifier {
   // ---------- Construction ----------
 
-  CanvasElementModel(this.data);
+  CanvasElementModel(T data) : _data = data;
 
   // ---------- State ----------
 
-  final T data;
+  T _data;
+  T get data => _data;
   final ValueNotifier<int> _documentRevision = ValueNotifier(0);
   bool _selected = false;
   bool _active = false;
@@ -27,6 +28,20 @@ abstract class CanvasElementModel<T extends CanvasElementData> extends ChangeNot
     _documentRevision.value++;
     if (rebuild) notifyListeners();
   }
+
+  /// Restores persisted state without recording a document edit.
+  void restoreData(covariant T snapshot) {
+    if (snapshot.id != data.id || snapshot.runtimeType != data.runtimeType) {
+      throw ArgumentError('Restoration must preserve element identity and type');
+    }
+    final previous = _data;
+    _data = snapshot;
+    synchronizeRestoredData(previous);
+    notifyListeners();
+  }
+
+  @protected
+  void synchronizeRestoredData(T previous) {}
 
   bool get selected => _selected;
 

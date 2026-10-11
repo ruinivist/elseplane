@@ -101,14 +101,13 @@ class _CodeTitleTab extends StatelessWidget {
                   child: TextFormField(
                     key: ValueKey(editing ? 'code-title-input' : 'code-title-text'),
                     contextMenuBuilder: null,
-                    initialValue: model.title,
+                    controller: model.titleController,
                     style: style,
                     cursorColor: colors.accent,
                     readOnly: !editing,
                     canRequestFocus: editing,
                     showCursor: editing,
                     enableInteractiveSelection: editing,
-                    onChanged: (title) => model.title = title,
                     decoration: InputDecoration(
                       hintText: 'Untitled',
                       hintStyle: style.copyWith(color: colors.textMuted),

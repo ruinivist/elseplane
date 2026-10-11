@@ -278,11 +278,17 @@ void main() {
           expect(_order(store.persisted!), expected);
           await _shortcut(tester, LogicalKeyboardKey.keyZ);
           expect(canvas.childOrder, ['a', 'b', 'c', 'd']);
+          for (final id in before.keys) {
+            expect(_models(tester)[id], same(before[id]));
+          }
           await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
           expect(canvas.childOrder, expected);
           await _shortcut(tester, LogicalKeyboardKey.keyZ);
           await _shortcut(tester, LogicalKeyboardKey.keyZ);
           expect(canvas.childOrder, ['a', 'b', 'c', 'd']);
+          for (final id in before.keys) {
+            expect(_models(tester)[id], same(before[id]));
+          }
           await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
           await pumpPastSave(tester);
           await tester.pumpWidget(const SizedBox());

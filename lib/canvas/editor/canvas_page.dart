@@ -1816,6 +1816,7 @@ class _CanvasPageState extends State<CanvasPage> {
   void _removeElements(
     Iterable<CanvasElementModel> models, {
     bool finishHistory = true,
+    bool saveDocument = true,
   }) {
     if (!_documentLoaded) return;
     final modelsToDispose = models.where(_elements.contains).toList();
@@ -1849,7 +1850,7 @@ class _CanvasPageState extends State<CanvasPage> {
         model.dispose();
       }
     });
-    _scheduleDocumentSave();
+    if (saveDocument) _scheduleDocumentSave();
     if (finishHistory) _finishHistoryOperation();
   }
 
@@ -2488,10 +2489,47 @@ class _CanvasPageState extends State<CanvasPage> {
   void _restoreHistory(_CanvasHistoryEntry entry) {
     final documentChanged = _historyCurrent?.document != entry.document;
     _historyOperationActive = false;
-    if (documentChanged) _replaceLiveModels(CanvasDocument.fromJson(jsonDecode(entry.document)));
     _applyTool(entry.tool, touchSelectionEnabled: entry.touchSelectionEnabled);
+    if (documentChanged) _restoreLiveModels(CanvasDocument.fromJson(jsonDecode(entry.document)));
     _historyCurrent = entry;
     if (documentChanged) _scheduleDocumentSave();
+  }
+
+  void _restoreLiveModels(CanvasDocument document) {
+    _documentGeneration++;
+    _clearSelection();
+    final snapshots = {for (final data in document.elements) data.id: data};
+    _removeElements(
+      _elements.where((model) {
+        final snapshot = snapshots[model.data.id];
+        return snapshot == null || snapshot.runtimeType != model.data.runtimeType;
+      }).toList(),
+      finishHistory: false,
+      saveDocument: false,
+    );
+    final survivors = {for (final model in _elements) model.data.id: model};
+    final restored = <CanvasElementModel>[];
+    for (final snapshot in document.elements) {
+      final model = survivors[snapshot.id];
+      if (model == null) {
+        final added = _createElementModel(snapshot);
+        _mountElement(added);
+        restored.add(added);
+      } else {
+        if (jsonEncode(model.data.toJson()) != jsonEncode(snapshot.toJson())) {
+          model.restoreData(snapshot);
+        }
+        restored.add(model);
+      }
+    }
+    _elements
+      ..clear()
+      ..addAll(restored);
+    _canvasController.setChildOrder(document.elements.map((data) => data.id).toList());
+    if (_canvasBackgroundKind != document.background) {
+      _canvasBackgroundKind = document.background;
+      _canvasController.background = document.background.build(BTheme.of(context).colors);
+    }
   }
 
   // ---------- Rendering ----------

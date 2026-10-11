@@ -433,6 +433,29 @@ void main() {
   }
 
   for (final cut in [false, true]) {
+    testWidgets('pending ${cut ? 'Cut' : 'Paste'} is canceled by document undo', (tester) async {
+      final read = Completer<CanvasClipboardSnapshot>();
+      final write = Completer<void>();
+      final store = TestCanvasDocumentStore(_menuDocument);
+      await pumpCanvas(tester, store, readClipboard: () => read.future, writeClipboardText: (_) => write.future);
+      final model = tester.widgetList<Shape>(find.byType(Shape)).first.model;
+      final position = model.data.position;
+      model.moveBy(const Offset(10, 10));
+      await tester.pump();
+      await _openMenu(tester, const Offset(320, 320));
+      await tester.tap(find.text(cut ? 'Cut' : 'Paste'));
+      await tester.pump();
+      await _shortcut(tester, LogicalKeyboardKey.keyZ);
+      expect(model.data.position, position);
+      read.complete((text: encodeCanvasClipboard(_menuDocument.elements), image: null));
+      write.complete();
+      await tester.pumpAndSettle();
+      expect(tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller.childOrder, ['a', 'b']);
+      expect(tester.widgetList<Shape>(find.byType(Shape)).first.model, same(model));
+      await pumpPastSave(tester);
+      expect(store.persisted!.toJson(), _menuDocument.toJson());
+    });
+
     testWidgets('pending ${cut ? 'Cut' : 'Paste'} cannot affect a replacement document', (tester) async {
       final read = Completer<CanvasClipboardSnapshot>();
       final write = Completer<void>();

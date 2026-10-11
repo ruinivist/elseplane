@@ -10,7 +10,12 @@ part of 'pen_tool.dart';
 class PenStrokeModel extends CanvasElementModel<PenElementData> {
   PenStrokeModel(super.data) : path = createPenPath(data.points, data.width, data.streamline);
 
-  final Path path;
+  Path path;
+
+  @override
+  void synchronizeRestoredData(PenElementData previous) {
+    path = createPenPath(data.points, data.width, data.streamline);
+  }
 
   @override
   Offset get canvasPosition => data.position;

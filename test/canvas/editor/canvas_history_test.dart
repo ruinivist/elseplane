@@ -1,6 +1,8 @@
 // Verifies undo and redo behavior for canvas mutations.
 // Exercises editor history through persisted element changes.
 
+import 'dart:ui' as ui;
+
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
@@ -11,6 +13,8 @@ import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
 import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:elseplane/theme/fonts.dart';
+import 'package:elseplane/ui/common/select.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -29,6 +33,200 @@ void main() {
     GoogleFontsLite.config.allowRuntimeFetching = false;
   });
   tearDown(() => GoogleFontsLite.config.allowRuntimeFetching = true);
+
+  testWidgets('unrelated undo retains mixed canvas resources and widget states', (tester) async {
+    final document = _textDocument();
+    document.elements.addAll([
+      (_codeDocument().elements.first as CodeElementData)..position = const Offset(500, 240),
+      MediaElementData(
+        id: 'media',
+        position: const Offset(80, 100),
+        width: 120,
+        url: 'attachments/11111111-1111-4111-8111-111111111111.png',
+      ),
+      _penDocument(1).elements.single,
+    ]);
+    document.elements.add(
+      (_penDocument(1).elements.single as PenElementData).copy(id: 'offscreen')..position = const Offset(10000, 10000),
+    );
+    (document.elements[1] as CodeElementData).source = List.generate(80, (i) => '$i ${'long source ' * 30}').join('\n');
+    final attachments = _CountingAttachments({
+      'attachments/11111111-1111-4111-8111-111111111111.png': onePixelPngBytes,
+    });
+    final store = TestCanvasDocumentStore(document);
+    await _cacheAttachmentImage();
+    await pumpCanvas(tester, store, attachmentStore: attachments);
+    await tester.pumpAndSettle();
+    final text = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final codeFinder = find.byType(CodeTool);
+    final code = tester.widget<CodeTool>(codeFinder).model;
+    final codeState = tester.state(codeFinder);
+    final imageFinder = find.byKey(const ValueKey('media-image'));
+    final imageState = tester.state(imageFinder);
+    final media = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final image = media.image;
+    final pen = _stroke(tester);
+    code.scrollController.verticalScroller.jumpTo(120);
+    await tester.pump();
+    final vertical = code.scrollController.verticalScroller.offset;
+    final horizontal = code.scrollController.horizontalScroller;
+    expect(vertical, greaterThan(0));
+    text.controller.text = 'changed';
+    await _shortcut(tester);
+    expect(text.controller.text, 'original');
+    for (final redo in [true, false, true]) {
+      await _shortcut(tester, redo: redo);
+      expect(tester.widget<TextTool>(find.byType(TextTool)).model, same(text));
+      expect(tester.widget<CodeTool>(codeFinder).model, same(code));
+      expect(tester.state(codeFinder), same(codeState));
+      expect(tester.state(imageFinder), same(imageState));
+      expect(media.image, same(image));
+      expect(_stroke(tester), same(pen));
+      expect(code.scrollController.verticalScroller.offset, vertical);
+      expect(code.scrollController.horizontalScroller, same(horizontal));
+      expect(attachments.reads, 1);
+      expect(
+        tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller.childOrder,
+        document.elements.map((data) => data.id).toList(),
+      );
+    }
+    await pumpPastSave(tester);
+    expect((store.persisted!.elements.first as TextElementData).markdown, 'changed');
+  });
+
+  testWidgets('code restore synchronizes source and visible title without extra history', (tester) async {
+    final store = TestCanvasDocumentStore(_codeDocument()..elements.removeLast());
+    await pumpCanvas(tester, store);
+    final code = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+    final controller = code.controller;
+    final titleController = code.titleController;
+    controller.runRevocableOp(() => controller.text = 'changed source');
+    titleController.text = 'changed.dart';
+    code
+      ..moveBy(const Offset(10, 10))
+      ..rotate(0.2)
+      ..size = const Size(300, 260);
+    await _shortcut(tester);
+    expect(tester.widget<CodeTool>(find.byType(CodeTool)).model, same(code));
+    expect(code.controller, same(controller));
+    expect(code.titleController, same(titleController));
+    expect(controller.text, 'void main() {}');
+    expect(controller.canUndo, isFalse);
+    expect(titleController.text, 'main.dart');
+    expect(find.text('main.dart'), findsOneWidget);
+    expect(code.rotation, 0);
+    expect(code.size, const Size(280, 240));
+    await _shortcut(tester, redo: true);
+    expect(controller.text, 'changed source');
+    expect(titleController.text, 'changed.dart');
+    expect(find.text('changed.dart'), findsOneWidget);
+    expect(code.rotation, 0.2);
+    final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
+    expect(canvas.getInfo(code.data.id).gsPosition, code.canvasPosition);
+    await _shortcut(tester);
+    await _shortcut(tester);
+    expect(controller.text, 'void main() {}');
+    await _shortcut(tester, redo: true);
+    expect(controller.text, 'changed source');
+  });
+
+  testWidgets('media transforms retain image and changed sources reload on restore', (tester) async {
+    final attachments = _CountingAttachments({
+      'attachments/11111111-1111-4111-8111-111111111111.png': onePixelPngBytes,
+      'attachments/22222222-2222-4222-8222-222222222222.png': onePixelPngBytes,
+    });
+    final store = TestCanvasDocumentStore(
+      CanvasDocument(
+        background: CanvasBackgroundKind.plain,
+        elements: [
+          MediaElementData(
+            id: 'media',
+            position: const Offset(200, 200),
+            width: 160,
+            url: 'attachments/11111111-1111-4111-8111-111111111111.png',
+          ),
+        ],
+      ),
+    );
+    await _cacheAttachmentImage();
+    await pumpCanvas(tester, store, attachmentStore: attachments);
+    await tester.pumpAndSettle();
+    final media = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final image = media.image;
+    expect(media.hasImage, isTrue);
+    media
+      ..moveBy(const Offset(10, 20))
+      ..rotate(0.3)
+      ..resizeBy(const Offset(50, 50));
+    await _shortcut(tester);
+    expect(media.data.position, const Offset(200, 200));
+    expect(media.rotation, 0);
+    expect(media.data.width, 160);
+    expect(media.image, same(image));
+    expect(attachments.reads, 1);
+    await _shortcut(tester, redo: true);
+    expect(media.rotation, 0.3);
+    expect(media.image, same(image));
+    media.controller.text = 'attachments/22222222-2222-4222-8222-222222222222.png';
+    await tester.pumpAndSettle();
+    expect(attachments.reads, 2);
+    await _shortcut(tester);
+    await tester.pumpAndSettle();
+    expect(media.controller.text, 'attachments/11111111-1111-4111-8111-111111111111.png');
+    expect(media.data.url, 'attachments/11111111-1111-4111-8111-111111111111.png');
+    expect(media.hasImage, isTrue);
+    expect(attachments.reads, 3);
+    await _shortcut(tester, redo: true);
+    await tester.pumpAndSettle();
+    expect(media.data.url, 'attachments/22222222-2222-4222-8222-222222222222.png');
+    expect(attachments.reads, 4);
+  });
+
+  test('restore rejects identity changes and refreshes pen geometry without edits', () {
+    final pen = PenStrokeModel(_penDocument(1).elements.single as PenElementData);
+    var edits = 0;
+    pen.documentChanges.addListener(() => edits++);
+    final path = pen.path;
+    final snapshot = pen.data.copy()..width = 20;
+    pen.restoreData(snapshot);
+    expect(pen.path, isNot(same(path)));
+    expect(pen.path.getBounds(), isNot(path.getBounds()));
+    expect(edits, 0);
+    expect(() => pen.restoreData(snapshot.copy(id: 'other')), throwsArgumentError);
+    expect(pen.data, same(snapshot));
+    pen.dispose();
+  });
+
+  testWidgets('background undo retains objects and saves one reversible step', (tester) async {
+    final store = TestCanvasDocumentStore(_document());
+    await pumpCanvas(tester, store);
+    final pen = _stroke(tester);
+    final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
+    final originalBackground = canvas.background;
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Canvas').last);
+    await tester.pumpAndSettle();
+    tester.widget<Select<CanvasBackgroundKind>>(find.byKey(const ValueKey('canvas-background-select'))).onChanged!(
+      CanvasBackgroundKind.dotGrid,
+    );
+    await tester.tap(find.byKey(const ValueKey('settings-close')));
+    await tester.pumpAndSettle();
+    await pumpPastSave(tester);
+    expect(store.persisted!.background, CanvasBackgroundKind.dotGrid);
+    expect(canvas.background, isNot(same(originalBackground)));
+    await _shortcut(tester);
+    await pumpPastSave(tester);
+    expect(store.persisted!.background, CanvasBackgroundKind.plain);
+    final restoredBackground = canvas.background;
+    await _shortcut(tester);
+    expect(canvas.background, same(restoredBackground));
+    expect(_stroke(tester), same(pen));
+    await _shortcut(tester, redo: true);
+    await pumpPastSave(tester);
+    expect(store.persisted!.background, CanvasBackgroundKind.dotGrid);
+    expect(_stroke(tester), same(pen));
+  });
 
   testWidgets('stroke undo keeps Pen ready and tool selection is a separate step', (tester) async {
     final store = TestCanvasDocumentStore(_penDocument(0));
@@ -550,3 +748,25 @@ CanvasDocument _codeDocument() => CanvasDocument(
       ),
   ],
 );
+
+class _CountingAttachments extends TestAttachmentStore {
+  _CountingAttachments(super.initial);
+
+  int reads = 0;
+
+  @override
+  Future<Uint8List> read(String path) {
+    reads++;
+    return super.read(path);
+  }
+}
+
+Future<void> _cacheAttachmentImage() async {
+  final recorder = ui.PictureRecorder();
+  Canvas(recorder).drawRect(const Rect.fromLTWH(0, 0, 100, 100), Paint()..color = Colors.black);
+  final image = await recorder.endRecording().toImage(100, 100);
+  PaintingBinding.instance.imageCache.putIfAbsent(
+    MemoryImage(onePixelPngBytes),
+    () => OneFrameImageStreamCompleter(SynchronousFuture(ImageInfo(image: image))),
+  );
+}

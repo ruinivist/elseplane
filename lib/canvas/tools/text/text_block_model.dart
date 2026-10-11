@@ -116,6 +116,11 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
     );
   }
 
+  @override
+  void synchronizeRestoredData(TextElementData previous) {
+    if (controller.text != data.markdown) controller.text = data.markdown;
+  }
+
   void _syncMarkdown() {
     if (node.markdown == controller.text) return;
     node.markdown = controller.text;

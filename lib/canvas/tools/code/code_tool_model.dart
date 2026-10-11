@@ -13,11 +13,13 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
   CodeBlockModel(CodeElementData data) : super(data) {
     controller.text = data.source;
     controller.addListener(_syncSource);
+    titleController = TextEditingController(text: data.title)..addListener(_syncTitle);
   }
 
   final controller = CodeLineEditingController(
     options: const CodeLineOptions(indentSize: 4),
   );
+  late final TextEditingController titleController;
   final focusNode = FocusNode();
   final scrollController = CodeScrollController(
     verticalScroller: AnimatedScrollController(
@@ -82,6 +84,7 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
   set title(String value) {
     if (data.title == value) return;
     data.title = value;
+    if (titleController.text != value) titleController.text = value;
     notifyDocumentChanged();
   }
 
@@ -110,6 +113,17 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
 
   // ---------- Synchronization ----------
 
+  @override
+  void synchronizeRestoredData(CodeElementData previous) {
+    if (controller.text != data.source) {
+      controller.text = data.source;
+      controller.clearHistory();
+    }
+    if (titleController.text != data.title) titleController.text = data.title;
+  }
+
+  void _syncTitle() => title = titleController.text;
+
   void _syncSource() {
     if (data.source == controller.text) return;
     data.source = controller.text;
@@ -122,6 +136,9 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
   void dispose() {
     controller
       ..removeListener(_syncSource)
+      ..dispose();
+    titleController
+      ..removeListener(_syncTitle)
       ..dispose();
     focusNode.dispose();
     scrollController

@@ -103,6 +103,12 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
         );
   }
 
+  @override
+  void synchronizeRestoredData(MediaElementData previous) {
+    if (controller.text != data.url) controller.text = data.url;
+    if (previous.url.trim() != data.url.trim()) _loadImage();
+  }
+
   void _syncUrl() {
     if (data.url == controller.text) return;
     data.url = controller.text;
