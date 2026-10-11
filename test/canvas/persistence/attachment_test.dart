@@ -182,6 +182,24 @@ void main() {
     expect(await createAttachmentStore().read(path), bytes);
   });
 
+  test('web deletion removes only its attachment and tolerates missing files', () async {
+    const path = 'attachments/22222222-2222-4222-8222-222222222222.png';
+    const otherPath = 'attachments/33333333-3333-4333-8333-333333333333.png';
+    final store = createAttachmentStore();
+    await store.write(path, onePixelPngBytes);
+    await store.write(otherPath, onePixelPngBytes);
+
+    await store.delete(path);
+    expect(await store.readIfExists(path), isNull);
+    expect(await store.read(otherPath), onePixelPngBytes);
+    await store.delete(path);
+    await store.delete(otherPath);
+  });
+
+  test('attachment deletion rejects invalid paths', () async {
+    await expectLater(createAttachmentStore().delete('../attachments/image.png'), throwsFormatException);
+  });
+
   test('optional attachment reads return present bytes or null', () async {
     const path = 'attachments/00000000-0000-4000-8000-000000000000.png';
     final bytes = Uint8List.fromList(<int>[7, 8, 9]);

@@ -56,6 +56,8 @@ void main() {
             }
             final store = TestCanvasDocumentStore(document);
             final attachments = (await tester.runAsync(() async => _PausedWrite()))!;
+            const existingPath = 'attachments/11111111-1111-4111-8111-111111111111.png';
+            attachments.files[existingPath] = onePixelPngBytes;
             await pumpCanvas(tester, store, attachmentStore: attachments);
             final text = media ? null : tester.widget<TextTool>(find.byType(TextTool)).model;
             final image = media ? tester.widget<MediaTool>(find.byType(MediaTool)).model : null;
@@ -81,6 +83,7 @@ void main() {
               }
               await pending;
             });
+            expect(attachments.files, {existingPath: onePixelPngBytes});
             expect(media ? image!.data.url : text!.data.markdown, 'original');
             expect(
               media
@@ -101,6 +104,43 @@ void main() {
           },
         );
       }
+    }
+  }
+
+  for (final media in [false, true]) {
+    for (final failDelete in [false, true]) {
+      testWidgets(
+        '${media ? 'media' : 'text'} disposed upload ${failDelete ? 'stays canceled if deletion fails' : 'deletes its completed write'}',
+        (tester) async {
+          final attachments = (await tester.runAsync(() async => _PausedWrite(failDeletes: failDelete)))!;
+          final document = _textDocument();
+          if (media) {
+            document.elements[0] = MediaElementData(
+              id: 'media',
+              position: const Offset(200, 240),
+              width: 280,
+              url: 'original',
+            );
+          }
+          await pumpCanvas(tester, TestCanvasDocumentStore(document), attachmentStore: attachments);
+          final text = media ? null : tester.widget<TextTool>(find.byType(TextTool)).model;
+          final image = media ? tester.widget<MediaTool>(find.byType(MediaTool)).model : null;
+          late Future<void> pending;
+          await tester.runAsync(() async {
+            pending = media
+                ? image!.setDeviceImage(onePixelPngBytes, 'png')
+                : text!.insertPastedImage(onePixelPngBytes, 'png', attachments);
+            await attachments.started.future;
+          });
+          await tester.pumpWidget(const SizedBox());
+          await tester.runAsync(() async {
+            attachments.release.complete();
+            await pending;
+          });
+          expect(media ? image!.data.url : text!.data.markdown, 'original');
+          expect(attachments.files, hasLength(failDelete ? 1 : 0));
+        },
+      );
     }
   }
 
@@ -138,6 +178,7 @@ void main() {
         await pending;
       });
       expect(text.data.markdown, 'original');
+      expect(attachments.files, isEmpty);
       await tester.pumpAndSettle();
     });
   }
@@ -932,6 +973,16 @@ Future<void> _cacheAttachmentImage() async {
 }
 
 class _PausedWrite extends TestAttachmentStore {
+  _PausedWrite({this.failDeletes = false});
+
+  final bool failDeletes;
+
+  @override
+  Future<void> delete(String path) async {
+    if (failDeletes) throw StateError('delete failed');
+    await super.delete(path);
+  }
+
   final started = Completer<void>();
   final release = Completer<void>();
 

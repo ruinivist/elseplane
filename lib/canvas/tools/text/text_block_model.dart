@@ -120,7 +120,10 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
       final path = 'attachments/${const Uuid().v4()}.$extension';
       if (generation != asyncEditGeneration) return;
       await store.write(path, bytes);
-      if (generation != asyncEditGeneration) return;
+      if (generation != asyncEditGeneration) {
+        await store.delete(path);
+        return;
+      }
       _insertText('![pasted image]($path)');
     } on Object {
       if (generation != asyncEditGeneration) return;

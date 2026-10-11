@@ -103,7 +103,10 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
       final ratio = await _imageAspectRatio(bytes);
       if (generation != asyncEditGeneration) return;
       await attachmentStore.write(path, bytes);
-      if (generation != asyncEditGeneration) return;
+      if (generation != asyncEditGeneration) {
+        await attachmentStore.delete(path);
+        return;
+      }
 
       data.url = path;
       controller.text = path;

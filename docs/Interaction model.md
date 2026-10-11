@@ -55,7 +55,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 - Document undo and redo clear selection, activation, and editing while preserving surviving objects of the same ID and type, their controllers, scroll positions, and loaded images. Changed image sources and restored deleted objects load normally. File switching and imports replace the document completely.
 
-- Document restoration, replacement, removal, and disposal cancel pending editor pastes and image uploads, including work targeting unchanged surviving objects. Leaving editing, changing tools, and tool-only undo or redo keep pending edits alive. Ordinary image loads continue when their source is unchanged.
+- Document restoration, replacement, removal, and disposal cancel pending editor pastes and image uploads, including work targeting unchanged surviving objects. Canceled uploads attempt to delete their newly written attachment when a pending write finishes. Leaving editing, changing tools, and tool-only undo or redo keep pending edits alive. Ordinary image loads continue when their source is unchanged.
 
 - Explicit tool choices, switching tools, toggling a tool off, and Escape disabling a tool each form one undo step. Touch Select is included; choosing it from another tool is one step.
 - Undoing a stroke keeps the pen enabled. Another Undo reverses choosing the pen. Redo restores these actions in order.

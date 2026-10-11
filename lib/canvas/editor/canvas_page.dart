@@ -1764,6 +1764,11 @@ class _CanvasPageState extends State<CanvasPage> {
     }
     if (!mounted || !_documentLoaded || _filePickerOpen || _documentGeneration != generation) {
       model.dispose();
+      try {
+        await _attachmentStore.delete(model.data.url);
+      } on Object {
+        return;
+      }
       return;
     }
     _placePastedMedia(model, position);

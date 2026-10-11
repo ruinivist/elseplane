@@ -21,6 +21,19 @@ class PlatformAttachmentStore implements AttachmentStore {
   }
 
   @override
+  Future<void> delete(String path) async {
+    final fileName = attachmentFileName(path);
+    try {
+      final root = await window.navigator.storage.getDirectory().toDart;
+      final attachments = await root.getDirectoryHandle('attachments').toDart;
+      await attachments.removeEntry(fileName).toDart;
+    } catch (error) {
+      if (error.isA<DOMException>() && (error as DOMException).name == 'NotFoundError') return;
+      rethrow;
+    }
+  }
+
+  @override
   Future<Uint8List> read(String path) async {
     final file = await (await _file(path, create: false)).getFile().toDart;
     return (await file.arrayBuffer().toDart).toDart.asUint8List();

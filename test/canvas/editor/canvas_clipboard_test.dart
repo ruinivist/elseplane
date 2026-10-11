@@ -487,6 +487,43 @@ void main() {
     });
   }
 
+  for (final failDelete in [false, true]) {
+    testWidgets(
+      'canceled canvas image paste ${failDelete ? 'stays canceled if cleanup fails' : 'deletes its written attachment'}',
+      (tester) async {
+        final attachments = (await tester.runAsync(() async => _PausedImageWrite(failDeletes: failDelete)))!;
+        final store = TestCanvasDocumentStore(_menuDocument);
+        await pumpCanvas(
+          tester,
+          store,
+          attachmentStore: attachments,
+          readClipboard: () async => (text: null, image: (bytes: onePixelPngBytes, extension: 'png')),
+        );
+        final model = tester.widgetList<Shape>(find.byType(Shape)).first.model;
+        final position = model.canvasPosition;
+        model.moveBy(const Offset(10, 10));
+        await pumpPastSave(tester);
+        await tester.runAsync(() async {
+          await _shortcut(tester, LogicalKeyboardKey.keyV);
+          await attachments.started.future;
+        });
+        await _shortcut(tester, LogicalKeyboardKey.keyZ);
+        expect(model.canvasPosition, position);
+        await tester.runAsync(() async {
+          attachments.release.complete();
+          await attachments.finished.future;
+          await Future<void>.delayed(Duration.zero);
+        });
+        await tester.pumpAndSettle();
+        expect(find.byType(MediaTool), findsNothing);
+        expect(attachments.files, hasLength(failDelete ? 1 : 0));
+        expect(find.text('Could not paste canvas elements'), findsNothing);
+        await pumpPastSave(tester);
+        expect(store.persisted!.toJson(), _menuDocument.toJson());
+      },
+    );
+  }
+
   testWidgets('routes image clipboard content to media', (
     tester,
   ) async {
@@ -677,3 +714,29 @@ final _menuDocument = CanvasDocument(
       ),
   ],
 );
+
+class _PausedImageWrite extends TestAttachmentStore {
+  _PausedImageWrite({required this.failDeletes});
+
+  final bool failDeletes;
+  final started = Completer<void>();
+  final release = Completer<void>();
+  final finished = Completer<void>();
+
+  @override
+  Future<void> write(String path, Uint8List bytes) async {
+    started.complete();
+    await release.future;
+    await super.write(path, bytes);
+  }
+
+  @override
+  Future<void> delete(String path) async {
+    try {
+      if (failDeletes) throw StateError('delete failed');
+      await super.delete(path);
+    } finally {
+      finished.complete();
+    }
+  }
+}

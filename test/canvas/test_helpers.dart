@@ -43,6 +43,11 @@ class TestAttachmentStore implements AttachmentStore {
   final Map<String, Uint8List> files;
 
   @override
+  Future<void> delete(String path) async {
+    files.remove(path);
+  }
+
+  @override
   Future<Uint8List> read(String path) async {
     final bytes = files[path];
     if (bytes == null) throw StateError('Missing attachment: $path');

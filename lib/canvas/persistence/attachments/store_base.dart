@@ -20,6 +20,8 @@ void validateAttachmentSize(int byteLength, String errorMessage) {
 abstract interface class AttachmentStore {
   Future<void> write(String path, Uint8List bytes);
 
+  Future<void> delete(String path);
+
   Future<Uint8List> read(String path);
 
   Future<Uint8List?> readIfExists(String path);
