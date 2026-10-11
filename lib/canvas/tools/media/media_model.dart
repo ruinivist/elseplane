@@ -72,23 +72,49 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
 
   // ---------- Image updates ----------
 
-  Future<void> setDeviceImage(Uint8List bytes, String extension) async {
-    final normalizedExtension = extension.toLowerCase() == 'jpeg' ? 'jpg' : extension.toLowerCase();
-    if (!const {'png', 'jpg', 'gif', 'webp'}.contains(normalizedExtension)) {
-      throw const FormatException('Unsupported image type');
+  Future<void> paste(Future<ClipboardReader> readerFuture) async {
+    final generation = asyncEditGeneration;
+    try {
+      final reader = await readerFuture;
+      if (generation != asyncEditGeneration) return;
+      final clipboard = await readCanvasClipboard(reader);
+      if (generation != asyncEditGeneration) return;
+      if (clipboard.image case final image?) {
+        await setDeviceImage(image.bytes, image.extension);
+      } else if (clipboard.text case final text?) {
+        _insertPastedText(text);
+      }
+    } on Object {
+      if (generation != asyncEditGeneration) return;
+      rethrow;
     }
-    validateAttachmentSize(bytes.length, 'Image exceeds 10 MiB');
+  }
 
-    final path = 'attachments/${const Uuid().v4()}.$normalizedExtension';
-    final ratio = await _imageAspectRatio(bytes);
-    await attachmentStore.write(path, bytes);
+  Future<void> setDeviceImage(Uint8List bytes, String extension) async {
+    final generation = asyncEditGeneration;
+    try {
+      final normalizedExtension = extension.toLowerCase() == 'jpeg' ? 'jpg' : extension.toLowerCase();
+      if (!const {'png', 'jpg', 'gif', 'webp'}.contains(normalizedExtension)) {
+        throw const FormatException('Unsupported image type');
+      }
+      validateAttachmentSize(bytes.length, 'Image exceeds 10 MiB');
 
-    data.url = path;
-    controller.text = path;
-    _detachImage();
-    _image = MemoryImage(bytes);
-    _aspectRatio = ratio;
-    notifyDocumentChanged();
+      final path = 'attachments/${const Uuid().v4()}.$normalizedExtension';
+      final ratio = await _imageAspectRatio(bytes);
+      if (generation != asyncEditGeneration) return;
+      await attachmentStore.write(path, bytes);
+      if (generation != asyncEditGeneration) return;
+
+      data.url = path;
+      controller.text = path;
+      _detachImage();
+      _image = MemoryImage(bytes);
+      _aspectRatio = ratio;
+      notifyDocumentChanged();
+    } on Object {
+      if (generation != asyncEditGeneration) return;
+      rethrow;
+    }
   }
 
   // ---------- Private helpers ----------

@@ -3,7 +3,6 @@
 
 import 'dart:async';
 
-import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/tools/text/text_block_model.dart';
 import 'package:elseplane/theme/theme.dart';
@@ -66,12 +65,7 @@ class _TextMarkdownEditorState extends State<TextMarkdownEditor> {
 
   Future<void> _paste(Future<ClipboardReader> readerFuture) async {
     try {
-      final clipboard = await readCanvasClipboard(await readerFuture);
-      if (clipboard.image case final image?) {
-        await widget.model.insertPastedImage(image.bytes, image.extension, widget.attachmentStore);
-      } else if (clipboard.text case final text?) {
-        widget.model.insertPastedText(text);
-      }
+      await widget.model.paste(readerFuture, widget.attachmentStore);
     } on Object {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

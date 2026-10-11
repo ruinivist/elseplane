@@ -1833,6 +1833,7 @@ class _CanvasPageState extends State<CanvasPage> {
     }
     if (modelsToDispose.contains(_activeElement)) _setActiveElement(null);
     for (final model in modelsToDispose) {
+      model.invalidatePendingEdits();
       _editorFocusNode(model)?.unfocus();
       _editorFocusNode(model)?.removeListener(_finishHistoryOperation);
       model.removeListener(_geometryListeners.remove(model)!);
@@ -2161,6 +2162,7 @@ class _CanvasPageState extends State<CanvasPage> {
     _editingChromeModel.value = null;
 
     for (final model in oldElements) {
+      model.invalidatePendingEdits();
       model.removeListener(_geometryListeners.remove(model)!);
       model.documentChanges.removeListener(_scheduleDocumentSave);
       _editorFocusNode(model)?.removeListener(_finishHistoryOperation);
@@ -2518,6 +2520,8 @@ class _CanvasPageState extends State<CanvasPage> {
       } else {
         if (jsonEncode(model.data.toJson()) != jsonEncode(snapshot.toJson())) {
           model.restoreData(snapshot);
+        } else {
+          model.invalidatePendingEdits();
         }
         restored.add(model);
       }

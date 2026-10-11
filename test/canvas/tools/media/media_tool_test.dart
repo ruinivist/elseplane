@@ -1,6 +1,7 @@
 // Verifies media creation, loading, resizing, and persistence behavior.
 // Exercises the media tool through model and canvas widget flows.
 
+import 'dart:async';
 import 'dart:js_interop';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -9,6 +10,7 @@ import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/tools/media/media_tool.dart';
+import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +26,85 @@ import '../../test_helpers.dart';
 
 void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
+
+  for (final media in [false, true]) {
+    for (final stale in [false, true]) {
+      testWidgets(
+        '${media ? 'media' : 'text'} image paste ${stale ? 'cancels stale' : 'reports current'} write failure',
+        (tester) async {
+          final attachments = (await tester.runAsync(() async => _FailedWrite()))!;
+          final document = _document();
+          if (media) {
+            document.elements.add(
+              MediaElementData(id: 'media', position: const Offset(120, 150), width: 280, url: 'original'),
+            );
+          } else {
+            document.elements.add(
+              TextElementData(
+                id: 'text',
+                position: const Offset(120, 150),
+                width: 280,
+                height: null,
+                markdown: 'original',
+                style: const TextNodeStyle(fontFamily: 'Inter', color: '#201C1A'),
+              ),
+            );
+          }
+          await pumpCanvas(tester, TestCanvasDocumentStore(document), attachmentStore: attachments);
+          final text = media ? null : tester.widget<TextTool>(find.byType(TextTool)).model;
+          final image = media ? tester.widget<MediaTool>(find.byType(MediaTool)).model : null;
+          await tester.tap(find.byKey(ValueKey(media ? 'media-url-field' : 'text-markdown-preview')));
+          await tester.pump();
+          await tester.runAsync(() async {
+            _dispatchImagePaste(onePixelPngBytes);
+            await attachments.started.future;
+          });
+          if (stale) {
+            if (media) {
+              image!.restoreData(image.data.copy());
+            } else {
+              text!.restoreData(text.data.copy());
+            }
+          }
+          await tester.runAsync(() async {
+            attachments.release.completeError(StateError('write failed'));
+            await attachments.finished.future;
+            await Future<void>.delayed(Duration.zero);
+          });
+          await tester.pump();
+          expect(find.text('Could not paste image'), stale ? findsNothing : findsOneWidget);
+          expect(media ? image!.data.url : text!.data.markdown, 'original');
+          await tester.pumpWidget(const SizedBox());
+        },
+      );
+    }
+  }
+
+  testWidgets('restoring during image decoding prevents storage writes and silences stale decoding errors', (
+    tester,
+  ) async {
+    final attachments = TestAttachmentStore();
+    final model = MediaModel(
+      MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'),
+      attachments,
+    );
+    for (final bytes in [
+      onePixelPngBytes,
+      Uint8List.fromList([1, 2, 3]),
+    ]) {
+      await tester.runAsync(() async {
+        final pending = model.setDeviceImage(bytes, 'png');
+        model.restoreData(model.data.copy());
+        await pending;
+      });
+      expect(attachments.files, isEmpty);
+      expect(model.data.url, 'original');
+    }
+    await tester.runAsync(() async {
+      await expectLater(model.setDeviceImage(Uint8List.fromList([1, 2, 3]), 'png'), throwsFormatException);
+    });
+    model.dispose();
+  });
 
   testWidgets('media places as a selectable URL-only node', (tester) async {
     await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
@@ -436,3 +517,19 @@ CanvasDocument _document([MediaElementData? media]) => CanvasDocument(
   background: CanvasBackgroundKind.plain,
   elements: [?media],
 );
+
+class _FailedWrite extends TestAttachmentStore {
+  final started = Completer<void>();
+  final release = Completer<void>();
+  final finished = Completer<void>();
+
+  @override
+  Future<void> write(String path, Uint8List bytes) async {
+    started.complete();
+    try {
+      await release.future;
+    } finally {
+      finished.complete();
+    }
+  }
+}

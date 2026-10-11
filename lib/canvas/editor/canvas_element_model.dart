@@ -17,6 +17,10 @@ abstract class CanvasElementModel<T extends CanvasElementData> extends ChangeNot
 
   T _data;
   T get data => _data;
+  int _asyncEditGeneration = 0;
+  int get asyncEditGeneration => _asyncEditGeneration;
+
+  void invalidatePendingEdits() => _asyncEditGeneration++;
   final ValueNotifier<int> _documentRevision = ValueNotifier(0);
   bool _selected = false;
   bool _active = false;
@@ -34,6 +38,7 @@ abstract class CanvasElementModel<T extends CanvasElementData> extends ChangeNot
     if (snapshot.id != data.id || snapshot.runtimeType != data.runtimeType) {
       throw ArgumentError('Restoration must preserve element identity and type');
     }
+    invalidatePendingEdits();
     final previous = _data;
     _data = snapshot;
     synchronizeRestoredData(previous);
@@ -69,6 +74,7 @@ abstract class CanvasElementModel<T extends CanvasElementData> extends ChangeNot
 
   @override
   void dispose() {
+    invalidatePendingEdits();
     _documentRevision.dispose();
     super.dispose();
   }

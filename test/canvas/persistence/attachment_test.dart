@@ -1,18 +1,106 @@
 // Verifies attachment storage behavior and text-image integration.
 // Exercises attachment implementations through editor-facing contracts.
 
+import 'dart:async';
+
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
+import 'package:elseplane/canvas/tools/media/media_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_block_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:super_clipboard/super_clipboard.dart';
 
 import '../test_helpers.dart';
 
 // ---------- Tests ----------
 
 void main() {
+  for (final media in [false, true]) {
+    for (final failure in [false, true]) {
+      for (final dispose in [false, true]) {
+        test(
+          '${media ? 'media' : 'text'} cancels delayed reader ${failure ? 'failure' : 'text'} on ${dispose ? 'disposal' : 'restore'}',
+          () async {
+            final store = TestAttachmentStore();
+            final text = media ? null : _model('original');
+            final image = media
+                ? MediaModel(MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'), store)
+                : null;
+            final reader = Completer<ClipboardReader>();
+            final pending = media ? image!.paste(reader.future) : text!.paste(reader.future, store);
+            if (dispose) {
+              (text ?? image!).dispose();
+            } else if (media) {
+              image!.restoreData(image.data.copy());
+            } else {
+              text!.restoreData(text.data.copy());
+            }
+            if (failure) {
+              reader.completeError(StateError('clipboard failed'));
+            } else {
+              reader.complete(_TextReader(Future.value('late')));
+            }
+            await pending;
+            expect(media ? image!.data.url : text!.data.markdown, 'original');
+            expect(store.files, isEmpty);
+            if (!dispose) (text ?? image!).dispose();
+          },
+        );
+      }
+    }
+
+    test('${media ? 'media' : 'text'} cancels clipboard content already being read', () async {
+      final store = TestAttachmentStore();
+      final text = media ? null : _model('original');
+      final image = media
+          ? MediaModel(MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'), store)
+          : null;
+      final value = Completer<String>();
+      final reader = _TextReader(value.future);
+      final pending = media ? image!.paste(Future.value(reader)) : text!.paste(Future.value(reader), store);
+      await reader.started.future;
+      if (media) {
+        image!.invalidatePendingEdits();
+      } else {
+        text!.invalidatePendingEdits();
+      }
+      value.complete('late');
+      await pending;
+      expect(media ? image!.data.url : text!.data.markdown, 'original');
+      (text ?? image!).dispose();
+    });
+
+    test('${media ? 'media' : 'text'} current reader failure still reports', () async {
+      final store = TestAttachmentStore();
+      final text = media ? null : _model('original');
+      final image = media
+          ? MediaModel(MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'), store)
+          : null;
+      final reader = Completer<ClipboardReader>();
+      final pending = media ? image!.paste(reader.future) : text!.paste(reader.future, store);
+      final check = expectLater(pending, throwsStateError);
+      reader.completeError(StateError('clipboard failed'));
+      await check;
+      (text ?? image!).dispose();
+    });
+  }
+
+  test('invalidation is silent and invalid restoration keeps pending edits', () {
+    final model = _model('original');
+    var notifications = 0;
+    model.addListener(() => notifications++);
+    model.documentChanges.addListener(() => notifications++);
+    final generation = model.asyncEditGeneration;
+    expect(() => model.restoreData(model.data.copy(id: 'other')), throwsArgumentError);
+    expect(model.asyncEditGeneration, generation);
+    model.invalidatePendingEdits();
+    expect(model.asyncEditGeneration, generation + 1);
+    expect(notifications, 0);
+    model.dispose();
+  });
+
   test(
     'pasted image is committed before its short reference is inserted',
     () async {
@@ -141,5 +229,21 @@ class _FailingAttachmentStore extends TestAttachmentStore {
   Future<void> write(String path, Uint8List bytes) async {
     if (failWrites) throw StateError('write failed');
     await super.write(path, bytes);
+  }
+}
+
+class _TextReader extends ClipboardReader {
+  _TextReader(this.value) : super([]);
+
+  final Future<String> value;
+  final started = Completer<void>();
+
+  @override
+  bool canProvide(DataFormat format) => format == Formats.plainText;
+
+  @override
+  Future<T?> readValue<T extends Object>(ValueFormat<T> format) async {
+    started.complete();
+    return await value as T;
   }
 }

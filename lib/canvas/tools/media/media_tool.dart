@@ -83,12 +83,7 @@ class _MediaToolState extends State<MediaTool> {
 
   Future<void> _paste(Future<ClipboardReader> readerFuture) async {
     try {
-      final clipboard = await readCanvasClipboard(await readerFuture);
-      if (clipboard.image case final image?) {
-        await widget.model.setDeviceImage(image.bytes, image.extension);
-      } else if (clipboard.text case final text?) {
-        widget.model._insertPastedText(text);
-      }
+      await widget.model.paste(readerFuture);
     } on Object {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -98,18 +93,24 @@ class _MediaToolState extends State<MediaTool> {
   }
 
   Future<void> _pickImage() async {
+    final model = widget.model;
+    final generation = model.asyncEditGeneration;
     try {
       final file = await openFile(acceptedTypeGroups: const [_imageTypes]);
-      if (file == null) return;
+      if (file == null || generation != model.asyncEditGeneration) return;
       final separator = file.name.lastIndexOf('.');
       if (separator < 0) throw const FormatException('Missing image type');
-      validateAttachmentSize(await file.length(), 'Image exceeds 10 MiB');
-      await widget.model.setDeviceImage(
-        await file.readAsBytes(),
+      final length = await file.length();
+      if (generation != model.asyncEditGeneration) return;
+      validateAttachmentSize(length, 'Image exceeds 10 MiB');
+      final bytes = await file.readAsBytes();
+      if (generation != model.asyncEditGeneration) return;
+      await model.setDeviceImage(
+        bytes,
         file.name.substring(separator + 1),
       );
     } on Object {
-      if (!mounted) return;
+      if (!mounted || generation != model.asyncEditGeneration) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Could not open image')));

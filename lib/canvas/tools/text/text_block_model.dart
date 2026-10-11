@@ -5,10 +5,12 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:flutter/material.dart';
 import 'package:scroll_animator/scroll_animator.dart';
+import 'package:super_clipboard/super_clipboard.dart';
 import 'package:uuid/uuid.dart';
 
 // ---------- Models ----------
@@ -89,15 +91,41 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
 
   // ---------- Content insertion ----------
 
+  Future<void> paste(Future<ClipboardReader> readerFuture, AttachmentStore store) async {
+    final generation = asyncEditGeneration;
+    try {
+      final reader = await readerFuture;
+      if (generation != asyncEditGeneration) return;
+      final clipboard = await readCanvasClipboard(reader);
+      if (generation != asyncEditGeneration) return;
+      if (clipboard.image case final image?) {
+        await insertPastedImage(image.bytes, image.extension, store);
+      } else if (clipboard.text case final text?) {
+        insertPastedText(text);
+      }
+    } on Object {
+      if (generation != asyncEditGeneration) return;
+      rethrow;
+    }
+  }
+
   Future<void> insertPastedImage(
     Uint8List bytes,
     String extension,
     AttachmentStore store,
   ) async {
-    validateAttachmentSize(bytes.length, 'Image exceeds 10 MiB');
-    final path = 'attachments/${const Uuid().v4()}.$extension';
-    await store.write(path, bytes);
-    _insertText('![pasted image]($path)');
+    final generation = asyncEditGeneration;
+    try {
+      validateAttachmentSize(bytes.length, 'Image exceeds 10 MiB');
+      final path = 'attachments/${const Uuid().v4()}.$extension';
+      if (generation != asyncEditGeneration) return;
+      await store.write(path, bytes);
+      if (generation != asyncEditGeneration) return;
+      _insertText('![pasted image]($path)');
+    } on Object {
+      if (generation != asyncEditGeneration) return;
+      rethrow;
+    }
   }
 
   void insertPastedText(String text) => _insertText(text);
