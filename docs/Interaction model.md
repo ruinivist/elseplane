@@ -51,6 +51,14 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Primary-button dragging moves a stroke directly. Modifier-click and marquee selection are the only ways to select strokes.
 - Selected strokes participate in group movement and keyboard deletion.
 
+## Undo and redo
+
+- Explicit tool choices, switching tools, toggling a tool off, and Escape disabling a tool each form one undo step. Touch Select is included; choosing it from another tool is one step.
+- Undoing a stroke keeps the pen enabled. Another Undo reverses choosing the pen. Redo restores these actions in order.
+- Undoing object placement re-enables its placement tool. Automatically returning to Select belongs to the placement operation and does not add a separate step.
+- Tool-only undo and redo preserve canvas contents and object selection without saving the document. Drawing defaults, object selection, and activation are not history operations.
+- New tool choices or document edits clear redo. Tool choices share the latest 50 operations with document edits; switching files or replacing a document resets history and tools.
+
 ## Arrows
 
 - Drawing an arrow makes it active and returns to the select tool.

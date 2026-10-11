@@ -55,6 +55,8 @@ import 'package:uuid/uuid.dart';
 
 enum _CanvasTool { select, text, code, media, shape, pen, arrow, eraser }
 
+typedef _CanvasHistoryEntry = ({String document, _CanvasTool tool, bool touchSelectionEnabled});
+
 final List<({String label, Color color})> _toolColorSwatches = presetColors
     .where(
       (swatch) => switch (swatch.label) {
@@ -180,9 +182,9 @@ class _CanvasPageState extends State<CanvasPage> {
   Offset _pasteOffset = Offset.zero;
   final ValueNotifier<Offset?> _canvasPointerPosition = ValueNotifier(null);
   (String, Offset?)? _pointerReference;
-  final _undoHistory = <String>[];
-  final _redoHistory = <String>[];
-  String? _historyCurrent;
+  final _undoHistory = <_CanvasHistoryEntry>[];
+  final _redoHistory = <_CanvasHistoryEntry>[];
+  _CanvasHistoryEntry? _historyCurrent;
   var _historyOperationActive = false;
   var _penColorPickerExpanded = false;
   var _shapeOutlineColorPickerExpanded = false;
@@ -329,19 +331,28 @@ class _CanvasPageState extends State<CanvasPage> {
 
   void _toggleTool(_CanvasTool tool) {
     if (!_documentLoaded) return;
+    _applyTool(_activeTool.value != tool ? tool : _CanvasTool.select);
+    _noteHistoryChange();
+    _finishHistoryOperation();
+  }
+
+  void _applyTool(_CanvasTool tool, {bool touchSelectionEnabled = false}) {
     _closeContextMenu();
-    final enabling = _activeTool.value != tool;
+    _blockedCanvasPointers.addAll(_canvasPointers.keys);
     _cancelDrawingTools();
     _touchPlacement = null;
-    if (_pointerPan case final pan?) _blockedCanvasPointers.add(pan.pointer);
     _pointerPan = null;
-    if (_dragSelectionPointer case final pointer?) _blockedCanvasPointers.add(pointer);
+    _dragArrowPointer = null;
+    _dragArrow = null;
+    _widgetPointer = null;
+    _interactiveCanvasPointerIds.clear();
+    _selectionBeforeWidgetPointer.clear();
     _finishDragSelection(canceled: true);
     _finishHistoryOperation();
     _clearElementEditing();
     setState(() {
-      _activeTool.value = enabling ? tool : _CanvasTool.select;
-      _touchSelectionEnabled = false;
+      _activeTool.value = tool;
+      _touchSelectionEnabled = touchSelectionEnabled;
       _eraserPointer = null;
       _spaceHeld = false;
     });
@@ -349,9 +360,9 @@ class _CanvasPageState extends State<CanvasPage> {
 
   void _toggleTouchSelection() {
     if (!_documentLoaded) return;
-    final enabling = !_touchSelectionEnabled;
-    _toggleTool(_CanvasTool.select);
-    setState(() => _touchSelectionEnabled = enabling);
+    _applyTool(_CanvasTool.select, touchSelectionEnabled: !_touchSelectionEnabled);
+    _noteHistoryChange();
+    _finishHistoryOperation();
   }
 
   void _setPenColor(Color color) {
@@ -2425,7 +2436,11 @@ class _CanvasPageState extends State<CanvasPage> {
 
   // ---------- History ----------
 
-  String _captureHistory() => jsonEncode(_currentDocument().toJson());
+  _CanvasHistoryEntry _captureHistory() => (
+    document: jsonEncode(_currentDocument().toJson()),
+    tool: _activeTool.value,
+    touchSelectionEnabled: _touchSelectionEnabled,
+  );
 
   void _resetHistory() {
     _undoHistory.clear();
@@ -2473,11 +2488,13 @@ class _CanvasPageState extends State<CanvasPage> {
     _restoreHistory(_redoHistory.removeLast());
   }
 
-  void _restoreHistory(String entry) {
-    _historyCurrent = entry;
+  void _restoreHistory(_CanvasHistoryEntry entry) {
+    final documentChanged = _historyCurrent?.document != entry.document;
     _historyOperationActive = false;
-    _replaceLiveModels(CanvasDocument.fromJson(jsonDecode(entry)));
-    _scheduleDocumentSave();
+    if (documentChanged) _replaceLiveModels(CanvasDocument.fromJson(jsonDecode(entry.document)));
+    _applyTool(entry.tool, touchSelectionEnabled: entry.touchSelectionEnabled);
+    _historyCurrent = entry;
+    if (documentChanged) _scheduleDocumentSave();
   }
 
   // ---------- Rendering ----------

@@ -3,10 +3,15 @@
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_background.dart';
+import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
+import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
+import 'package:elseplane/canvas/tools/media/media_tool.dart';
 import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
+import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:elseplane/theme/fonts.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,6 +30,147 @@ void main() {
   });
   tearDown(() => GoogleFontsLite.config.allowRuntimeFetching = true);
 
+  testWidgets('stroke undo keeps Pen ready and tool selection is a separate step', (tester) async {
+    final store = TestCanvasDocumentStore(_penDocument(0));
+    await pumpCanvas(tester, store);
+    await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
+    await tester.pump();
+    await _draw(tester);
+    expect(find.byType(PenStroke), findsOneWidget);
+
+    await _shortcut(tester);
+    expect(find.byType(PenStroke), findsNothing);
+    expect(_toolSelected(tester, 'draw'), isTrue);
+    await _shortcut(tester);
+    expect(_toolSelected(tester, 'draw'), isFalse);
+    await _shortcut(tester, redo: true);
+    expect(_toolSelected(tester, 'draw'), isTrue);
+    expect(find.byType(PenStroke), findsNothing);
+    await _shortcut(tester, redo: true);
+    expect(find.byType(PenStroke), findsOneWidget);
+    expect(_toolSelected(tester, 'draw'), isTrue);
+
+    await _shortcut(tester);
+    await _draw(tester);
+    final newStroke = _stroke(tester);
+    await _shortcut(tester, redo: true);
+    expect(_stroke(tester), same(newStroke));
+    await pumpPastSave(tester);
+    expect(store.persisted!.elements.single.id, newStroke.data.id);
+  });
+
+  for (final (tool, key) in const [
+    ('text', LogicalKeyboardKey.keyT),
+    ('code', LogicalKeyboardKey.keyC),
+    ('media', LogicalKeyboardKey.keyM),
+    ('shape', LogicalKeyboardKey.keyS),
+    ('draw', LogicalKeyboardKey.keyP),
+    ('erase', LogicalKeyboardKey.keyE),
+    ('arrow', LogicalKeyboardKey.keyA),
+  ]) {
+    testWidgets('$tool choice, toggle, and Escape undo without saving or replacing objects', (tester) async {
+      final store = TestCanvasDocumentStore(_document());
+      await pumpCanvas(tester, store);
+      final original = _stroke(tester)..selected = true;
+      await tester.tap(find.byKey(ValueKey('toolbar-$tool')));
+      await tester.pump();
+      expect(_toolSelected(tester, tool), isTrue);
+      await _shortcut(tester);
+      expect(_toolSelected(tester, tool), isFalse);
+      await _shortcut(tester, redo: true);
+      expect(_toolSelected(tester, tool), isTrue);
+
+      await tester.sendKeyEvent(key);
+      await tester.pump();
+      expect(_toolSelected(tester, tool), isFalse);
+      await _shortcut(tester);
+      expect(_toolSelected(tester, tool), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(_toolSelected(tester, tool), isFalse);
+      await _shortcut(tester);
+      expect(_toolSelected(tester, tool), isTrue);
+      await _shortcut(tester);
+      expect(_toolSelected(tester, tool), isFalse);
+
+      // Escape in the default tool must leave redo available.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await _shortcut(tester, redo: true);
+      expect(_toolSelected(tester, tool), isTrue);
+      final next = tool == 'draw' ? 'erase' : 'draw';
+      await tester.tap(find.byKey(ValueKey('toolbar-$next')));
+      await tester.pump();
+      await _shortcut(tester, redo: true);
+      expect(_toolSelected(tester, next), isTrue);
+      await _shortcut(tester);
+      expect(_toolSelected(tester, tool), isTrue);
+      expect(_stroke(tester), same(original));
+      await pumpPastSave(tester);
+      expect(store.persisted, isNull);
+    });
+  }
+
+  for (final (tool, type) in const [
+    ('text', TextTool),
+    ('code', CodeTool),
+    ('media', MediaTool),
+    ('shape', Shape),
+    ('arrow', Arrow),
+  ]) {
+    testWidgets('$tool placement undo restores its tool and redo returns to Select', (tester) async {
+      final store = TestCanvasDocumentStore(_penDocument(0));
+      await pumpCanvas(tester, store);
+      await tester.tap(find.byKey(ValueKey('toolbar-$tool')));
+      await tester.pump();
+      if (tool == 'shape' || tool == 'arrow') {
+        await _draw(tester);
+      } else {
+        await tester.tapAt(const Offset(300, 250));
+        await tester.pumpAndSettle();
+      }
+      expect(find.byType(type), findsOneWidget);
+      expect(_toolSelected(tester, tool), isFalse);
+      // Leave focused editors before issuing the canvas Undo shortcut.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await _shortcut(tester);
+      expect(find.byType(type), findsNothing);
+      expect(_toolSelected(tester, tool), isTrue);
+      await pumpPastSave(tester);
+      expect(store.persisted!.elements, isEmpty);
+      await _shortcut(tester);
+      expect(_toolSelected(tester, tool), isFalse);
+      await _shortcut(tester, redo: true);
+      expect(_toolSelected(tester, tool), isTrue);
+      await _shortcut(tester, redo: true);
+      expect(find.byType(type), findsOneWidget);
+      expect(_toolSelected(tester, tool), isFalse);
+      await pumpPastSave(tester);
+      expect(store.persisted!.elements, hasLength(1));
+    });
+  }
+
+  testWidgets('choosing touch Select from Pen is one reversible tool action', (tester) async {
+    final store = TestCanvasDocumentStore(_document());
+    await pumpCanvas(tester, store, platform: TargetPlatform.android);
+    final original = _stroke(tester)..selected = true;
+    await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('toolbar-select')));
+    await tester.pump();
+    expect(_toolSelected(tester, 'select'), isTrue);
+    expect(_toolSelected(tester, 'draw'), isFalse);
+    await _shortcut(tester);
+    expect(_toolSelected(tester, 'select'), isFalse);
+    expect(_toolSelected(tester, 'draw'), isTrue);
+    await _shortcut(tester, redo: true);
+    expect(_toolSelected(tester, 'select'), isTrue);
+    expect(_toolSelected(tester, 'draw'), isFalse);
+    expect(_stroke(tester), same(original));
+    expect(original.selected, isTrue);
+    await pumpPastSave(tester);
+    expect(store.persisted, isNull);
+  });
+
   testWidgets('transient model state does not persist', (tester) async {
     final store = TestCanvasDocumentStore(_document());
     await pumpCanvas(tester, store);
@@ -37,6 +183,49 @@ void main() {
     model.moveBy(const Offset(10, 10));
     await pumpPastSave(tester);
     expect(store.persisted, isNotNull);
+  });
+
+  testWidgets('tool-only Undo interrupts held object drags and preserves Redo', (tester) async {
+    final store = TestCanvasDocumentStore(
+      CanvasDocument(
+        background: CanvasBackgroundKind.plain,
+        elements: [
+          ArrowElementData(
+            id: 'arrow',
+            start: const Offset(150, 250),
+            controls: const [Offset(200, 250)],
+            end: const Offset(250, 250),
+            color: 0xff000000,
+            strokeStyle: ArrowStrokeStyle.solid,
+            strokeWidth: 3,
+          ),
+        ],
+      ),
+    );
+    await pumpCanvas(tester, store, platform: TargetPlatform.android);
+    final select = find.byKey(const ValueKey('toolbar-select'));
+    await tester.tap(select);
+    await tester.pump();
+    await tester.tap(select);
+    await tester.pump();
+    final model = tester.widget<Arrow>(find.byType(Arrow)).model;
+    final original = model.start;
+    final gesture = await tester.startGesture(tester.getCenter(find.byType(Arrow)), kind: PointerDeviceKind.mouse);
+    await _shortcut(tester);
+    expect(_toolSelected(tester, 'select'), isTrue);
+    await gesture.moveBy(const Offset(60, 30));
+    await gesture.up();
+    await tester.pump();
+    expect(model.start, original);
+    expect(tester.widget<Arrow>(find.byType(Arrow)).model, same(model));
+    await _shortcut(tester, redo: true);
+    expect(_toolSelected(tester, 'select'), isFalse);
+    await pumpPastSave(tester);
+    expect(store.persisted, isNull);
+
+    await tester.drag(find.byType(Arrow), const Offset(60, 30), kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    expect(model.start, original + const Offset(60, 30));
   });
 
   testWidgets('undo and redo restore and persist canvas operations', (
@@ -292,6 +481,16 @@ Future<void> _shortcut(WidgetTester tester, {bool redo = false}) async {
 }
 
 PenStrokeModel _stroke(WidgetTester tester) => tester.widget<PenStroke>(find.byType(PenStroke)).model;
+
+bool _toolSelected(WidgetTester tester, String tool) =>
+    tester.widget<ToolbarButton>(find.byKey(ValueKey('toolbar-$tool'))).selected;
+
+Future<void> _draw(WidgetTester tester) async {
+  final gesture = await tester.startGesture(const Offset(300, 250), kind: PointerDeviceKind.mouse);
+  await gesture.moveTo(const Offset(420, 350));
+  await gesture.up();
+  await tester.pump();
+}
 
 // ---------- Fixtures ----------
 

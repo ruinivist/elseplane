@@ -399,7 +399,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 150));
   });
 
-  testWidgets('mixed touch group moves in either mode as one undo step and replacement resets Select', (tester) async {
+  testWidgets('mixed touch group moves in either mode as one undo step and preserves Select', (tester) async {
     await pumpCanvas(
       tester,
       TestCanvasDocumentStore(
@@ -448,7 +448,11 @@ void main() {
       expect(moved, before.map((position) => position + delta));
       await _undo(tester);
       expect(positions(), before);
-      expect(_selectEnabled(tester), isFalse);
+      expect(_selectEnabled(tester), select);
+      if (select) {
+        await _undo(tester);
+        expect(_selectEnabled(tester), isFalse);
+      }
     }
   });
 
