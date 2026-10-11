@@ -357,6 +357,29 @@ void main() {
     expect(_selectEnabled(tester), isFalse);
   });
 
+  for (final touchSelect in [false, true]) {
+    testWidgets('Escape deselects inactive objects with touch Select $touchSelect', (tester) async {
+      final store = TestCanvasDocumentStore(_document([_pen('a'), _pen('b', const Offset(350, 250))]));
+      await pumpCanvas(tester, store, platform: touchSelect ? TargetPlatform.android : TargetPlatform.linux);
+      if (touchSelect) await _chooseTool(tester, 'select');
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      final models = tester.widgetList<PenStroke>(find.byType(PenStroke)).map((stroke) => stroke.model).toList();
+      expect(models.every((model) => model.selected && !model.active), isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(models.every((model) => !model.selected), isTrue);
+      if (touchSelect) expect(_selectEnabled(tester), isFalse);
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      await pumpPastSave(tester);
+      expect(_canvas(tester).childOrder, ['a', 'b']);
+      expect(store.persisted, isNull);
+    });
+  }
+
   testWidgets('Escape dismisses editing before disabling Select', (tester) async {
     await pumpCanvas(tester, TestCanvasDocumentStore(_document([_code()])), platform: TargetPlatform.android);
     await _chooseTool(tester, 'select');
@@ -364,9 +387,11 @@ void main() {
     await tester.pumpAndSettle();
     final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
     expect(model.active, isTrue);
+    model.selected = true;
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(model.active, isFalse);
+    expect(model.selected, isFalse);
     expect(_selectEnabled(tester), isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();

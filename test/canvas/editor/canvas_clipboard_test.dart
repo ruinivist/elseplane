@@ -283,6 +283,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Paste'), findsNothing);
     expect(_models(tester).first.selected, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(_models(tester).every((model) => !model.selected), isTrue);
   });
 
   testWidgets('failed menu Cut preserves targets and undo history', (tester) async {

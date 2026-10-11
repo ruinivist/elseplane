@@ -2265,10 +2265,10 @@ class _CanvasPageState extends State<CanvasPage> {
     if (unmodifiedKeyDown && event.logicalKey == LogicalKeyboardKey.escape) {
       if (_editingElement || _activeElement != null) {
         _clearElementEditing();
-        _clearSelection();
       } else {
         _toggleTool(_activeTool.value);
       }
+      _clearSelection();
       return true;
     }
     if (_editingElement) return false;

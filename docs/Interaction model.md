@@ -68,6 +68,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Dragging an inactive, unselected block moves only that block and clears any unrelated selection.
 - Dragging any member of a selected group moves the whole group.
 - Ctrl-click, or Cmd-click on macOS, toggles selection without activating the block.
+- Escape clears canvas selection, including inactive selected objects. While a menu or file picker is open, Escape follows that surface's dismissal rules first.
 - Resizing affects one block and clears group selection.
 - Movement remains aligned with screen direction under canvas zoom and element rotation. Screen deltas are converted to canvas coordinates before persistence.
 - Transform controls rotate with their block and remain anchored to its top-left corner.
