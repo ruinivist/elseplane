@@ -406,7 +406,7 @@ class _SearchableSelectState<T> extends State<SearchableSelect<T>> {
   BTheme get _theme => BTheme.of(context);
   BColors get _colors => _theme.colors;
   TextStyle get _textStyle => _theme.typo.body;
-  double get _preferredWidth => _selectPreferredWidth(context, widget.options, _textStyle);
+  double get _preferredWidth => 280;
 
   double get _compactTriggerWidth {
     final label = _selectedOption?.label ?? '';
@@ -564,15 +564,13 @@ class _SearchableSelectState<T> extends State<SearchableSelect<T>> {
               else
                 SizedBox(
                   width: menuWidth,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 280),
-                    child: ListView(
+                  child: SizedBox(
+                    height: 280,
+                    child: ListView.builder(
                       padding: EdgeInsets.zero,
                       primary: false,
-                      shrinkWrap: true,
-                      children: [
-                        for (var i = 0; i < visibleOptions.length; i++) _buildSearchableOption(visibleOptions[i], i),
-                      ],
+                      itemCount: visibleOptions.length,
+                      itemBuilder: (_, index) => _buildSearchableOption(visibleOptions[index], index),
                     ),
                   ),
                 ),

@@ -1,9 +1,9 @@
 // Defines elseplane's concrete themes, typography, colors, and shared geometry.
 // Used by the app shell and themed editor widgets.
 
+import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:re_highlight/styles/atom-one-dark.dart';
 import 'package:re_highlight/styles/atom-one-light.dart';
 
@@ -73,65 +73,32 @@ const _starlessGeo = BGeo(
 
 // ---------- Typography ----------
 
-var _useMonoFallback = false;
-
 BTypo _starlessTypo(BColors colors) => BTypo(
-  display: GoogleFonts.sourceSerif4(
-    textStyle: const TextStyle(
-      fontSize: 40,
-      fontWeight: FontWeight.w600,
-      height: 1.1,
-    ),
+  display: TextStyle(
+    fontFamily: defaultFontFamily,
+    fontSize: 40,
+    fontWeight: FontWeight.w600,
+    height: 1.1,
     color: colors.textPrimary,
   ),
-  heading: GoogleFonts.sourceSerif4(
-    textStyle: const TextStyle(
-      fontSize: 20,
-      fontWeight: FontWeight.w600,
-      height: 1.3,
-    ),
+  heading: TextStyle(
+    fontFamily: defaultFontFamily,
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
+    height: 1.3,
     color: colors.textPrimary,
   ),
-  title: GoogleFonts.robotoMono(
-    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+  title: TextStyle(fontFamily: defaultFontFamily, fontSize: 13, fontWeight: FontWeight.w600, color: colors.textPrimary),
+  body: TextStyle(fontFamily: defaultFontFamily, fontSize: 13, fontWeight: FontWeight.w400, color: colors.textPrimary),
+  label: TextStyle(fontFamily: defaultFontFamily, fontSize: 13, fontWeight: FontWeight.w600, color: colors.textPrimary),
+  code: TextStyle(
+    fontFamily: defaultFontFamily,
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    height: 1.4,
     color: colors.textPrimary,
   ),
-  body: GoogleFonts.robotoMono(
-    textStyle: const TextStyle(fontSize: 13),
-    color: colors.textPrimary,
-  ),
-  label: GoogleFonts.robotoMono(
-    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-    color: colors.textPrimary,
-  ),
-  code: _useMonoFallback
-      ? TextStyle(
-          color: colors.textPrimary,
-          fontFamily: 'monospace',
-          fontSize: 14,
-          height: 1.4,
-        )
-      : GoogleFonts.jetBrainsMono(
-          color: colors.textPrimary,
-          fontSize: 14,
-          height: 1.4,
-        ),
 );
-
-/// Loads runtime font families and enables a safe monospace fallback.
-/// Called during application bootstrap before the root widget is mounted.
-Future<void> loadFonts() async {
-  try {
-    await GoogleFonts.pendingFonts([
-      GoogleFonts.sourceSerif4(),
-      GoogleFonts.robotoMono(),
-      GoogleFonts.jetBrainsMono(),
-      GoogleFonts.inter(),
-    ]).timeout(const Duration(seconds: 3));
-  } on Exception {
-    _useMonoFallback = true;
-  }
-}
 
 // ---------- Theme instances ----------
 
@@ -230,6 +197,7 @@ ThemeData _starlessThemeData(BColors colors, Brightness brightness, Map<String, 
   );
 
   return ThemeData(
+    fontFamily: defaultFontFamily,
     brightness: brightness,
     colorScheme: colorScheme,
     scaffoldBackgroundColor: colors.canvasBackground,

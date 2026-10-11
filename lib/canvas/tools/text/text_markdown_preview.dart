@@ -1,17 +1,18 @@
 // Renders Markdown, LaTeX, images, and links for text blocks.
 // Used by the text tool whenever a text element is not being edited.
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/tools/text/text_tool_settings.dart';
+import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -45,6 +46,28 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
   // ---------- State ----------
 
   Offset? _dragPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadFont());
+  }
+
+  @override
+  void didUpdateWidget(covariant TextMarkdownPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.style.fontFamily != widget.style.fontFamily) unawaited(_loadFont());
+  }
+
+  Future<void> _loadFont() async {
+    final family = widget.style.fontFamily;
+    try {
+      await loadTextFont(family);
+      if (mounted && widget.style.fontFamily == family) setState(() {});
+    } on Object {
+      // Keep the saved choice and render the bundled fallback after failure.
+    }
+  }
 
   // ---------- Rendering ----------
 
@@ -117,6 +140,8 @@ MarkdownStyleSheet _styleSheet(BuildContext context, TextNodeStyle style) {
   final theme = BTheme.of(context);
   final colors = theme.colors;
   final base = _fontStyle(style).copyWith(height: 1.5);
+  final semibold = textFontStyle(style.fontFamily, base.copyWith(fontWeight: FontWeight.w600));
+  final italic = textFontStyle(style.fontFamily, base.copyWith(fontStyle: FontStyle.italic));
   final code = theme.typo.code.copyWith(
     color: colors.textPrimary,
     fontSize: BSizes.markdownBodyFontSize - 1,
@@ -128,20 +153,20 @@ MarkdownStyleSheet _styleSheet(BuildContext context, TextNodeStyle style) {
     a: base.copyWith(color: colors.accent),
     p: base,
     code: code,
-    h1: base.copyWith(fontSize: BSizes.markdownBodyFontSize + 10, fontWeight: FontWeight.w600, height: 1.2),
-    h2: base.copyWith(fontSize: BSizes.markdownBodyFontSize + 8, fontWeight: FontWeight.w600, height: 1.25),
-    h3: base.copyWith(fontSize: BSizes.markdownBodyFontSize + 6, fontWeight: FontWeight.w600, height: 1.3),
-    h4: base.copyWith(fontSize: BSizes.markdownBodyFontSize + 4, fontWeight: FontWeight.w600, height: 1.35),
-    h5: base.copyWith(fontSize: BSizes.markdownBodyFontSize + 2, fontWeight: FontWeight.w600, height: 1.35),
-    h6: base.copyWith(fontWeight: FontWeight.w600, height: 1.4),
-    em: base.copyWith(fontStyle: FontStyle.italic),
-    strong: base.copyWith(fontWeight: FontWeight.w600),
+    h1: semibold.copyWith(fontSize: BSizes.markdownBodyFontSize + 10, fontWeight: FontWeight.w600, height: 1.2),
+    h2: semibold.copyWith(fontSize: BSizes.markdownBodyFontSize + 8, fontWeight: FontWeight.w600, height: 1.25),
+    h3: semibold.copyWith(fontSize: BSizes.markdownBodyFontSize + 6, fontWeight: FontWeight.w600, height: 1.3),
+    h4: semibold.copyWith(fontSize: BSizes.markdownBodyFontSize + 4, fontWeight: FontWeight.w600, height: 1.35),
+    h5: semibold.copyWith(fontSize: BSizes.markdownBodyFontSize + 2, fontWeight: FontWeight.w600, height: 1.35),
+    h6: semibold.copyWith(fontWeight: FontWeight.w600, height: 1.4),
+    em: italic,
+    strong: semibold,
     del: base.copyWith(decoration: TextDecoration.lineThrough),
     blockquote: base,
     img: base,
     checkbox: base.copyWith(color: colors.accent),
     listBullet: base,
-    tableHead: table.copyWith(fontWeight: FontWeight.w600),
+    tableHead: semibold.copyWith(fontSize: table.fontSize, height: table.height),
     tableBody: table,
     codeblockDecoration: BoxDecoration(color: colors.surfaceSubtle),
   );
@@ -149,12 +174,7 @@ MarkdownStyleSheet _styleSheet(BuildContext context, TextNodeStyle style) {
 
 TextStyle _fontStyle(TextNodeStyle style) {
   final base = TextStyle(fontSize: BSizes.markdownBodyFontSize, color: colorFromHex(style.color));
-  return switch (style.fontFamily) {
-    'Source Serif 4' => GoogleFonts.sourceSerif4(textStyle: base),
-    'Inter' => GoogleFonts.inter(textStyle: base),
-    'Roboto Mono' => GoogleFonts.robotoMono(textStyle: base),
-    _ => throw StateError('Validated font family became invalid'),
-  };
+  return textFontStyle(style.fontFamily, base);
 }
 
 // ---------- Images ----------

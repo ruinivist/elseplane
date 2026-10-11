@@ -38,8 +38,10 @@ Future<ThemeMode> loadThemeMode(SharedPreferencesAsync preferences) async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (kIsWeb) await BrowserContextMenu.disableContextMenu();
-  // TODO(dev): bundle it instead of fetching fonts at runtime.
-  await loadFonts();
+  LicenseRegistry.addLicense(() async* {
+    final license = await rootBundle.loadString('assets/fonts/jetbrains-mono/OFL.txt');
+    yield LicenseEntryWithLineBreaks(['JetBrains Mono'], license);
+  });
   final preferences = SharedPreferencesAsync();
   runApp(
     ElseplaneApp(

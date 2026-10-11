@@ -3,6 +3,7 @@
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/tools/text/text_block_model.dart';
+import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
 import 'package:elseplane/ui/common/select.dart';
@@ -18,12 +19,13 @@ final List<SelectOption<String>> textFontOptions = [
 
 /// Presents font, color, and background controls for the active text element.
 /// Used by the canvas tool-options overlay during text editing.
-class TextToolSettings extends StatelessWidget {
+class TextToolSettings extends StatefulWidget {
   const TextToolSettings({
     required this.model,
     required this.onChangeBoundary,
     required this.colorPickerExpanded,
     required this.onColorPickerExpandedChanged,
+    this.loadFont = loadTextFont,
     super.key,
   });
 
@@ -32,8 +34,77 @@ class TextToolSettings extends StatelessWidget {
   final bool colorPickerExpanded;
   final ValueChanged<bool> onColorPickerExpandedChanged;
 
+  final Future<void> Function(String) loadFont;
+
+  @override
+  State<TextToolSettings> createState() => _TextToolSettingsState();
+}
+
+class _TextToolSettingsState extends State<TextToolSettings> {
+  bool _loading = false;
+  Object? _request;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.model.addListener(_modelChanged);
+  }
+
+  void _modelChanged() {
+    if (widget.model.active || _request == null) return;
+    _request = null;
+    setState(() => _loading = false);
+  }
+
+  Future<void> _chooseFont(String family) async {
+    final model = widget.model;
+    if (_loading || family == model.style.fontFamily) return;
+    final previousFamily = model.style.fontFamily;
+    final request = Object();
+    _request = request;
+    setState(() => _loading = true);
+    bool ownsRequest() =>
+        mounted &&
+        !model.disposed &&
+        model.active &&
+        identical(_request, request) &&
+        identical(widget.model, model) &&
+        model.style.fontFamily == previousFamily;
+    try {
+      await widget.loadFont(family);
+      if (!ownsRequest()) return;
+      widget.onChangeBoundary();
+      model.style = model.style.copyWith(fontFamily: family);
+      widget.onChangeBoundary();
+    } on Object {
+      if (!mounted || !ownsRequest()) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load font')));
+    } finally {
+      if (mounted && identical(_request, request)) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant TextToolSettings oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.model, widget.model)) {
+      oldWidget.model.removeListener(_modelChanged);
+      widget.model.addListener(_modelChanged);
+      _request = null;
+      _loading = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.model.removeListener(_modelChanged);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final model = widget.model;
+    final onChangeBoundary = widget.onChangeBoundary;
     final theme = BTheme.of(context);
     return ListenableBuilder(
       listenable: model,
@@ -47,24 +118,23 @@ class TextToolSettings extends StatelessWidget {
           children: [
             Text('Font', style: theme.typo.label),
             const SizedBox(height: 6),
-            Select<String>(
+            SearchableSelect<String>(
               key: const ValueKey('text-font-select'),
               value: style.fontFamily,
               options: textFontOptions,
-              onChanged: (fontFamily) {
-                onChangeBoundary();
-                model.style = style.copyWith(fontFamily: fontFamily);
-                onChangeBoundary();
-              },
+              preferredValues: [style.fontFamily, defaultFontFamily],
+              searchHint: 'Search fonts',
+              onChanged: _loading ? null : _chooseFont,
             ),
+            if (_loading) const Padding(padding: EdgeInsets.only(top: 6), child: LinearProgressIndicator()),
             const SizedBox(height: 10),
             Text('Color', style: theme.typo.label),
             const SizedBox(height: 6),
             ColorControl(
               color: selectedColor,
-              expanded: colorPickerExpanded,
+              expanded: widget.colorPickerExpanded,
               enableAlpha: false,
-              onExpandedChanged: onColorPickerExpandedChanged,
+              onExpandedChanged: widget.onColorPickerExpandedChanged,
               onChanged: (color) {
                 onChangeBoundary();
                 model.style = style.copyWith(color: colorToHex(color));

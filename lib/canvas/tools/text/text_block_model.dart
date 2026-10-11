@@ -32,6 +32,8 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
     animationFactory: const ChromiumEaseInOut(),
   );
   bool _editing = false;
+  bool _disposed = false;
+  bool get disposed => _disposed;
 
   @override
   double get rotation => node.rotation;
@@ -124,6 +126,7 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
 
   @override
   void dispose() {
+    _disposed = true;
     controller
       ..removeListener(_syncMarkdown)
       ..dispose();

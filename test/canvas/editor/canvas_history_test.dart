@@ -6,9 +6,11 @@ import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/theme/fonts.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts_lite.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
@@ -17,7 +19,11 @@ import '../test_helpers.dart';
 // ---------- Tests ----------
 
 void main() {
-  setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
+  setUp(() {
+    SharedPreferencesAsyncWeb.registerWith(null);
+    GoogleFontsLite.config.allowRuntimeFetching = false;
+  });
+  tearDown(() => GoogleFontsLite.config.allowRuntimeFetching = true);
 
   testWidgets('transient model state does not persist', (tester) async {
     final store = TestCanvasDocumentStore(_document());
@@ -113,6 +119,31 @@ void main() {
       tester.widget<TextTool>(find.byType(TextTool)).model,
       same(original),
     );
+  });
+
+  testWidgets('font choice is one undo step and restores the saved family', (tester) async {
+    final store = TestCanvasDocumentStore(_textDocument());
+    await pumpCanvas(tester, store);
+    TextBlockModel model() => tester.widget<TextTool>(find.byType(TextTool)).model;
+    final savedFamily = model().style.fontFamily;
+    await tester.tap(find.byKey(const ValueKey('text-markdown-preview')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('searchable-select-trigger')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(MenuItemButton, defaultFontFamily));
+    await tester.pumpAndSettle();
+    await pumpPastSave(tester);
+    expect(model().style.fontFamily, defaultFontFamily);
+    expect((store.persisted!.elements.single as TextElementData).style.fontFamily, defaultFontFamily);
+    await _shortcut(tester);
+    await pumpPastSave(tester);
+    expect(model().style.fontFamily, savedFamily);
+    expect((store.persisted!.elements.single as TextElementData).style.fontFamily, savedFamily);
+    final original = model();
+    await _shortcut(tester);
+    expect(model(), same(original));
+    await _shortcut(tester, redo: true);
+    expect(model().style.fontFamily, defaultFontFamily);
   });
 
   testWidgets('text background choices persist as individual undo steps', (tester) async {

@@ -11,6 +11,7 @@ import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:elseplane/main.dart';
+import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
 import 'package:elseplane/ui/common/select.dart';
@@ -21,6 +22,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts_lite.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
@@ -36,6 +38,7 @@ void main() {
   late _FakeUrlLauncher launcher;
 
   setUp(() async {
+    GoogleFontsLite.config.allowRuntimeFetching = false;
     SharedPreferencesAsyncWeb.registerWith(null);
     final preferences = SharedPreferencesAsync();
     await preferences.remove(CanvasDocumentStore.libraryKey);
@@ -44,7 +47,10 @@ void main() {
     UrlLauncherPlatform.instance = launcher;
   });
 
-  tearDown(() => UrlLauncherPlatform.instance = originalLauncher);
+  tearDown(() {
+    GoogleFontsLite.config.allowRuntimeFetching = true;
+    UrlLauncherPlatform.instance = originalLauncher;
+  });
 
   testWidgets('renderer owns initial and live rotation with rotated pointer targets', (tester) async {
     await pumpCanvas(tester, TestCanvasDocumentStore(_rendererDocument(rotation: math.pi / 2)));
@@ -892,12 +898,16 @@ Inline $x^2$''';
         findsOneWidget,
       );
 
+      model.style = model.style.copyWith(fontFamily: 'ABeeZee');
+      await tester.pump();
       await tester.tap(_selectTrigger('text-font-select'));
       await tester.pump();
-      await tester.tap(find.text('Inter'));
+      await tester.enterText(find.byKey(const ValueKey('searchable-select-search')), defaultFontFamily);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(defaultFontFamily).last);
       await tester.pumpAndSettle();
 
-      expect(model.style.fontFamily, 'Inter');
+      expect(model.style.fontFamily, defaultFontFamily);
       expect(model.node.markdown, source);
       expect(model.active, isTrue);
       expect(model.editing, isFalse);
@@ -944,7 +954,7 @@ Inline $x^2$''';
         expect(model.editing, isTrue);
         await _chooseBackground(tester, background);
         expect(model.style.background, background);
-        expect(model.style.fontFamily, 'Inter');
+        expect(model.style.fontFamily, defaultFontFamily);
         expect(model.style.color, colorToHex(orange.color));
         expect(model.node.markdown, source);
         expect(model.active, isTrue);
@@ -1143,11 +1153,17 @@ Inline $x^2$''';
     final first = await _placeTextBlock(tester, const Offset(120, 200));
     final second = await _placeTextBlock(tester, const Offset(480, 360));
     await tester.pumpAndSettle();
-
-    tester.widget<Select<String>>(find.byKey(const ValueKey('text-font-select'))).onChanged!.call('Inter');
+    first.style = first.style.copyWith(fontFamily: 'Inter');
+    second.style = second.style.copyWith(fontFamily: 'ABeeZee');
     await tester.pump();
-    expect(second.style.fontFamily, 'Inter');
-    expect(first.style.fontFamily, 'Source Serif 4');
+
+    tester
+        .widget<SearchableSelect<String>>(find.byKey(const ValueKey('text-font-select')))
+        .onChanged!
+        .call(defaultFontFamily);
+    await tester.pump();
+    expect(second.style.fontFamily, defaultFontFamily);
+    expect(first.style.fontFamily, 'Inter');
     await _chooseBackground(tester, BlockBackgroundKind.transparent);
     expect(second.style.background, BlockBackgroundKind.transparent);
     expect(first.style.background, BlockBackgroundKind.card);
@@ -1160,10 +1176,13 @@ Inline $x^2$''';
       find.byKey(const ValueKey('text-settings-panel')).hitTestable(),
       findsOneWidget,
     );
-    tester.widget<Select<String>>(find.byKey(const ValueKey('text-font-select'))).onChanged!.call('Roboto Mono');
+    tester
+        .widget<SearchableSelect<String>>(find.byKey(const ValueKey('text-font-select')))
+        .onChanged!
+        .call(defaultFontFamily);
     await tester.pump();
-    expect(first.style.fontFamily, 'Roboto Mono');
-    expect(second.style.fontFamily, 'Inter');
+    expect(first.style.fontFamily, defaultFontFamily);
+    expect(second.style.fontFamily, defaultFontFamily);
     expect(
       tester.widget<Select<BlockBackgroundKind>>(find.byKey(const ValueKey('text-background-select'))).value,
       BlockBackgroundKind.card,
@@ -1209,7 +1228,10 @@ Inline $x^2$''';
     );
     await tester.pumpAndSettle();
 
-    tester.widget<Select<String>>(find.byKey(const ValueKey('text-font-select'))).onChanged!.call('Inter');
+    tester
+        .widget<SearchableSelect<String>>(find.byKey(const ValueKey('text-font-select')))
+        .onChanged!
+        .call(defaultFontFamily);
     await tester.pump();
     await tester.tap(
       find.byWidgetPredicate(
@@ -1234,7 +1256,7 @@ Inline $x^2$''';
     expect(savedNodes.last.position, second.node.position);
     expect(savedNodes.last.width, second.node.width);
     expect(savedNodes.last.height, second.node.height);
-    expect(savedNodes.last.style.fontFamily, 'Inter');
+    expect(savedNodes.last.style.fontFamily, defaultFontFamily);
     expect(savedNodes.first.style.background, BlockBackgroundKind.card);
     expect(savedNodes.last.style.background, BlockBackgroundKind.transparent);
     expect(savedNodes.last.style.color, isNot(savedNodes.first.style.color));
@@ -1289,7 +1311,7 @@ Inline $x^2$''';
 
 Finder _selectTrigger(String key) => find.descendant(
   of: find.byKey(ValueKey(key)),
-  matching: find.byKey(const ValueKey('select-trigger')),
+  matching: find.byKey(ValueKey(key == 'text-font-select' ? 'searchable-select-trigger' : 'select-trigger')),
 );
 
 Future<void> _chooseBackground(WidgetTester tester, BlockBackgroundKind background) async {
@@ -1380,7 +1402,7 @@ CanvasDocument _rendererDocument({double rotation = 0, bool autoHeight = false})
       height: autoHeight ? null : 80,
       rotation: rotation,
       markdown: autoHeight ? List.filled(8, 'Measured paragraph.').join('\n\n') : 'rotated text',
-      style: const TextNodeStyle(fontFamily: 'Inter', color: '#201C1A'),
+      style: const TextNodeStyle(fontFamily: defaultFontFamily, color: '#201C1A'),
     ),
   ],
 );

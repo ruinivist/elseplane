@@ -32,6 +32,7 @@ import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
 import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:elseplane/settings/settings_dialog.dart';
+import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
@@ -1273,7 +1274,7 @@ class _CanvasPageState extends State<CanvasPage> {
       height: textNodeDefaultHeight,
       markdown: '',
       style: TextNodeStyle(
-        fontFamily: 'Source Serif 4',
+        fontFamily: defaultFontFamily,
         color: colorToHex(BTheme.of(context).colors.textPrimary),
       ),
     );

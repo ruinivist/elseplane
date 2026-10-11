@@ -16,6 +16,7 @@ dependencies:
   flutter_markdown_plus_latex: ^1.0.5
   flutter_svg: ^2.3.0
   google_fonts: ^9.0.0
+  http: ^1.6.0
   infinite_lazy_grid:
     git:
       url: https://github.com/ruinivist/infinite_lazy_grid.git
@@ -50,3 +51,22 @@ flutter:
     - assets/icons/arrow-dashed.svg
     - assets/icons/arrow-solid.svg
     - assets/icons/resize.svg
+    - assets/fonts/jetbrains-mono/OFL.txt
+  fonts:
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/jetbrains-mono/JetBrainsMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/jetbrains-mono/JetBrainsMono-Italic.ttf
+          weight: 400
+          style: italic
+        - asset: assets/fonts/jetbrains-mono/JetBrainsMono-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/jetbrains-mono/JetBrainsMono-SemiBoldItalic.ttf
+          weight: 600
+          style: italic
+        - asset: assets/fonts/jetbrains-mono/JetBrainsMono-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/jetbrains-mono/JetBrainsMono-BoldItalic.ttf
+          weight: 700
+          style: italic

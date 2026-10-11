@@ -596,7 +596,7 @@ final _document = CanvasDocument(
       height: null,
       markdown: 'hello',
       style: const TextNodeStyle(
-        fontFamily: 'Inter',
+        fontFamily: 'ABeeZee',
         color: '#201C1A',
       ),
     ),

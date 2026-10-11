@@ -5,7 +5,10 @@ import 'dart:ui';
 
 import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/tools/code/code_language.dart';
+import 'package:elseplane/theme/fonts.dart';
 import 'package:json_annotation/json_annotation.dart';
+
+export 'package:elseplane/theme/fonts.dart' show textNodeFontFamilies;
 
 part 'canvas_document.g.dart';
 part 'json_serialisation.dart';
@@ -16,12 +19,6 @@ const textNodeDefaultWidth = 420.0;
 const textNodeDefaultHeight = 108.0;
 const textNodeMinimumWidth = 160.0;
 const textNodeMinimumHeight = 52.0;
-
-const textNodeFontFamilies = <String>{
-  'Source Serif 4',
-  'Inter',
-  'Roboto Mono',
-};
 
 const codeBlockMinimumSize = Size(280, 240);
 const mediaNodeDefaultWidth = 480.0;
