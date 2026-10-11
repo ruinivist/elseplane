@@ -45,6 +45,7 @@ class FileTreePopup extends StatelessWidget {
     required this.onNewFile,
     required this.onClose,
     required this.actionsFor,
+    this.onDemo,
     this.editingId,
     this.editor,
     super.key,
@@ -60,6 +61,7 @@ class FileTreePopup extends StatelessWidget {
   final VoidCallback onNewFolder;
   final VoidCallback onNewFile;
   final VoidCallback onClose;
+  final VoidCallback? onDemo;
   final List<ContextMenuAction> Function(FileTreeNode node) actionsFor;
   final String? editingId;
   final Widget? editor;
@@ -113,6 +115,16 @@ class FileTreePopup extends StatelessWidget {
                       tooltip: 'New folder',
                       onPressed: onNewFolder,
                     ),
+                    if (onDemo case final onDemo?) ...[
+                      const SizedBox(width: 2),
+                      _control(
+                        context,
+                        key: const ValueKey('file-tree-demo'),
+                        icon: LucideIcons.flaskConical,
+                        tooltip: 'Demo',
+                        onPressed: onDemo,
+                      ),
+                    ],
                     const SizedBox(width: 2),
                     _control(
                       context,

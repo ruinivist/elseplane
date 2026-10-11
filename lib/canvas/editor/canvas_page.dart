@@ -1868,6 +1868,7 @@ class _CanvasPageState extends State<CanvasPage> {
         builder: (_) => CanvasFilePicker(
           library: _documentStore.library,
           onSave: _documentStore.saveLibrary,
+          attachmentStore: _attachmentStore,
         ),
       );
       if (!mounted) return;

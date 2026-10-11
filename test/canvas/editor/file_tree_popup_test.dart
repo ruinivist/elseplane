@@ -27,6 +27,7 @@ void main() {
     String? contextId;
     var newFolderCalls = 0;
     var closeCalls = 0;
+    var demoCalls = 0;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -47,6 +48,7 @@ void main() {
                 onNewFolder: () => newFolderCalls++,
                 onNewFile: () {},
                 onClose: () => closeCalls++,
+                onDemo: () => demoCalls++,
                 actionsFor: (node) => [
                   ContextMenuAction(label: 'Rename', icon: Icons.edit, onPressed: () => contextId = node.id),
                 ],
@@ -79,9 +81,11 @@ void main() {
     expect(contextId, 'brainstorm');
 
     await tester.tap(find.byKey(const ValueKey('file-tree-new-folder')));
+    await tester.tap(find.byTooltip('Demo'));
     await tester.tap(find.byKey(const ValueKey('file-tree-close')));
     expect(newFolderCalls, 1);
     expect(closeCalls, 1);
+    expect(demoCalls, 1);
   });
 
   testWidgets('routes before, folder, and after drops without selecting', (tester) async {
@@ -114,6 +118,8 @@ void main() {
         ),
       ),
     );
+
+    expect(find.byTooltip('Demo'), findsNothing);
 
     Future<void> dragTo(Offset destination) async {
       final gesture = await tester.startGesture(

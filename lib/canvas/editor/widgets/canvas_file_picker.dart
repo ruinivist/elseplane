@@ -3,11 +3,15 @@
 
 import 'dart:async';
 
+import 'package:elseplane/canvas/debug/demo_canvas.dart';
 import 'package:elseplane/canvas/editor/widgets/file_tree_popup.dart';
+import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/persistence/canvas_library.dart';
+import 'package:elseplane/canvas/persistence/canvas_project.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/context_menu.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -16,10 +20,11 @@ import 'package:uuid/uuid.dart';
 // ---------- Picker ----------
 
 class CanvasFilePicker extends StatefulWidget {
-  const CanvasFilePicker({required this.library, required this.onSave, super.key});
+  const CanvasFilePicker({required this.library, required this.onSave, required this.attachmentStore, super.key});
 
   final CanvasLibrary library;
   final Future<void> Function(CanvasLibrary library) onSave;
+  final AttachmentStore attachmentStore;
 
   @override
   State<CanvasFilePicker> createState() => _CanvasFilePickerState();
@@ -95,7 +100,7 @@ class _CanvasFilePickerState extends State<CanvasFilePicker> {
         : CanvasLibrary(files: [..._library.files, file], currentId: _library.currentId);
     final selectedId = openId ?? (!exists && !file.isFolder ? file.id : null);
     if (selectedId != null) next = next.select(selectedId);
-    if (!await _save(next) || !mounted) return false;
+    if (!await _save(() => next) || !mounted) return false;
     setState(() => _editing = null);
     if (selectedId != null || close) Navigator.of(context).pop(selectedId);
     return true;
@@ -106,7 +111,7 @@ class _CanvasFilePickerState extends State<CanvasFilePicker> {
       await _saveName(openId: id);
       return;
     }
-    if (!await _save(_library.select(id)) || !mounted) return;
+    if (!await _save(() => _library.select(id)) || !mounted) return;
     Navigator.of(context).pop(id);
   }
 
@@ -127,6 +132,26 @@ class _CanvasFilePickerState extends State<CanvasFilePicker> {
 
   Future<void> _createAfterEdit({required bool folder, String? parentId}) async {
     if (await _commitPendingEdit()) _create(folder: folder, parentId: parentId);
+  }
+
+  Future<void> _createDemo() async {
+    if (!kDebugMode || _busy || !await _commitPendingEdit() || !mounted) return;
+    final saved = await _save(() async {
+      final project = rebaseCanvasProjectAttachments(
+        await loadDemoCanvas(),
+        _library.files.where((file) => !file.isFolder).expand((file) => canvasAttachmentPaths(file.document!)).toSet(),
+      );
+      var name = 'Demo';
+      for (var suffix = 2; _library.nameError(name, null) != null; suffix++) {
+        name = 'Demo $suffix';
+      }
+      final file = CanvasFile(id: const Uuid().v4(), name: name, document: project.document);
+      for (final entry in project.attachments.entries) {
+        await widget.attachmentStore.write(entry.key, entry.value);
+      }
+      return CanvasLibrary(files: [..._library.files, file], currentId: file.id);
+    });
+    if (saved && mounted) Navigator.of(context).pop(_library.currentId);
   }
 
   void _close() {
@@ -168,14 +193,15 @@ class _CanvasFilePickerState extends State<CanvasFilePicker> {
       setState(() => _error = error.message);
       return;
     }
-    if (identical(next, _library) || !await _save(next) || !mounted) return;
+    if (identical(next, _library) || !await _save(() => next) || !mounted) return;
     if (position == FileTreeDropPosition.inside) setState(() => _expanded.add(targetId));
   }
 
-  Future<bool> _save(CanvasLibrary next) async {
+  Future<bool> _save(FutureOr<CanvasLibrary> Function() buildLibrary) async {
     if (_busy) return false;
     setState(() => _busy = true);
     try {
+      final next = await buildLibrary();
       await widget.onSave(next);
       if (!mounted) return false;
       setState(() {
@@ -222,7 +248,7 @@ class _CanvasFilePickerState extends State<CanvasFilePicker> {
         ? _library.currentId
         : remaining.firstWhere((entry) => !entry.isFolder).id;
     final changedCurrent = currentId != _library.currentId;
-    if (!await _save(CanvasLibrary(files: remaining, currentId: currentId)) || !mounted) return;
+    if (!await _save(() => CanvasLibrary(files: remaining, currentId: currentId)) || !mounted) return;
     setState(() {
       _editing = null;
     });
@@ -295,6 +321,7 @@ class _CanvasFilePickerState extends State<CanvasFilePicker> {
                   onMove: _move,
                   onNewFile: () => _createAfterEdit(folder: false),
                   onNewFolder: () => _createAfterEdit(folder: true),
+                  onDemo: kDebugMode ? _createDemo : null,
                   onClose: _close,
                   actionsFor: (node) {
                     final file = _library.files.where((file) => file.id == node.id).firstOrNull;

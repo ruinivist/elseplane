@@ -1,13 +1,18 @@
 // Checks file creation, naming, switching, and persistence failure behavior.
 // Exercises the file picker through the canvas title and browser-backed UI.
 
+import 'dart:async';
+
+import 'package:elseplane/canvas/debug/demo_canvas.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_file_picker.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
 import 'package:elseplane/canvas/editor/widgets/file_tree_popup.dart';
 import 'package:elseplane/canvas/persistence/canvas_library.dart';
+import 'package:elseplane/canvas/persistence/canvas_project.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +26,155 @@ import '../test_helpers.dart';
 
 void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
+
+  test('bundled demo validates and round-trips every element type and its image', () async {
+    final demo = await loadDemoCanvas();
+    expect(demo.document.elements.map((element) => element.type).toSet(), {
+      'text',
+      'code',
+      'media',
+      'shape',
+      'arrow',
+      'pen',
+    });
+    expect(demo.document.elements, hasLength(12));
+    expect(
+      demo.document.elements.whereType<TextElementData>().every(
+        (element) => element.style.fontFamily == defaultFontFamily,
+      ),
+      isTrue,
+    );
+    expect(demo.attachments, hasLength(1));
+    final exported = await encodeCanvasProject(demo.document, TestAttachmentStore(demo.attachments));
+    final imported = await decodeCanvasProject(exported);
+    expect(imported.document.toJson(), demo.document.toJson());
+    expect(imported.attachments, demo.attachments);
+  });
+
+  testWidgets('demo opens at root with unique names and preserves edits and images', (tester) async {
+    final demo = await tester.runAsync(loadDemoCanvas);
+    final imagePath = demo!.attachments.keys.single;
+    final attachments = TestAttachmentStore({imagePath: onePixelPngBytes});
+    final original = CanvasDocument(
+      background: CanvasBackgroundKind.plain,
+      elements: [
+        TextElementData(
+          id: 'original-text',
+          position: const Offset(100, 150),
+          width: 280,
+          height: null,
+          markdown: 'Original ![image]($imagePath)',
+          style: const TextNodeStyle(fontFamily: defaultFontFamily, color: '#201C1A'),
+        ),
+      ],
+    );
+    final store = TestCanvasDocumentStore(original);
+    await pumpCanvas(tester, store, attachmentStore: attachments);
+    final current = store.library.current;
+    store.library = CanvasLibrary(
+      files: [
+        const CanvasFile(id: 'work', name: 'Work'),
+        CanvasFile(id: current.id, name: 'Original', parentId: 'work', document: current.document),
+        const CanvasFile(id: 'demo-folder', name: 'dEmO'),
+        const CanvasFile(id: 'other', name: 'demo 2', document: CanvasLibrary.emptyDocument),
+      ],
+      currentId: current.id,
+    );
+    tester.widget<TextTool>(find.byType(TextTool)).model.insertPastedText(' edited');
+    await _open(tester);
+    final originalSaved = store.library.current.document!.toJson();
+    await tester.tap(find.byTooltip('Demo'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CanvasFilePicker), findsNothing);
+    final first = store.library.current;
+    expect(first.name, 'Demo 3');
+    expect(first.parentId, isNull);
+    expect(first.document!.elements, hasLength(12));
+    expect(store.library.file(current.id).document!.toJson(), originalSaved);
+    expect(attachments.files[imagePath], onePixelPngBytes);
+    final firstPath = canvasAttachmentPaths(first.document!).single;
+    expect(firstPath, isNot(imagePath));
+    expect(attachments.files[firstPath], demo.attachments[imagePath]);
+    expect(tester.widget<CanvasTitle>(find.byType(CanvasTitle)).path, ['Demo 3']);
+
+    tester.widgetList<TextTool>(find.byType(TextTool)).first.model.insertPastedText(' changed');
+    await _open(tester);
+    final firstSaved = store.library.current.document!.toJson();
+    await tester.tap(find.byTooltip('Demo'));
+    await tester.pumpAndSettle();
+    final second = store.library.current;
+    expect(second.name, 'Demo 4');
+    expect(second.id, isNot(first.id));
+    expect(store.library.file(first.id).document!.toJson(), firstSaved);
+    final secondPath = canvasAttachmentPaths(second.document!).single;
+    expect(rebaseCanvasDocumentAttachments(second.document!, {secondPath: imagePath}).toJson(), demo.document.toJson());
+    expect(secondPath, isNot(firstPath));
+    expect(attachments.files[secondPath], demo.attachments[imagePath]);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(store.library.currentId, second.id);
+    expect(store.library.current.document!.elements, hasLength(12));
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final failAttachment in [true, false]) {
+    testWidgets('failed demo ${failAttachment ? 'image' : 'library'} save preserves the current canvas', (
+      tester,
+    ) async {
+      final store = _FailingLibraryStore();
+      final attachments = _FailingAttachmentStore();
+      await pumpCanvas(tester, store, attachmentStore: attachments);
+      await _open(tester);
+      final original = store.library.toJson();
+      attachments.fail = failAttachment;
+      store.fail = !failAttachment;
+      await tester.tap(find.byTooltip('Demo'));
+      await tester.pumpAndSettle();
+      expect(store.library.toJson(), original);
+      expect(find.byType(CanvasFilePicker), findsOneWidget);
+      expect(find.text('Could not save changes. Please try again.'), findsOneWidget);
+
+      attachments.fail = false;
+      store.fail = false;
+      await tester.tap(find.byTooltip('Demo'));
+      await tester.pumpAndSettle();
+      expect(store.library.current.name, 'Demo');
+      expect(find.byType(CanvasFilePicker), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('demo saves pending folder names and blocks dismissal until its image is saved', (tester) async {
+    final store = TestCanvasDocumentStore();
+    final attachments = _FailingAttachmentStore();
+    await pumpCanvas(tester, store, attachmentStore: attachments);
+    await _open(tester);
+    await tester.tap(find.byTooltip('New folder'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Notes');
+    final gate = Completer<void>();
+    attachments.gate = gate.future;
+    await tester.tap(find.byTooltip('Demo'));
+    await tester.pumpAndSettle();
+    expect(store.library.files.singleWhere((file) => file.isFolder).name, 'Notes');
+    expect(find.byType(CanvasFilePicker), findsOneWidget);
+    final popup = tester.widget<FileTreePopup>(find.byType(FileTreePopup));
+    popup.onClose();
+    popup.onDemo!();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(CanvasFilePicker), findsOneWidget);
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(store.library.files.where((file) => !file.isFolder), hasLength(2));
+    expect(store.library.current.name, 'Demo');
+    expect(find.byType(CanvasFilePicker), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('creates nested canvases, renames, switches, and isolates undo', (tester) async {
     final store = TestCanvasDocumentStore(
@@ -201,7 +355,11 @@ void main() {
         theme: starlessLightThemeData,
         home: Scaffold(
           body: Center(
-            child: CanvasFilePicker(library: store.library, onSave: store.saveLibrary),
+            child: CanvasFilePicker(
+              library: store.library,
+              onSave: store.saveLibrary,
+              attachmentStore: TestAttachmentStore(),
+            ),
           ),
         ),
       ),
@@ -260,5 +418,17 @@ class _FailingLibraryStore extends TestCanvasDocumentStore {
   Future<void> saveLibrary(CanvasLibrary next) async {
     if (fail) throw StateError('Storage full');
     await super.saveLibrary(next);
+  }
+}
+
+class _FailingAttachmentStore extends TestAttachmentStore {
+  bool fail = false;
+  Future<void>? gate;
+
+  @override
+  Future<void> write(String path, Uint8List bytes) async {
+    if (fail) throw StateError('Storage full');
+    if (gate case final gate?) await gate;
+    await super.write(path, bytes);
   }
 }
