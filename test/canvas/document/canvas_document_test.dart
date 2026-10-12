@@ -172,6 +172,23 @@ void main() {
     );
   });
 
+  test('theme-default text colors round-trip, copy, and retain explicit overrides', () {
+    const style = TextNodeStyle(fontFamily: 'Inter', background: BlockBackgroundKind.glass);
+    expect(style.toJson(), isNot(contains('color')));
+    for (final json in [style.toJson(), style.toJson()..['color'] = null]) {
+      final restored = TextNodeStyle.fromJson(jsonDecode(jsonEncode(json)));
+      expect(restored.color, isNull);
+      expect(restored.fontFamily, style.fontFamily);
+      expect(restored.background, style.background);
+      expect(restored.copyWith().toJson(), style.toJson());
+      expect(restored.copyWith(background: BlockBackgroundKind.transparent).color, isNull);
+    }
+    final custom = style.copyWith(color: '#ABCDEF');
+    expect(TextNodeStyle.fromJson(custom.toJson()).color, custom.color);
+    expect(custom.copyWith(background: BlockBackgroundKind.card).color, custom.color);
+    expect(() => TextNodeStyle.fromJson(style.toJson()..['color'] = 123), throwsFormatException);
+  });
+
   test('text backgrounds round-trip and reject invalid or legacy styles', () {
     const defaultStyle = TextNodeStyle(fontFamily: 'Inter', color: '#201C1A');
     expect(defaultStyle.background, BlockBackgroundKind.card);

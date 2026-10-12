@@ -110,7 +110,10 @@ class _TextToolSettingsState extends State<TextToolSettings> {
       listenable: model,
       builder: (context, _) {
         final style = model.style;
-        final selectedColor = colorFromHex(style.color);
+        final selectedColor = switch (style.color) {
+          final color? => colorFromHex(color),
+          null => theme.colors.textPrimary,
+        };
         return Column(
           key: const ValueKey('text-settings-panel'),
           crossAxisAlignment: CrossAxisAlignment.stretch,

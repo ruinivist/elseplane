@@ -7,10 +7,12 @@ import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:elseplane/main.dart';
 import 'package:elseplane/settings/settings_dialog.dart';
+import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/glass_surface.dart';
 import 'package:elseplane/ui/previews/theme_preview.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -43,7 +45,15 @@ void main() {
       );
       final theme = Theme.of(tester.element(find.byKey(const ValueKey('preview-child'))));
       expect(theme.brightness, brightness);
-      expect(theme.extension<BTheme>(), isNotNull);
+      final semantics = theme.extension<BTheme>()!;
+      expect(semantics.typo.heading.color, semantics.colors.textHeading);
+      expect(semantics.typo.body.color, semantics.colors.textPrimary);
+      if (brightness == Brightness.dark) {
+        expect(
+          semantics.colors.textHeading.computeLuminance(),
+          greaterThan(semantics.colors.textPrimary.computeLuminance()),
+        );
+      }
     }
   });
 
@@ -65,6 +75,14 @@ void main() {
             markdown: 'Fixed content color',
             style: const TextNodeStyle(fontFamily: 'Source Serif 4', color: '#201C1A'),
           ),
+          TextElementData(
+            id: 'theme-color',
+            position: const Offset(80, 270),
+            width: 420,
+            height: 108,
+            markdown: '# Themed heading\nBody',
+            style: const TextNodeStyle(fontFamily: defaultFontFamily),
+          ),
         ],
       ),
     );
@@ -72,8 +90,16 @@ void main() {
     await tester.pumpAndSettle();
     final canvasState = tester.state(find.byType(CanvasPage));
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
-    final text = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final models = tester.widgetList<TextTool>(find.byType(TextTool)).map((widget) => widget.model);
+    final text = models.singleWhere((model) => model.node.id == 'fixed-color');
+    final themedText = models.singleWhere((model) => model.node.id == 'theme-color');
     final originalContent = text.node.toJson();
+    final originalThemedContent = themedText.node.toJson();
+    MarkdownStyleSheet themedStyles() => tester
+        .widgetList<MarkdownBody>(find.byType(MarkdownBody))
+        .singleWhere((widget) => widget.data == themedText.node.markdown)
+        .styleSheet!;
+    final lightStyles = themedStyles();
 
     await _openAppearance(tester);
     expect(_brightness(tester), Brightness.light);
@@ -83,6 +109,11 @@ void main() {
     expect(tester.state(find.byType(CanvasPage)), same(canvasState));
     expect(tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller, same(controller));
     expect(text.node.toJson(), originalContent);
+    expect(themedText.node.toJson(), originalThemedContent);
+    final colors = BTheme.of(tester.element(find.byType(CanvasPage))).colors;
+    expect(themedStyles().p!.color, colors.textPrimary);
+    expect(themedStyles().h1!.color, colors.textHeading);
+    expect(themedStyles().p!.color, isNot(lightStyles.p!.color));
     expect(store.persisted, isNull);
 
     await tester.pumpWidget(const SizedBox());

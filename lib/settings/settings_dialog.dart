@@ -379,7 +379,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       children: [
         Text(
           'Background',
-          style: theme.typo.label.copyWith(color: theme.colors.textPrimary),
+          style: theme.typo.label,
         ),
         const SizedBox(height: 10),
         Select<CanvasBackgroundKind>(
@@ -401,7 +401,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
         const SizedBox(height: 20),
         Text(
           'Data',
-          style: theme.typo.label.copyWith(color: theme.colors.textPrimary),
+          style: theme.typo.label,
         ),
         const SizedBox(height: 8),
         Wrap(

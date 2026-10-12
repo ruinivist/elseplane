@@ -85,7 +85,7 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
             blockSyntaxes: [LatexBlockSyntax()],
             inlineSyntaxes: [_TextImageSyntax(), LatexInlineSyntax()],
             builders: {
-              'latex': LatexElementBuilder(textStyle: _fontStyle(widget.style)),
+              'latex': LatexElementBuilder(textStyle: _fontStyle(context, widget.style)),
             },
             styleSheet: styleSheet,
             checkboxBuilder: (checked) => _buildCheckbox(checked, styleSheet),
@@ -130,7 +130,7 @@ class _EmptyTextMarkdownPreview extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: Text(
         'Click to edit',
-        style: _fontStyle(style).copyWith(color: theme.colors.textMuted),
+        style: _fontStyle(context, style).copyWith(color: theme.colors.textMuted),
       ),
     );
   }
@@ -141,8 +141,9 @@ class _EmptyTextMarkdownPreview extends StatelessWidget {
 MarkdownStyleSheet _styleSheet(BuildContext context, TextNodeStyle style) {
   final theme = BTheme.of(context);
   final colors = theme.colors;
-  final base = _fontStyle(style).copyWith(height: 1.5);
+  final base = _fontStyle(context, style).copyWith(height: 1.5);
   final semibold = textFontStyle(style.fontFamily, base.copyWith(fontWeight: FontWeight.w600));
+  final heading = semibold.copyWith(color: style.color == null ? colors.textHeading : base.color);
   final italic = textFontStyle(style.fontFamily, base.copyWith(fontStyle: FontStyle.italic));
   final code = theme.typo.code.copyWith(
     color: colors.textPrimary,
@@ -155,12 +156,12 @@ MarkdownStyleSheet _styleSheet(BuildContext context, TextNodeStyle style) {
     a: base.copyWith(color: colors.accent),
     p: base,
     code: code,
-    h1: semibold.copyWith(fontSize: BSizes.markdownBodyFontSize + 10, fontWeight: FontWeight.w600, height: 1.2),
-    h2: semibold.copyWith(fontSize: BSizes.markdownBodyFontSize + 8, fontWeight: FontWeight.w600, height: 1.25),
-    h3: semibold.copyWith(fontSize: BSizes.markdownBodyFontSize + 6, fontWeight: FontWeight.w600, height: 1.3),
-    h4: semibold.copyWith(fontSize: BSizes.markdownBodyFontSize + 4, fontWeight: FontWeight.w600, height: 1.35),
-    h5: semibold.copyWith(fontSize: BSizes.markdownBodyFontSize + 2, fontWeight: FontWeight.w600, height: 1.35),
-    h6: semibold.copyWith(fontWeight: FontWeight.w600, height: 1.4),
+    h1: heading.copyWith(fontSize: BSizes.markdownBodyFontSize + 10, fontWeight: FontWeight.w600, height: 1.2),
+    h2: heading.copyWith(fontSize: BSizes.markdownBodyFontSize + 8, fontWeight: FontWeight.w600, height: 1.25),
+    h3: heading.copyWith(fontSize: BSizes.markdownBodyFontSize + 6, fontWeight: FontWeight.w600, height: 1.3),
+    h4: heading.copyWith(fontSize: BSizes.markdownBodyFontSize + 4, fontWeight: FontWeight.w600, height: 1.35),
+    h5: heading.copyWith(fontSize: BSizes.markdownBodyFontSize + 2, fontWeight: FontWeight.w600, height: 1.35),
+    h6: heading.copyWith(fontWeight: FontWeight.w600, height: 1.4),
     em: italic,
     strong: semibold,
     del: base.copyWith(decoration: TextDecoration.lineThrough),
@@ -168,7 +169,7 @@ MarkdownStyleSheet _styleSheet(BuildContext context, TextNodeStyle style) {
     img: base,
     checkbox: base.copyWith(color: colors.accent, fontSize: BSizes.defaultIconSize),
     listBullet: base,
-    tableHead: semibold.copyWith(fontSize: table.fontSize, height: table.height),
+    tableHead: heading.copyWith(fontSize: table.fontSize, height: table.height),
     tableBody: table,
     codeblockDecoration: BoxDecoration(color: colors.surfaceSubtle),
   );
@@ -194,8 +195,12 @@ Widget _buildCheckbox(bool checked, MarkdownStyleSheet styleSheet) => Padding(
   ),
 );
 
-TextStyle _fontStyle(TextNodeStyle style) {
-  final base = TextStyle(fontSize: BSizes.markdownBodyFontSize, color: colorFromHex(style.color));
+TextStyle _fontStyle(BuildContext context, TextNodeStyle style) {
+  final color = switch (style.color) {
+    final color? => colorFromHex(color),
+    null => BTheme.of(context).colors.textPrimary,
+  };
+  final base = TextStyle(fontSize: BSizes.markdownBodyFontSize, color: color);
   return textFontStyle(style.fontFamily, base);
 }
 

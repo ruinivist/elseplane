@@ -15,6 +15,7 @@ import 'package:elseplane/main.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/starless.dart';
+import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/gestures.dart';
@@ -646,6 +647,53 @@ Inline $x^2$''';
     expect(preview.data, source);
   });
 
+  testWidgets('Markdown uses theme heading and body roles while preserving custom colors', (tester) async {
+    for (final theme in [starlessLightThemeData, starlessDarkThemeData]) {
+      final colors = theme.extension<BTheme>()!.colors;
+      for (final color in [null, '#ABCDEF']) {
+        final style = TextNodeStyle(fontFamily: defaultFontFamily, color: color);
+        final saved = style.toJson();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: theme,
+            home: Scaffold(
+              body: TextMarkdownPreview(
+                source: '# Heading\nBody **bold** *italic* `code`\n\n> Quote\n\n- List\n\n\$x^2\$',
+                style: style,
+                scrollController: null,
+                onEdit: () {},
+                onMove: (_) {},
+                attachmentStore: _FakeAttachmentStore(),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final styles = tester.widget<MarkdownBody>(find.byType(MarkdownBody)).styleSheet!;
+        final bodyColor = color == null ? colors.textPrimary : colorFromHex(color);
+        final headingColor = color == null ? colors.textHeading : bodyColor;
+        for (final heading in [styles.h1, styles.h2, styles.h3, styles.h4, styles.h5, styles.h6, styles.tableHead]) {
+          expect(heading!.color, headingColor);
+        }
+        for (final body in [
+          styles.p,
+          styles.em,
+          styles.strong,
+          styles.blockquote,
+          styles.listBullet,
+          styles.tableBody,
+        ]) {
+          expect(body!.color, bodyColor);
+        }
+        expect(styles.code!.color, colors.textPrimary);
+        expect(styles.a!.color, colors.accent);
+        expect(tester.widget<Math>(find.byType(Math)).textStyle!.color, bodyColor);
+        expect(style.toJson(), saved);
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+
   testWidgets('task checkboxes align with the first line in both themes', (tester) async {
     const tasks = ['Checked task', 'Unchecked task with enough words to wrap onto several lines'];
     for (final theme in [starlessLightThemeData, starlessDarkThemeData]) {
@@ -1057,10 +1105,11 @@ Inline $x^2$''';
 
     final second = await _placeTextBlock(tester, const Offset(480, 360));
     await tester.pumpAndSettle();
+    expect(second.style.color, isNull);
     expect(pickerFinder, findsOneWidget);
     expect(
       tester.widget<ColorControl>(controlFinder).color,
-      colorFromHex(second.style.color),
+      BTheme.of(tester.element(controlFinder)).colors.textPrimary,
     );
 
     await tester.tap(

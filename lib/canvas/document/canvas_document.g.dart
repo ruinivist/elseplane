@@ -142,7 +142,7 @@ TextNodeStyle _$TextNodeStyleFromJson(Map<String, dynamic> json) =>
       );
       final val = TextNodeStyle._json(
         fontFamily: $checkedConvert('fontFamily', (v) => v as String),
-        color: $checkedConvert('color', (v) => v as String),
+        color: $checkedConvert('color', (v) => v as String?),
         background: $checkedConvert(
           'background',
           (v) => $enumDecode(_$BlockBackgroundKindEnumMap, v),
@@ -154,7 +154,7 @@ TextNodeStyle _$TextNodeStyleFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$TextNodeStyleToJson(TextNodeStyle instance) =>
     <String, dynamic>{
       'fontFamily': instance.fontFamily,
-      'color': instance.color,
+      'color': ?instance.color,
       'background': _$BlockBackgroundKindEnumMap[instance.background]!,
     };
 

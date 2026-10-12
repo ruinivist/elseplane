@@ -50,7 +50,7 @@ class _CodeTitleTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = BTheme.of(context);
     final colors = theme.colors;
-    final style = theme.typo.body.copyWith(color: colors.textPrimary);
+    final style = theme.typo.body.copyWith(color: colors.textHeading);
     final border = _codeSurfaceBorder(colors, model);
     final borderRadius = BorderRadius.only(
       topLeft: theme.geo.radiusMedium.topLeft,

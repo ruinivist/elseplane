@@ -1284,10 +1284,7 @@ class _CanvasPageState extends State<CanvasPage> {
       width: textNodeDefaultWidth,
       height: textNodeDefaultHeight,
       markdown: '',
-      style: TextNodeStyle(
-        fontFamily: defaultFontFamily,
-        color: colorToHex(BTheme.of(context).colors.textPrimary),
-      ),
+      style: const TextNodeStyle(fontFamily: defaultFontFamily),
     );
     final model = TextBlockModel(node);
 

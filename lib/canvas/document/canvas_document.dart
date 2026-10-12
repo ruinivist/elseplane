@@ -288,7 +288,7 @@ class TextNodeStyle {
 
   const TextNodeStyle({
     required this.fontFamily,
-    required this.color,
+    this.color,
     this.background = BlockBackgroundKind.card,
   });
 
@@ -303,8 +303,10 @@ class TextNodeStyle {
     if (!textNodeFontFamilies.contains(style.fontFamily)) {
       throw const FormatException('style.fontFamily is not supported');
     }
-    if (!_canonicalColor.hasMatch(style.color)) {
-      throw const FormatException('style.color must be uppercase #RRGGBB');
+    if (style.color case final color?) {
+      if (!_canonicalColor.hasMatch(color)) {
+        throw const FormatException('style.color must be uppercase #RRGGBB');
+      }
     }
     return style;
   }
@@ -312,7 +314,9 @@ class TextNodeStyle {
   // ---------- State ----------
 
   final String fontFamily;
-  final String color;
+
+  /// Null uses the theme's heading and body colors.
+  final String? color;
   final BlockBackgroundKind background;
 
   // ---------- Copying ----------

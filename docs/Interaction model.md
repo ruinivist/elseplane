@@ -25,7 +25,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Using an option or starting a move or rotation closes the source editor but leaves the block active. Options and transform controls remain available.
 - Resizing is available whenever the block is active, including while editing.
 - Clicking empty canvas or another block, changing tools, or pressing Escape returns the block to its inactive preview.
-- Text options control font, color, and background. The Background dropdown offers Transparent, Card, and Glass; new text blocks use Card. Transparent hides the surface, shadow, and preview border while preserving editing borders and selection highlighting. Glass blurs the canvas behind its rounded bounds and retains a translucent surface, fine border, and soft shadow during preview, activation, and editing. Selected Glass keeps its blur and translucency with an accent tint and outline.
+- Text options control font, color, and background. New text blocks use the theme's heading and body colors; picking a color applies that fixed color to both. Existing saved custom colors remain fixed when switching themes. The Background dropdown offers Transparent, Card, and Glass; new text blocks use Card. Transparent hides the surface, shadow, and preview border while preserving editing borders and selection highlighting. Glass blurs the canvas behind its rounded bounds and retains a translucent surface, fine border, and soft shadow during preview, activation, and editing. Selected Glass keeps its blur and translucency with an accent tint and outline.
 
 ## Code blocks
 

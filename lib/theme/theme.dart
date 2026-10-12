@@ -25,6 +25,7 @@ class BColors {
     required this.surfaceSubtle,
     required this.surfaceHover,
     required this.surfacePressed,
+    required this.textHeading,
     required this.textPrimary,
     required this.textSecondary,
     required this.textMuted,
@@ -50,6 +51,7 @@ class BColors {
   final Color surfaceSubtle;
   final Color surfaceHover;
   final Color surfacePressed;
+  final Color textHeading;
   final Color textPrimary;
   final Color textSecondary;
   final Color textMuted;
@@ -83,6 +85,7 @@ class BColors {
       surfaceSubtle: Color.lerp(surfaceSubtle, other.surfaceSubtle, t)!,
       surfaceHover: Color.lerp(surfaceHover, other.surfaceHover, t)!,
       surfacePressed: Color.lerp(surfacePressed, other.surfacePressed, t)!,
+      textHeading: Color.lerp(textHeading, other.textHeading, t)!,
       textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
       textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
       textMuted: Color.lerp(textMuted, other.textMuted, t)!,
