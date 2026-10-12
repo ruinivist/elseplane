@@ -1276,6 +1276,9 @@ class _CanvasPageState extends State<CanvasPage> {
 
   // ---------- Element creation ----------
 
+  BlockBackgroundKind get _newBlockBackground =>
+      BTheme.of(context).surfaceStyle == SurfaceStyle.glass ? BlockBackgroundKind.glass : BlockBackgroundKind.card;
+
   void _addTextBlock(Offset position) {
     if (!_documentLoaded) return;
     final node = TextElementData(
@@ -1284,7 +1287,7 @@ class _CanvasPageState extends State<CanvasPage> {
       width: textNodeDefaultWidth,
       height: textNodeDefaultHeight,
       markdown: '',
-      style: const TextNodeStyle(fontFamily: defaultFontFamily),
+      style: TextNodeStyle(fontFamily: defaultFontFamily, background: _newBlockBackground),
     );
     final model = TextBlockModel(node);
 
@@ -1472,6 +1475,7 @@ class _CanvasPageState extends State<CanvasPage> {
         source: '',
         title: '',
         showLineNumbers: true,
+        background: _newBlockBackground,
       ),
     );
     _mountElement(model, requestFocus: true);

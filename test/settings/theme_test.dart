@@ -4,6 +4,7 @@
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/canvas_page.dart';
+import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:elseplane/main.dart';
 import 'package:elseplane/settings/settings_dialog.dart';
@@ -185,6 +186,58 @@ void main() {
     expect(await loadSurfaceStyle(preferences), SurfaceStyle.solid);
     expect(find.descendant(of: find.byType(SettingsDialog), matching: find.byType(GlassSurface)), findsNothing);
   });
+
+  for (final tool in ['text', 'code']) {
+    testWidgets('new $tool backgrounds follow live surface style without changing existing blocks', (tester) async {
+      tester.view.physicalSize = const Size(1600, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final store = TestCanvasDocumentStore();
+      await tester.pumpWidget(ElseplaneApp(documentStore: store));
+      await tester.pumpAndSettle();
+
+      Future<void> place(Offset position) async {
+        await tester.tap(
+          find.descendant(of: find.byKey(ValueKey('toolbar-$tool')), matching: find.byType(TextButton)),
+        );
+        await tester.pumpAndSettle();
+        await tester.tapAt(position);
+        await tester.pumpAndSettle();
+        await pumpPastSave(tester);
+      }
+
+      List<BlockBackgroundKind> backgrounds() => tool == 'text'
+          ? tester.widgetList<TextTool>(find.byType(TextTool)).map((widget) => widget.model.style.background).toList()
+          : tester.widgetList<CodeTool>(find.byType(CodeTool)).map((widget) => widget.model.background).toList();
+
+      await place(const Offset(100, 200));
+      expect(backgrounds(), [BlockBackgroundKind.card]);
+      await _openAppearance(tester);
+      await _selectSurfaceStyle(tester, 'Glass');
+      await tester.tap(find.byKey(const ValueKey('settings-close')));
+      await tester.pumpAndSettle();
+      await place(const Offset(800, 200));
+      expect(backgrounds(), [BlockBackgroundKind.card, BlockBackgroundKind.glass]);
+      await _openAppearance(tester);
+      await _selectSurfaceStyle(tester, 'Solid');
+      await tester.tap(find.byKey(const ValueKey('settings-close')));
+      await tester.pumpAndSettle();
+      await place(const Offset(100, 750));
+      final expected = [BlockBackgroundKind.card, BlockBackgroundKind.glass, BlockBackgroundKind.card];
+      expect(backgrounds(), expected);
+      final saved = CanvasDocument.fromJson(store.persisted!.toJson());
+      expect(
+        saved.elements.map(
+          (element) => switch (element) {
+            TextElementData(:final style) => style.background,
+            CodeElementData(:final background) => background,
+            _ => throw StateError('Unexpected element'),
+          },
+        ),
+        expected,
+      );
+    });
+  }
 
   testWidgets('surface storage failure retains the live style and permits later saves', (tester) async {
     var fail = true;
