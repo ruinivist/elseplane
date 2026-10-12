@@ -181,7 +181,8 @@ class ContextMenu extends StatelessWidget {
                 child: child,
               ),
             ),
-      child: child,
+      // MenuAnchor's traversal shortcuts must yield to editing inside its content.
+      child: DefaultTextEditingShortcuts(child: child),
     );
   }
 }

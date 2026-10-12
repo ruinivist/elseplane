@@ -192,6 +192,32 @@ void main() {
     expect(find.byType(ElementTransformControls), findsNothing);
   });
 
+  testWidgets('text editor forwards arrow keys to native editing', (tester) async {
+    await _addTextBlock(tester, const Offset(120, 200));
+    await tester.pumpAndSettle();
+    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    await tester.enterText(
+      find.byKey(const ValueKey('text-markdown-editor')),
+      'first line\nsecond line',
+    );
+    await tester.pump();
+    expect(model.focusNode.hasFocus, isTrue);
+
+    for (final key in [
+      LogicalKeyboardKey.arrowLeft,
+      LogicalKeyboardKey.arrowRight,
+      LogicalKeyboardKey.arrowUp,
+      LogicalKeyboardKey.arrowDown,
+    ]) {
+      expect(await tester.sendKeyEvent(key), isFalse, reason: '$key must reach the browser');
+    }
+
+    expect(model.editing, isTrue);
+    expect(model.node.markdown, 'first line\nsecond line');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
   testWidgets('text editor keeps native select and delete actions', (
     tester,
   ) async {
