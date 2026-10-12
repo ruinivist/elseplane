@@ -97,21 +97,24 @@ class ElementTransformControls extends StatelessWidget {
                 ),
               ),
             ),
-            MouseRegion(
-              key: ValueKey('$elementName-block-delete-control'),
-              cursor: SystemMouseCursors.click,
-              child: Semantics(
-                button: true,
-                label: 'Delete $elementName block',
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onDelete,
-                  child: SizedBox.fromSize(
-                    size: BSizes.defaultIconButtonSize,
-                    child: Icon(
-                      Icons.delete_outline,
-                      size: 20,
-                      color: BTheme.of(context).colors.textSecondary,
+            Tooltip(
+              message: 'Delete',
+              child: MouseRegion(
+                key: ValueKey('$elementName-block-delete-control'),
+                cursor: SystemMouseCursors.click,
+                child: Semantics(
+                  button: true,
+                  label: 'Delete $elementName block',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onDelete,
+                    child: SizedBox.fromSize(
+                      size: BSizes.defaultIconButtonSize,
+                      child: Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: BTheme.of(context).colors.textSecondary,
+                      ),
                     ),
                   ),
                 ),
