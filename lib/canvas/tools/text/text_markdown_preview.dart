@@ -85,7 +85,9 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
             blockSyntaxes: [LatexBlockSyntax()],
             inlineSyntaxes: [_TextImageSyntax(), LatexInlineSyntax()],
             builders: {
-              'latex': LatexElementBuilder(textStyle: _fontStyle(context, widget.style)),
+              'latex': LatexElementBuilder(
+                textStyle: _fontStyle(context, widget.style).copyWith(fontSize: BSizes.markdownLatexFontSize),
+              ),
             },
             styleSheet: styleSheet,
             checkboxBuilder: (checked) => _buildCheckbox(checked, styleSheet),
