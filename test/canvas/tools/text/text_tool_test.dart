@@ -9,10 +9,12 @@ import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart'
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
+import 'package:elseplane/canvas/tools/text/text_markdown_preview.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:elseplane/main.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/preset_colors.dart';
+import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/gestures.dart';
@@ -642,6 +644,53 @@ Inline $x^2$''';
       find.byKey(const ValueKey('text-markdown-preview')),
     );
     expect(preview.data, source);
+  });
+
+  testWidgets('task checkboxes align with the first line in both themes', (tester) async {
+    const tasks = ['Checked task', 'Unchecked task with enough words to wrap onto several lines'];
+    for (final theme in [starlessLightThemeData, starlessDarkThemeData]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: SizedBox(
+              width: 220,
+              child: TextMarkdownPreview(
+                source: '- [x] ${tasks[0]}\n- [ ] ${tasks[1]}',
+                style: const TextNodeStyle(fontFamily: defaultFontFamily, color: '#201C1A'),
+                scrollController: null,
+                onEdit: () {},
+                onMove: (_) {},
+                attachmentStore: _FakeAttachmentStore(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final icons = [Icons.check_box, Icons.check_box_outline_blank];
+      for (var i = 0; i < tasks.length; i++) {
+        final icon = find.byIcon(icons[i]);
+        final text = find.byWidgetPredicate(
+          (widget) => widget is RichText && widget.text.toPlainText() == tasks[i],
+        );
+        final paragraph = tester.renderObject<RenderParagraph>(text);
+        final painter = TextPainter(
+          text: paragraph.text,
+          textDirection: paragraph.textDirection,
+          textScaler: paragraph.textScaler,
+        )..layout(maxWidth: paragraph.size.width);
+        final lines = painter.computeLineMetrics();
+        if (i == 1) expect(lines.length, greaterThan(1));
+        final firstLineCenter =
+            tester.getTopLeft(text).dy + lines.first.baseline - lines.first.ascent + lines.first.height / 2;
+        expect(tester.getCenter(icon).dy, closeTo(firstLineCenter, 1));
+        expect(tester.getSize(icon).height, greaterThan(paragraph.text.style!.fontSize!));
+        painter.dispose();
+      }
+      expect(tester.takeException(), isNull);
+    }
   });
 
   testWidgets('text preview keeps links safe and images restricted', (

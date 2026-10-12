@@ -73,6 +73,7 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
 
   @override
   Widget build(BuildContext context) {
+    final styleSheet = _styleSheet(context, widget.style);
     final content = widget.source.isEmpty
         ? _EmptyTextMarkdownPreview(
             key: const ValueKey('text-markdown-preview'),
@@ -86,7 +87,8 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
             builders: {
               'latex': LatexElementBuilder(textStyle: _fontStyle(widget.style)),
             },
-            styleSheet: _styleSheet(context, widget.style),
+            styleSheet: styleSheet,
+            checkboxBuilder: (checked) => _buildCheckbox(checked, styleSheet),
             imageBuilder: (uri, title, alt) => _buildImage(uri, alt, widget.attachmentStore),
             onTapLink: (_, href, _) => _openLink(context, href),
           );
@@ -164,13 +166,33 @@ MarkdownStyleSheet _styleSheet(BuildContext context, TextNodeStyle style) {
     del: base.copyWith(decoration: TextDecoration.lineThrough),
     blockquote: base,
     img: base,
-    checkbox: base.copyWith(color: colors.accent),
+    checkbox: base.copyWith(color: colors.accent, fontSize: BSizes.defaultIconSize),
     listBullet: base,
     tableHead: semibold.copyWith(fontSize: table.fontSize, height: table.height),
     tableBody: table,
     codeblockDecoration: BoxDecoration(color: colors.surfaceSubtle),
   );
 }
+
+Widget _buildCheckbox(bool checked, MarkdownStyleSheet styleSheet) => Padding(
+  padding: styleSheet.listBulletPadding!,
+  child: Text.rich(
+    TextSpan(
+      style: styleSheet.p,
+      children: [
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Icon(
+            checked ? Icons.check_box : Icons.check_box_outline_blank,
+            size: styleSheet.checkbox!.fontSize,
+            color: styleSheet.checkbox!.color,
+          ),
+        ),
+      ],
+    ),
+    textAlign: TextAlign.center,
+  ),
+);
 
 TextStyle _fontStyle(TextNodeStyle style) {
   final base = TextStyle(fontSize: BSizes.markdownBodyFontSize, color: colorFromHex(style.color));
