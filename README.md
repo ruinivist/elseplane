@@ -19,6 +19,16 @@ is too restrictive.
 - flutter so would be 100% cross platform ( need to test still )
 - self host with sharing ( planned )
 
+## Feature flags
+
+Edit the `static const` values in `lib/feature_flags.dart` and rebuild the app.
+`themeSelection` and `surfaceStyleSelection` default to `false`: the app uses
+Dark and Glass, and hides their settings. Enable either flag to restore its
+selector. New users start in Dark and Glass even when selection is enabled.
+
+Flags belong at the feature's entry points and controls. Future tool flags
+must guard activation and keyboard shortcuts as well as toolbar buttons.
+
 ## TODO
 
 a vague list

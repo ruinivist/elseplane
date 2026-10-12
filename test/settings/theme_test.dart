@@ -6,6 +6,7 @@ import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/feature_flags.dart';
 import 'package:elseplane/main.dart';
 import 'package:elseplane/settings/settings_dialog.dart';
 import 'package:elseplane/theme/fonts.dart';
@@ -58,11 +59,63 @@ void main() {
     }
   });
 
+  testWidgets('appearance flags guard root state, callbacks, and settings independently', (tester) async {
+    await tester.pumpWidget(
+      ElseplaneApp(
+        initialThemeMode: ThemeMode.light,
+        initialSurfaceStyle: SurfaceStyle.solid,
+        documentStore: TestCanvasDocumentStore(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final page = tester.widget<CanvasPage>(find.byType(CanvasPage));
+    final context = tester.element(find.byType(CanvasPage));
+    expect(Theme.of(context).brightness, FeatureFlags.themeSelection ? Brightness.light : Brightness.dark);
+    expect(
+      BTheme.of(context).surfaceStyle,
+      FeatureFlags.surfaceStyleSelection ? SurfaceStyle.solid : SurfaceStyle.glass,
+    );
+    expect(page.onThemeModeChanged, FeatureFlags.themeSelection ? isNotNull : isNull);
+    expect(page.onSurfaceStyleChanged, FeatureFlags.surfaceStyleSelection ? isNotNull : isNull);
+
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
+    await tester.pumpAndSettle();
+    if (FeatureFlags.themeSelection || FeatureFlags.surfaceStyleSelection) {
+      await tester.tap(find.text('Appearance').last);
+      await tester.pumpAndSettle();
+    } else {
+      expect(find.text('Appearance'), findsNothing);
+    }
+    expect(find.byKey(const ValueKey('theme-select')), FeatureFlags.themeSelection ? findsOneWidget : findsNothing);
+    expect(
+      find.byKey(const ValueKey('surface-style-select')),
+      FeatureFlags.surfaceStyleSelection ? findsOneWidget : findsNothing,
+    );
+  });
+
+  testWidgets('new users start dark and glass', (tester) async {
+    final preferences = SharedPreferencesAsync();
+    expect(await loadThemeMode(preferences), ThemeMode.dark);
+    expect(await loadSurfaceStyle(preferences), SurfaceStyle.glass);
+    await preferences.setString(themePreferenceKey, 'unknown');
+    await preferences.setString(surfaceStylePreferenceKey, 'unknown');
+    expect(await loadThemeMode(preferences), ThemeMode.dark);
+    expect(await loadSurfaceStyle(preferences), SurfaceStyle.glass);
+    final unavailable = _FailingPreferences(() => true);
+    expect(await loadThemeMode(unavailable), ThemeMode.dark);
+    expect(await loadSurfaceStyle(unavailable), SurfaceStyle.glass);
+    await tester.pumpWidget(ElseplaneApp(documentStore: TestCanvasDocumentStore()));
+    await tester.pumpAndSettle();
+    final context = tester.element(find.byType(CanvasPage));
+    expect(Theme.of(context).brightness, Brightness.dark);
+    expect(BTheme.of(context).surfaceStyle, SurfaceStyle.glass);
+  });
+
   testWidgets('theme switches live, persists, and keeps canvas content fixed', (tester) async {
     final preferences = SharedPreferencesAsync();
-    expect(await loadThemeMode(preferences), ThemeMode.light);
+    expect(await loadThemeMode(preferences), ThemeMode.dark);
     await preferences.setString(themePreferenceKey, 'unknown');
-    expect(await loadThemeMode(preferences), ThemeMode.light);
+    expect(await loadThemeMode(preferences), ThemeMode.dark);
 
     final store = TestCanvasDocumentStore(
       CanvasDocument(
@@ -87,7 +140,14 @@ void main() {
         ],
       ),
     );
-    await tester.pumpWidget(ElseplaneApp(preferences: preferences, documentStore: store));
+    await tester.pumpWidget(
+      ElseplaneApp(
+        initialThemeMode: ThemeMode.light,
+        initialSurfaceStyle: SurfaceStyle.solid,
+        preferences: preferences,
+        documentStore: store,
+      ),
+    );
     await tester.pumpAndSettle();
     final canvasState = tester.state(find.byType(CanvasPage));
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
@@ -127,13 +187,13 @@ void main() {
     await _selectTheme(tester, 'Light');
     expect(_brightness(tester), Brightness.light);
     expect(await loadThemeMode(preferences), ThemeMode.light);
-  });
+  }, skip: !FeatureFlags.themeSelection);
 
   testWidgets('surface style defaults, switches live, and reloads without changing canvas state', (tester) async {
     final preferences = SharedPreferencesAsync();
-    expect(await loadSurfaceStyle(preferences), SurfaceStyle.solid);
+    expect(await loadSurfaceStyle(preferences), SurfaceStyle.glass);
     await preferences.setString(surfaceStylePreferenceKey, 'unknown');
-    expect(await loadSurfaceStyle(preferences), SurfaceStyle.solid);
+    expect(await loadSurfaceStyle(preferences), SurfaceStyle.glass);
     final store = TestCanvasDocumentStore(
       CanvasDocument(
         background: CanvasBackgroundKind.dotGrid,
@@ -149,7 +209,14 @@ void main() {
         ],
       ),
     );
-    await tester.pumpWidget(ElseplaneApp(preferences: preferences, documentStore: store));
+    await tester.pumpWidget(
+      ElseplaneApp(
+        initialThemeMode: ThemeMode.light,
+        initialSurfaceStyle: SurfaceStyle.solid,
+        preferences: preferences,
+        documentStore: store,
+      ),
+    );
     await tester.pumpAndSettle();
     final state = tester.state(find.byType(CanvasPage));
     final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
@@ -167,7 +234,7 @@ void main() {
     expect(model.data.toJson(), original);
     expect(model.selected, isTrue);
     expect(store.persisted, isNull);
-    await _selectTheme(tester, 'Dark');
+    if (FeatureFlags.themeSelection) await _selectTheme(tester, 'Dark');
     expect(_surfaceStyle(tester), SurfaceStyle.glass);
     expect(_brightness(tester), Brightness.dark);
     await tester.pumpWidget(const SizedBox());
@@ -185,7 +252,7 @@ void main() {
     expect(_surfaceStyle(tester), SurfaceStyle.solid);
     expect(await loadSurfaceStyle(preferences), SurfaceStyle.solid);
     expect(find.descendant(of: find.byType(SettingsDialog), matching: find.byType(GlassSurface)), findsNothing);
-  });
+  }, skip: !FeatureFlags.surfaceStyleSelection);
 
   for (final tool in ['text', 'code']) {
     testWidgets('new $tool backgrounds follow live surface style without changing existing blocks', (tester) async {
@@ -211,19 +278,26 @@ void main() {
           : tester.widgetList<CodeTool>(find.byType(CodeTool)).map((widget) => widget.model.background).toList();
 
       await place(const Offset(100, 200));
-      expect(backgrounds(), [BlockBackgroundKind.card]);
-      await _openAppearance(tester);
-      await _selectSurfaceStyle(tester, 'Glass');
-      await tester.tap(find.byKey(const ValueKey('settings-close')));
-      await tester.pumpAndSettle();
+      expect(backgrounds(), [BlockBackgroundKind.glass]);
+      if (FeatureFlags.surfaceStyleSelection) {
+        await _openAppearance(tester);
+        await _selectSurfaceStyle(tester, 'Solid');
+        await tester.tap(find.byKey(const ValueKey('settings-close')));
+        await tester.pumpAndSettle();
+      }
       await place(const Offset(800, 200));
-      expect(backgrounds(), [BlockBackgroundKind.card, BlockBackgroundKind.glass]);
-      await _openAppearance(tester);
-      await _selectSurfaceStyle(tester, 'Solid');
-      await tester.tap(find.byKey(const ValueKey('settings-close')));
-      await tester.pumpAndSettle();
+      const secondBackground = FeatureFlags.surfaceStyleSelection
+          ? BlockBackgroundKind.card
+          : BlockBackgroundKind.glass;
+      expect(backgrounds(), [BlockBackgroundKind.glass, secondBackground]);
+      if (FeatureFlags.surfaceStyleSelection) {
+        await _openAppearance(tester);
+        await _selectSurfaceStyle(tester, 'Glass');
+        await tester.tap(find.byKey(const ValueKey('settings-close')));
+        await tester.pumpAndSettle();
+      }
       await place(const Offset(100, 750));
-      final expected = [BlockBackgroundKind.card, BlockBackgroundKind.glass, BlockBackgroundKind.card];
+      final expected = [BlockBackgroundKind.glass, secondBackground, BlockBackgroundKind.glass];
       expect(backgrounds(), expected);
       final saved = CanvasDocument.fromJson(store.persisted!.toJson());
       expect(
@@ -242,8 +316,15 @@ void main() {
   testWidgets('surface storage failure retains the live style and permits later saves', (tester) async {
     var fail = true;
     final preferences = _FailingPreferences(() => fail);
-    expect(await loadSurfaceStyle(preferences), SurfaceStyle.solid);
-    await tester.pumpWidget(ElseplaneApp(preferences: preferences, documentStore: TestCanvasDocumentStore()));
+    expect(await loadSurfaceStyle(preferences), SurfaceStyle.glass);
+    await tester.pumpWidget(
+      ElseplaneApp(
+        initialThemeMode: ThemeMode.light,
+        initialSurfaceStyle: SurfaceStyle.solid,
+        preferences: preferences,
+        documentStore: TestCanvasDocumentStore(),
+      ),
+    );
     await tester.pumpAndSettle();
     await _openAppearance(tester);
     await _selectSurfaceStyle(tester, 'Glass');
@@ -252,15 +333,20 @@ void main() {
     fail = false;
     await _selectSurfaceStyle(tester, 'Solid');
     expect(await preferences.getString(surfaceStylePreferenceKey), 'solid');
-    await _selectTheme(tester, 'Dark');
-    expect(await preferences.getString(themePreferenceKey), 'dark');
-  });
+  }, skip: !FeatureFlags.surfaceStyleSelection);
 
   testWidgets('storage failure keeps the chosen theme and allows a later save', (tester) async {
     var fail = true;
     final preferences = _FailingPreferences(() => fail);
-    expect(await loadThemeMode(preferences), ThemeMode.light);
-    await tester.pumpWidget(ElseplaneApp(preferences: preferences, documentStore: TestCanvasDocumentStore()));
+    expect(await loadThemeMode(preferences), ThemeMode.dark);
+    await tester.pumpWidget(
+      ElseplaneApp(
+        initialThemeMode: ThemeMode.light,
+        initialSurfaceStyle: SurfaceStyle.solid,
+        preferences: preferences,
+        documentStore: TestCanvasDocumentStore(),
+      ),
+    );
     await tester.pumpAndSettle();
     await _openAppearance(tester);
     await _selectTheme(tester, 'Dark');
@@ -270,7 +356,7 @@ void main() {
     fail = false;
     await _selectTheme(tester, 'Light');
     expect(await preferences.getString(themePreferenceKey), 'light');
-  });
+  }, skip: !FeatureFlags.themeSelection);
 }
 
 // ---------- Helpers ----------

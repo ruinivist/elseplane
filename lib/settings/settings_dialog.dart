@@ -4,6 +4,7 @@
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/editor/canvas_background.dart';
+import 'package:elseplane/feature_flags.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
@@ -219,12 +220,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
     bool horizontal = false,
   }) {
     final children = [
-      _navigationItem(
-        context,
-        section: _SettingsSection.appearance,
-        icon: Icons.palette_outlined,
-        label: 'Appearance',
-      ),
+      if (FeatureFlags.themeSelection || FeatureFlags.surfaceStyleSelection)
+        _navigationItem(
+          context,
+          section: _SettingsSection.appearance,
+          icon: Icons.palette_outlined,
+          label: 'Appearance',
+        ),
       _navigationItem(
         context,
         section: _SettingsSection.canvas,
@@ -330,31 +332,35 @@ class _SettingsDialogState extends State<SettingsDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Surface style', style: theme.typo.label),
-        const SizedBox(height: 10),
-        Select<SurfaceStyle>(
-          key: const ValueKey('surface-style-select'),
-          value: theme.surfaceStyle,
-          options: const [
-            SelectOption(value: SurfaceStyle.solid, label: 'Solid'),
-            SelectOption(value: SurfaceStyle.glass, label: 'Glass'),
-          ],
-          showBorder: false,
-          onChanged: widget.onSurfaceStyleChanged == null ? null : _changeSurfaceStyle,
-        ),
-        const SizedBox(height: 20),
-        Text('Theme', style: theme.typo.label),
-        const SizedBox(height: 10),
-        Select<ThemeMode>(
-          key: const ValueKey('theme-select'),
-          value: _themeMode,
-          options: const [
-            SelectOption(value: ThemeMode.light, label: 'Light'),
-            SelectOption(value: ThemeMode.dark, label: 'Dark'),
-          ],
-          showBorder: false,
-          onChanged: widget.onThemeModeChanged == null ? null : _changeTheme,
-        ),
+        if (FeatureFlags.surfaceStyleSelection) ...[
+          Text('Surface style', style: theme.typo.label),
+          const SizedBox(height: 10),
+          Select<SurfaceStyle>(
+            key: const ValueKey('surface-style-select'),
+            value: theme.surfaceStyle,
+            options: const [
+              SelectOption(value: SurfaceStyle.solid, label: 'Solid'),
+              SelectOption(value: SurfaceStyle.glass, label: 'Glass'),
+            ],
+            showBorder: false,
+            onChanged: widget.onSurfaceStyleChanged == null ? null : _changeSurfaceStyle,
+          ),
+        ],
+        if (FeatureFlags.surfaceStyleSelection && FeatureFlags.themeSelection) const SizedBox(height: 20),
+        if (FeatureFlags.themeSelection) ...[
+          Text('Theme', style: theme.typo.label),
+          const SizedBox(height: 10),
+          Select<ThemeMode>(
+            key: const ValueKey('theme-select'),
+            value: _themeMode,
+            options: const [
+              SelectOption(value: ThemeMode.light, label: 'Light'),
+              SelectOption(value: ThemeMode.dark, label: 'Dark'),
+            ],
+            showBorder: false,
+            onChanged: widget.onThemeModeChanged == null ? null : _changeTheme,
+          ),
+        ],
       ],
     );
   }

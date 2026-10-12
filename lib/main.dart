@@ -5,6 +5,7 @@ import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
 import 'package:elseplane/canvas/persistence/canvas_project_files.dart';
+import 'package:elseplane/feature_flags.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/foundation.dart';
@@ -19,17 +20,17 @@ const surfaceStylePreferenceKey = 'elseplane.surface.style';
 
 Future<SurfaceStyle> loadSurfaceStyle(SharedPreferencesAsync preferences) async {
   try {
-    return await preferences.getString(surfaceStylePreferenceKey) == 'glass' ? SurfaceStyle.glass : SurfaceStyle.solid;
+    return await preferences.getString(surfaceStylePreferenceKey) == 'solid' ? SurfaceStyle.solid : SurfaceStyle.glass;
   } on Object {
-    return SurfaceStyle.solid;
+    return SurfaceStyle.glass;
   }
 }
 
 Future<ThemeMode> loadThemeMode(SharedPreferencesAsync preferences) async {
   try {
-    return await preferences.getString(themePreferenceKey) == 'dark' ? ThemeMode.dark : ThemeMode.light;
+    return await preferences.getString(themePreferenceKey) == 'light' ? ThemeMode.light : ThemeMode.dark;
   } on Object {
-    return ThemeMode.light;
+    return ThemeMode.dark;
   }
 }
 
@@ -58,8 +59,8 @@ Future<void> main() async {
 /// Used as the root widget created by the application bootstrap.
 class ElseplaneApp extends StatefulWidget {
   const ElseplaneApp({
-    this.initialThemeMode = ThemeMode.light,
-    this.initialSurfaceStyle = SurfaceStyle.solid,
+    this.initialThemeMode = ThemeMode.dark,
+    this.initialSurfaceStyle = SurfaceStyle.glass,
     this.preferences,
     this.attachmentStore,
     this.documentStore,
@@ -81,8 +82,10 @@ class ElseplaneApp extends StatefulWidget {
 class _ElseplaneAppState extends State<ElseplaneApp> {
   // ---------- State and persistence ----------
 
-  late ThemeMode _themeMode = widget.initialThemeMode;
-  late SurfaceStyle _surfaceStyle = widget.initialSurfaceStyle;
+  late ThemeMode _themeMode = FeatureFlags.themeSelection ? widget.initialThemeMode : ThemeMode.dark;
+  late SurfaceStyle _surfaceStyle = FeatureFlags.surfaceStyleSelection
+      ? widget.initialSurfaceStyle
+      : SurfaceStyle.glass;
   late final SharedPreferencesAsync _preferences = widget.preferences ?? SharedPreferencesAsync();
   Future<void> _saveQueue = Future<void>.value();
 
@@ -123,8 +126,8 @@ class _ElseplaneAppState extends State<ElseplaneApp> {
         documentStore: widget.documentStore,
         projectFiles: widget.projectFiles,
         themeMode: _themeMode,
-        onThemeModeChanged: _setThemeMode,
-        onSurfaceStyleChanged: _setSurfaceStyle,
+        onThemeModeChanged: FeatureFlags.themeSelection ? _setThemeMode : null,
+        onSurfaceStyleChanged: FeatureFlags.surfaceStyleSelection ? _setSurfaceStyle : null,
       ),
     );
   }

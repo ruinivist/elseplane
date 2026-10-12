@@ -18,6 +18,12 @@ Text can remain active without being edited. For code, active currently also mea
 
 Shapes follow the same state separation: clicking or creating a shape makes it active without selecting it. Ctrl-click, Cmd-click, or marquee selection can select a shape without making it active. An active shape may also be selected, but changing either state does not change the other.
 
+## Appearance
+
+- New users start in Dark theme and Glass surface style.
+- Compile-time flags independently control theme and surface-style selection. With a flag disabled, the app uses Dark or Glass and omits that selector. With both disabled, Settings omits the Appearance section. Enabling a flag restores its selector and normal preference persistence.
+- App-wide surface style controls the backgrounds of future text and code blocks. Existing and pasted blocks retain their backgrounds and per-block options.
+
 ## Text blocks
 
 - Clicking the preview makes the block active, opens the Markdown source editor, and focuses it.

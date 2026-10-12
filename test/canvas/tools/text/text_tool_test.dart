@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_background.dart';
+import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
@@ -1067,7 +1068,7 @@ Inline $x^2$''';
       expect(model.node.markdown, source);
       expect(model.editing, isFalse);
 
-      expect(model.style.background, BlockBackgroundKind.card);
+      expect(model.style.background, BlockBackgroundKind.glass);
       final panelWidth = tester.getSize(find.byKey(const ValueKey('text-settings-panel'))).width;
       expect(tester.getSize(_selectTrigger('text-font-select')).width, panelWidth);
       expect(tester.getSize(_selectTrigger('text-background-select')).width, panelWidth);
@@ -1154,7 +1155,7 @@ Inline $x^2$''';
 
     BorderSide border() => (tester.widget<Material>(surface).shape! as RoundedRectangleBorder).side;
 
-    expect(model.style.background, BlockBackgroundKind.card);
+    expect(model.style.background, BlockBackgroundKind.glass);
     await _chooseBackground(tester, BlockBackgroundKind.transparent);
     expect(model.style.background, BlockBackgroundKind.transparent);
     expect(model.active, isTrue);
@@ -1192,9 +1193,11 @@ Inline $x^2$''';
   testWidgets('glass keeps a clipped backdrop in preview, editing, and selection', (tester) async {
     for (final themeMode in [ThemeMode.light, ThemeMode.dark]) {
       await tester.pumpWidget(
-        ElseplaneApp(
-          initialThemeMode: themeMode,
-          documentStore: TestCanvasDocumentStore(_rendererDocument()),
+        MaterialApp(
+          theme: starlessLightThemeData,
+          darkTheme: starlessDarkThemeData,
+          themeMode: themeMode,
+          home: CanvasPage(documentStore: TestCanvasDocumentStore(_rendererDocument())),
         ),
       );
       await tester.pumpAndSettle();
@@ -1290,7 +1293,7 @@ Inline $x^2$''';
     expect(first.style.fontFamily, 'Inter');
     await _chooseBackground(tester, BlockBackgroundKind.transparent);
     expect(second.style.background, BlockBackgroundKind.transparent);
-    expect(first.style.background, BlockBackgroundKind.card);
+    expect(first.style.background, BlockBackgroundKind.glass);
 
     await tester.tap(
       find.byKey(const ValueKey('text-markdown-preview-surface')).first,
@@ -1309,7 +1312,7 @@ Inline $x^2$''';
     expect(second.style.fontFamily, defaultFontFamily);
     expect(
       tester.widget<Select<BlockBackgroundKind>>(find.byKey(const ValueKey('text-background-select'))).value,
-      BlockBackgroundKind.card,
+      BlockBackgroundKind.glass,
     );
     await _chooseBackground(tester, BlockBackgroundKind.transparent);
     await _chooseBackground(tester, BlockBackgroundKind.card);
@@ -1381,7 +1384,7 @@ Inline $x^2$''';
     expect(savedNodes.last.width, second.node.width);
     expect(savedNodes.last.height, second.node.height);
     expect(savedNodes.last.style.fontFamily, defaultFontFamily);
-    expect(savedNodes.first.style.background, BlockBackgroundKind.card);
+    expect(savedNodes.first.style.background, BlockBackgroundKind.glass);
     expect(savedNodes.last.style.background, BlockBackgroundKind.transparent);
     expect(savedNodes.last.style.color, isNot(savedNodes.first.style.color));
     final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
