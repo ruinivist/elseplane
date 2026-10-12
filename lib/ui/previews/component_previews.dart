@@ -178,43 +178,53 @@ Widget contextMenuPreview() => Builder(
   theme: previewTheme,
   brightness: Brightness.light,
 )
-Widget titledContextMenuPreview() => Builder(
-  builder: (context) {
-    final macOS = Theme.of(context).platform == TargetPlatform.macOS;
-    ContextMenuAction arrange(String label, IconData icon, {bool backward = false, bool shift = false}) =>
-        ContextMenuAction(
-          label: label,
-          icon: icon,
-          shortcut: SingleActivator(
-            backward ? LogicalKeyboardKey.bracketLeft : LogicalKeyboardKey.bracketRight,
-            meta: macOS,
-            control: !macOS,
-            shift: shift,
+Widget titledContextMenuPreview() {
+  var auto = true;
+  return StatefulBuilder(
+    builder: (context, setState) {
+      final macOS = Theme.of(context).platform == TargetPlatform.macOS;
+      ContextMenuAction arrange(String label, IconData icon, {bool backward = false, bool shift = false}) =>
+          ContextMenuAction(
+            label: label,
+            icon: icon,
+            shortcut: SingleActivator(
+              backward ? LogicalKeyboardKey.bracketLeft : LogicalKeyboardKey.bracketRight,
+              meta: macOS,
+              control: !macOS,
+              shift: shift,
+            ),
+            onPressed: () {},
+          );
+      return _surface(
+        ContextMenu(
+          title: 'Arrange',
+          semanticLabel: 'Arrange preview',
+          groups: [
+            [
+              ContextMenuAction.toggle(
+                label: 'Auto',
+                value: auto,
+                onPressed: () => setState(() => auto = !auto),
+              ),
+            ],
+            [
+              arrange('Bring Forward', Icons.arrow_upward),
+              arrange('Send Backward', Icons.arrow_downward, backward: true),
+            ],
+            [
+              arrange('Bring to Front', Icons.flip_to_front, shift: true),
+              arrange('Send to Back', Icons.flip_to_back, backward: true, shift: true),
+            ],
+          ],
+          child: const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('Open Arrange'),
           ),
-          onPressed: () {},
-        );
-    return _surface(
-      ContextMenu(
-        title: 'Arrange',
-        semanticLabel: 'Arrange preview',
-        groups: [
-          [
-            arrange('Bring Forward', Icons.arrow_upward),
-            arrange('Send Backward', Icons.arrow_downward, backward: true),
-          ],
-          [
-            arrange('Bring to Front', Icons.flip_to_front, shift: true),
-            arrange('Send to Back', Icons.flip_to_back, backward: true, shift: true),
-          ],
-        ],
-        child: const Padding(
-          padding: EdgeInsets.all(12),
-          child: Text('Open Arrange'),
         ),
-      ),
-    );
-  },
-);
+      );
+    },
+  );
+}
 
 @Preview(
   name: 'DiscreteSlider',

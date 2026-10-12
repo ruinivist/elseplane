@@ -4,6 +4,7 @@
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/theme/starless.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -35,6 +36,52 @@ void main() {
     expect((rebuilds, documentChanges), (2, 3));
     model.background = BlockBackgroundKind.glass;
     expect((rebuilds, documentChanges), (2, 3));
+  });
+
+  testWidgets('active code selection drag interacts without moving or clearing the editor', (tester) async {
+    final model = _codeModel(source: 'one two three four five')..active = true;
+    addTearDown(model.dispose);
+    var interactions = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: starlessLightThemeData,
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: CodeTool(
+              model: model,
+              onEdit: () => fail('Active code must not be reactivated'),
+              onInteract: () => interactions++,
+              onMove: (_) => fail('Editor selection must not move the block'),
+              onResize: (_) {},
+              onChangeBoundary: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final start = tester.getTopLeft(find.byType(CodeEditor)) + const Offset(30, 20);
+    await tester.tapAt(start, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(model.focusNode.hasFocus, isTrue);
+    expect(interactions, 1);
+    interactions = 0;
+    final mobile = defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+    final drag = await tester.startGesture(start, kind: mobile ? PointerDeviceKind.touch : PointerDeviceKind.mouse);
+    if (mobile) await tester.pump(kLongPressTimeout + const Duration(milliseconds: 1));
+    await tester.pump();
+    await drag.moveBy(const Offset(50, 0));
+    await tester.pump();
+    await drag.moveBy(const Offset(50, 0));
+    await tester.pump();
+    final selection = model.controller.selection;
+    expect(selection.isCollapsed, isFalse);
+    await drag.up();
+    await tester.pumpAndSettle();
+    expect(model.controller.selection, selection);
+    expect(model.focusNode.hasFocus, isTrue);
+    expect(interactions, 1);
   });
 
   testWidgets('backgrounds cover body, title, and line numbers in every interaction state', (tester) async {

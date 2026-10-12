@@ -110,7 +110,7 @@ class CanvasDocument {
 sealed class CanvasElementData {
   // ---------- Construction ----------
 
-  CanvasElementData(this.id, this.type);
+  CanvasElementData(this.id, this.type, {this.autoArrange = true});
 
   factory CanvasElementData.fromJson(Object? json) {
     final value = _jsonMap(json, 'element');
@@ -132,6 +132,8 @@ sealed class CanvasElementData {
 
   final String id;
   final String type;
+  @JsonKey(defaultValue: true)
+  bool autoArrange;
 
   // ---------- Interface ----------
 
@@ -163,6 +165,7 @@ class ShapeElementData extends CanvasElementData {
     required this.strokeColor,
     required this.fillColor,
     required this.strokeWidth,
+    super.autoArrange,
   }) : super(id, 'shape');
 
   ShapeElementData._json({
@@ -174,6 +177,7 @@ class ShapeElementData extends CanvasElementData {
     required this.strokeColor,
     required this.fillColor,
     required this.strokeWidth,
+    super.autoArrange,
   }) : super(id, type);
 
   factory ShapeElementData.fromJson(Object? json) {
@@ -211,6 +215,7 @@ class ShapeElementData extends CanvasElementData {
 
   @override
   ShapeElementData copy({String? id}) => ShapeElementData(
+    autoArrange: autoArrange,
     id: id ?? this.id,
     kind: kind,
     position: position,
@@ -232,6 +237,7 @@ class MediaElementData extends CanvasElementData {
     required this.position,
     required this.width,
     required this.url,
+    super.autoArrange,
     this.rotation = 0,
   }) : super(id, 'media');
 
@@ -242,6 +248,7 @@ class MediaElementData extends CanvasElementData {
     required this.width,
     required this.url,
     required this.rotation,
+    super.autoArrange,
   }) : super(id, type);
 
   factory MediaElementData.fromJson(Object? json) {
@@ -272,6 +279,7 @@ class MediaElementData extends CanvasElementData {
 
   @override
   MediaElementData copy({String? id}) => MediaElementData(
+    autoArrange: autoArrange,
     id: id ?? this.id,
     position: position,
     width: width,
@@ -351,6 +359,7 @@ class TextElementData extends CanvasElementData {
     required double? height,
     required this.markdown,
     required this.style,
+    super.autoArrange,
     this.rotation = 0,
   }) : textSize = (width: width, height: height),
        super(id, 'text');
@@ -363,6 +372,7 @@ class TextElementData extends CanvasElementData {
     required this.markdown,
     required this.style,
     required this.rotation,
+    super.autoArrange,
   }) : super(id, type);
 
   factory TextElementData.fromJson(Object? json) {
@@ -404,6 +414,7 @@ class TextElementData extends CanvasElementData {
 
   @override
   TextElementData copy({String? id}) => TextElementData(
+    autoArrange: autoArrange,
     id: id ?? this.id,
     position: position,
     width: width,
@@ -428,6 +439,7 @@ class CodeElementData extends CanvasElementData {
     required this.source,
     required this.title,
     required this.showLineNumbers,
+    super.autoArrange,
     this.background = BlockBackgroundKind.card,
     this.rotation = 0,
   }) : super(id, 'code');
@@ -443,6 +455,7 @@ class CodeElementData extends CanvasElementData {
     required this.showLineNumbers,
     required this.background,
     required this.rotation,
+    super.autoArrange,
   }) : super(id, type);
 
   factory CodeElementData.fromJson(Object? json) {
@@ -478,6 +491,7 @@ class CodeElementData extends CanvasElementData {
 
   @override
   CodeElementData copy({String? id}) => CodeElementData(
+    autoArrange: autoArrange,
     id: id ?? this.id,
     position: position,
     size: size,
@@ -543,6 +557,7 @@ class PenElementData extends CanvasElementData {
     required this.points,
     required this.color,
     required this.width,
+    super.autoArrange,
     this.streamline = penStreamlineDefault,
   }) : super(id, 'pen');
 
@@ -556,6 +571,7 @@ class PenElementData extends CanvasElementData {
     required this.color,
     required this.width,
     required this.streamline,
+    super.autoArrange,
   }) : super(id, type);
 
   factory PenElementData.fromJson(Object? json) {
@@ -598,6 +614,7 @@ class PenElementData extends CanvasElementData {
 
   @override
   PenElementData copy({String? id}) => PenElementData(
+    autoArrange: autoArrange,
     id: id ?? this.id,
     position: position,
     size: size,
@@ -623,6 +640,7 @@ class ArrowElementData extends CanvasElementData {
     required this.color,
     required this.strokeStyle,
     required this.strokeWidth,
+    super.autoArrange,
   }) : super(id, 'arrow');
 
   ArrowElementData._json({
@@ -634,6 +652,7 @@ class ArrowElementData extends CanvasElementData {
     required this.color,
     required this.strokeStyle,
     required this.strokeWidth,
+    super.autoArrange,
   }) : super(id, type);
 
   factory ArrowElementData.fromJson(Object? json) {
@@ -674,6 +693,7 @@ class ArrowElementData extends CanvasElementData {
 
   @override
   ArrowElementData copy({String? id}) => ArrowElementData(
+    autoArrange: autoArrange,
     id: id ?? this.id,
     start: start,
     controls: List.of(controls),

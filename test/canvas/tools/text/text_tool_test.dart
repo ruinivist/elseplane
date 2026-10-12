@@ -1378,17 +1378,19 @@ Inline $x^2$''';
     final savedDocument = (await CanvasDocumentStore().load())!;
     final savedNodes = savedDocument.elements.whereType<TextElementData>().toList();
     expect(savedNodes, hasLength(2));
-    expect(savedNodes.map((node) => node.id), [first.node.id, second.node.id]);
-    expect(savedNodes.map((node) => node.markdown), [firstSource, secondSource]);
-    expect(savedNodes.last.position, second.node.position);
-    expect(savedNodes.last.width, second.node.width);
-    expect(savedNodes.last.height, second.node.height);
-    expect(savedNodes.last.style.fontFamily, defaultFontFamily);
-    expect(savedNodes.first.style.background, BlockBackgroundKind.glass);
-    expect(savedNodes.last.style.background, BlockBackgroundKind.transparent);
-    expect(savedNodes.last.style.color, isNot(savedNodes.first.style.color));
+    final savedSecond = savedNodes.first;
+    final savedFirst = savedNodes.last;
+    expect(savedNodes.map((node) => node.id), [second.node.id, first.node.id]);
+    expect(savedNodes.map((node) => node.markdown), [secondSource, firstSource]);
+    expect(savedSecond.position, second.node.position);
+    expect(savedSecond.width, second.node.width);
+    expect(savedSecond.height, second.node.height);
+    expect(savedSecond.style.fontFamily, defaultFontFamily);
+    expect(savedFirst.style.background, BlockBackgroundKind.glass);
+    expect(savedSecond.style.background, BlockBackgroundKind.transparent);
+    expect(savedSecond.style.color, isNot(savedFirst.style.color));
     final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
-    expect(canvas.childOrder, [first.node.id, second.node.id]);
+    expect(canvas.childOrder, [second.node.id, first.node.id]);
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
     await tester.pumpWidget(const ElseplaneApp());
@@ -1400,7 +1402,7 @@ Inline $x^2$''';
     expect(restoredNodes.map((node) => node.toJson()), savedNodes.map((node) => node.toJson()));
     expect(
       tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller.childOrder,
-      [first.node.id, second.node.id],
+      [second.node.id, first.node.id],
     );
     for (final block in restoredBlocks) {
       expect(block.model.editing, isFalse);

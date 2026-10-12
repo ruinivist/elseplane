@@ -15,10 +15,11 @@ import 'package:super_clipboard/super_clipboard.dart';
 /// Renders the focused Markdown source editor and handles rich paste data.
 /// Used by the text tool through the active [TextBlockModel].
 class TextMarkdownEditor extends StatefulWidget {
-  const TextMarkdownEditor({required this.model, required this.attachmentStore, super.key});
+  const TextMarkdownEditor({required this.model, required this.attachmentStore, this.onInteract, super.key});
 
   final TextBlockModel model;
   final AttachmentStore attachmentStore;
+  final VoidCallback? onInteract;
 
   @override
   State<TextMarkdownEditor> createState() => _TextMarkdownEditorState();
@@ -86,6 +87,8 @@ class _TextMarkdownEditorState extends State<TextMarkdownEditor> {
       child: TextField(
         key: const ValueKey('text-markdown-editor'),
         contextMenuBuilder: null,
+        onTap: widget.onInteract,
+        onTapAlwaysCalled: true,
         controller: widget.model.controller,
         focusNode: widget.model.focusNode,
         scrollController: widget.model.scrollController,

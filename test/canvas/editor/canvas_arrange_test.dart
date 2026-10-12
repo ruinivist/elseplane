@@ -1,6 +1,7 @@
 // Verifies object Arrange menus, shortcuts, persistence, and history.
 // Exercises ordering through the canvas rather than reproducing the library algorithm.
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
@@ -12,10 +13,12 @@ import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart'
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/canvas/tools/media/media_tool.dart';
+import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
 import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/glass_surface.dart';
+import 'package:elseplane/ui/common/labeled_switch.dart';
 import 'package:elseplane/ui/common/menu_surface.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -32,6 +35,376 @@ import '../test_helpers.dart';
 void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
+  for (final kind in ['text', 'code', 'title']) {
+    for (final device in [PointerDeviceKind.mouse, if (kind != 'title') PointerDeviceKind.touch]) {
+      testWidgets('Auto active $kind $device tap promotes without restarting editing', (tester) async {
+        final document = _autoDocument(kind)..elements.last.autoArrange = true;
+        final store = TestCanvasDocumentStore(document);
+        await pumpCanvas(tester, store);
+        await tester.tapAt(_autoHitPoint(tester, kind));
+        await tester.pumpAndSettle();
+        final text = kind == 'text' ? tester.widget<TextTool>(find.byType(TextTool)).model : null;
+        final code = kind == 'text' ? null : tester.widget<CodeTool>(find.byType(CodeTool)).model;
+        final focus = text?.focusNode ?? code!.focusNode;
+        await _promoteOther(tester);
+        var focusLosses = 0;
+        void trackFocus() {
+          if (!focus.hasFocus) focusLosses++;
+        }
+
+        focus.addListener(trackFocus);
+        final point = _activeEditorHitPoint(tester, kind);
+        await tester.tapAt(point, kind: device);
+        await tester.pumpAndSettle();
+        focus.removeListener(trackFocus);
+        expect(_canvas(tester).childOrder, ['other', 'editor']);
+        expect(text?.active ?? code!.active, isTrue);
+        expect(text?.controller.text ?? code!.controller.text, 'contents');
+        if (kind != 'title') {
+          expect(focus.hasFocus, isTrue);
+          expect(focusLosses, 0);
+        }
+        if (text != null) expect(text.editing, isTrue);
+        await tester.tapAt(point, kind: device);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        await _shortcut(tester, LogicalKeyboardKey.keyZ);
+        expect(_canvas(tester).childOrder, ['editor', 'other']);
+        await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+        expect(_canvas(tester).childOrder, ['other', 'editor']);
+        await pumpPastSave(tester);
+        await tester.pumpWidget(const SizedBox());
+        await pumpCanvas(tester, TestCanvasDocumentStore(store.persisted));
+        expect(_canvas(tester).childOrder, ['other', 'editor']);
+      });
+    }
+
+    testWidgets('Auto $kind content edit promotes with content in one undo step', (tester) async {
+      final document = _autoDocument(kind)..elements.last.autoArrange = true;
+      await pumpCanvas(tester, TestCanvasDocumentStore(document));
+      await tester.tapAt(_autoHitPoint(tester, kind));
+      await tester.pumpAndSettle();
+      final text = kind == 'text' ? tester.widget<TextTool>(find.byType(TextTool)).model : null;
+      final code = kind == 'text' ? null : tester.widget<CodeTool>(find.byType(CodeTool)).model;
+      await _promoteOther(tester);
+      if (text != null) {
+        text.controller.selection = const TextSelection.collapsed(offset: 0);
+      } else {
+        code!.controller.cancelSelection();
+      }
+      expect(_canvas(tester).childOrder, ['editor', 'other']);
+      if (text != null) {
+        text.insertPastedText('pasted ');
+      } else if (kind == 'title') {
+        code!.titleController.text = 'Edited title';
+      } else {
+        code!.controller.text = 'edited source';
+      }
+      await tester.pump();
+      expect(_canvas(tester).childOrder, ['other', 'editor']);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      await _shortcut(tester, LogicalKeyboardKey.keyZ);
+      expect(_canvas(tester).childOrder, ['editor', 'other']);
+      expect(text?.controller.text ?? code!.controller.text, 'contents');
+      if (kind == 'title') expect(code!.titleController.text, 'Title');
+      await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+      expect(_canvas(tester).childOrder, ['other', 'editor']);
+      expect(
+        kind == 'title' ? code!.titleController.text : text?.controller.text ?? code!.controller.text,
+        switch (kind) {
+          'text' => 'pasted contents',
+          'title' => 'Edited title',
+          _ => 'edited source',
+        },
+      );
+    });
+  }
+
+  for (final kind in ['text', 'code']) {
+    testWidgets('Auto active $kind canceled taps and touch navigation preserve saved order', (tester) async {
+      final document = _autoDocument(kind)..elements.last.autoArrange = true;
+      await pumpCanvas(tester, TestCanvasDocumentStore(document));
+      await tester.tapAt(_autoHitPoint(tester, kind));
+      await tester.pumpAndSettle();
+      await _promoteOther(tester);
+      final point = _activeEditorHitPoint(tester, kind);
+      final canceled = await tester.startGesture(point, pointer: 1);
+      await canceled.cancel();
+      await tester.pump();
+      expect(_canvas(tester).childOrder, ['editor', 'other']);
+      final first = await tester.startGesture(point, pointer: 2);
+      final second = await tester.startGesture(const Offset(700, 500), pointer: 3);
+      await second.up();
+      await first.up();
+      await tester.pumpAndSettle();
+      expect(_canvas(tester).childOrder, ['editor', 'other']);
+    });
+  }
+
+  testWidgets('Auto completed image paste promotes after leaving editing and shares its undo step', (tester) async {
+    final document = _autoDocument('text')..elements.last.autoArrange = true;
+    final attachments = _DelayedAttachmentStore();
+    await pumpCanvas(tester, TestCanvasDocumentStore(document), attachmentStore: attachments);
+    await tester.tapAt(_autoHitPoint(tester, 'text'));
+    await tester.pumpAndSettle();
+    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    model.controller.selection = const TextSelection.collapsed(offset: 0);
+    final paste = model.insertPastedImage(onePixelPngBytes, 'png', attachments);
+    await _promoteOther(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(model.editing, isFalse);
+    attachments.resume.complete();
+    await paste;
+    await tester.pumpAndSettle();
+    expect(_canvas(tester).childOrder, ['other', 'editor']);
+    final pasted = model.controller.text;
+    expect(pasted, startsWith('![pasted image](attachments/'));
+    await _shortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(_canvas(tester).childOrder, ['editor', 'other']);
+    expect(model.controller.text, 'contents');
+    await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+    expect(_canvas(tester).childOrder, ['other', 'editor']);
+    expect(model.controller.text, pasted);
+  });
+
+  for (final image in [false, true]) {
+    for (final auto in [true, false]) {
+      testWidgets(
+        'Markdown ${image ? 'image' : 'text'} link respects Auto $auto without editing or bypassing validation',
+        (
+          tester,
+        ) async {
+          final document = _autoDocument('text');
+          (document.elements.first as TextElementData)
+            ..autoArrange = auto
+            ..markdown = image
+                ? '[![linked](http://example.com/image.png)](javascript:alert(1))'
+                : '[link](javascript:alert(1))';
+          await pumpCanvas(tester, TestCanvasDocumentStore(document));
+          await tester.pumpAndSettle();
+          final Offset point;
+          if (image) {
+            point = tester.getCenter(find.byIcon(Icons.broken_image_outlined));
+          } else {
+            final link = find.byWidgetPredicate((widget) => widget is Text && widget.textSpan?.toPlainText() == 'link');
+            final paragraph = tester.renderObject<RenderParagraph>(link);
+            point =
+                tester.getTopLeft(link) +
+                paragraph
+                    .getBoxesForSelection(const TextSelection(baseOffset: 0, extentOffset: 4))
+                    .single
+                    .toRect()
+                    .center;
+          }
+          await tester.tapAt(point);
+          await tester.pumpAndSettle();
+          expect(_canvas(tester).childOrder, auto ? ['other', 'editor'] : ['editor', 'other']);
+          final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+          expect((model.active, model.editing), (false, false));
+          expect(find.text('Could not open link'), findsOneWidget);
+          if (auto) {
+            await _shortcut(tester, LogicalKeyboardKey.keyZ);
+            expect(_canvas(tester).childOrder, ['editor', 'other']);
+          }
+        },
+      );
+    }
+  }
+
+  for (final kind in ['shape', 'text', 'code', 'title', 'media', 'pen', 'arrow']) {
+    for (final device in [PointerDeviceKind.mouse, PointerDeviceKind.touch]) {
+      testWidgets('Auto $kind $device click promotes permanently without changing activation rules', (tester) async {
+        final document = _autoDocument(kind);
+        final target = document.elements.first.id;
+        final store = TestCanvasDocumentStore(document);
+        await pumpCanvas(tester, store);
+        await tester.tapAt(_autoHitPoint(tester, kind), kind: device);
+        await tester.pumpAndSettle();
+        final expected = [...document.elements.skip(1).map((element) => element.id), target];
+        expect(_canvas(tester).childOrder, expected);
+        if (kind == 'pen') {
+          expect(tester.widget<PenStroke>(find.byType(PenStroke)).model.active, isFalse);
+        }
+        await tester.tapAt(const Offset(790, 590), kind: device);
+        await tester.pumpAndSettle();
+        expect(_canvas(tester).childOrder, expected);
+        await pumpPastSave(tester);
+        expect(_order(store.persisted!), expected);
+        await tester.pumpWidget(const SizedBox());
+        await pumpCanvas(tester, TestCanvasDocumentStore(store.persisted));
+        expect(_canvas(tester).childOrder, expected);
+      });
+    }
+    testWidgets('Auto inactive $kind drag promotes and moves in one undo step', (tester) async {
+      final document = _autoDocument(kind);
+      final initial = _order(document);
+      final target = document.elements.first.id;
+      await pumpCanvas(tester, TestCanvasDocumentStore(document));
+      final controller = _canvas(tester);
+      final position = controller.getInfo(target).gsPosition;
+      final start = kind == 'media'
+          ? tester.getCenter(find.byKey(const ValueKey('media-panel-drag-strip')))
+          : _autoHitPoint(tester, kind);
+      await tester.dragFrom(start, const Offset(45, 30), kind: PointerDeviceKind.mouse);
+      await tester.pumpAndSettle();
+      expect(controller.childOrder.last, target);
+      expect(controller.getInfo(target).gsPosition, position + const Offset(45, 30));
+      await _shortcut(tester, LogicalKeyboardKey.keyZ);
+      expect(controller.childOrder, initial);
+      expect(controller.getInfo(target).gsPosition, position);
+      await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+      expect(controller.childOrder.last, target);
+      expect(controller.getInfo(target).gsPosition, position + const Offset(45, 30));
+    });
+  }
+
+  testWidgets('Auto mixed group drag promotes only enabled members in relative order', (tester) async {
+    final document = _document();
+    document.elements[0].autoArrange = true;
+    document.elements[2].autoArrange = true;
+    await pumpCanvas(tester, TestCanvasDocumentStore(document));
+    final models = _models(tester);
+    for (final id in ['a', 'b', 'c']) {
+      models[id]!.selected = true;
+    }
+    final positions = {
+      for (final id in ['a', 'b', 'c']) id: models[id]!.canvasPosition,
+    };
+    final drag = await tester.startGesture(const Offset(305, 305), kind: PointerDeviceKind.mouse);
+    for (var update = 0; update < 3; update++) {
+      await drag.moveBy(const Offset(15, 10));
+      await tester.pump();
+      expect(_canvas(tester).childOrder, ['b', 'd', 'a', 'c']);
+    }
+    await drag.up();
+    await tester.pumpAndSettle();
+    expect(_canvas(tester).childOrder, ['b', 'd', 'a', 'c']);
+    for (final id in positions.keys) {
+      expect(models[id]!.canvasPosition, positions[id]! + const Offset(45, 30));
+    }
+    await _shortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
+    for (final id in positions.keys) {
+      expect(models[id]!.canvasPosition, positions[id]);
+    }
+  });
+
+  testWidgets('Auto modifier-click and right-click promote without activation', (tester) async {
+    await pumpCanvas(tester, TestCanvasDocumentStore(_document(auto: true)));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    await tester.tapAt(const Offset(305, 305));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
+    expect(_models(tester)['a']!.active, isFalse);
+    expect(_models(tester)['a']!.selected, isTrue);
+    await _shortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
+    await _open(tester, const Offset(305, 305));
+    expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
+    expect(_models(tester)['a']!.active, isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    await _shortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
+  });
+
+  testWidgets('manual boundary choice disables Auto and undo restores its setting', (tester) async {
+    await pumpCanvas(tester, TestCanvasDocumentStore(_document(auto: true)));
+    await tester.tapAt(const Offset(305, 305));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(305, 305));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Arrange'));
+    await tester.pumpAndSettle();
+    final toggle = tester.widget<LabeledSwitch>(find.byType(LabeledSwitch));
+    expect(toggle.value, isTrue);
+    expect(toggle.focusNode!.hasFocus, isTrue);
+    expect(tester.getSemantics(find.byType(LabeledSwitch)).flagsCollection.isToggled.toBoolOrNull(), isTrue);
+    expect(_button(tester, 'Bring to Front').onPressed, isNotNull);
+    await tester.tap(find.text('Bring to Front'));
+    await tester.pumpAndSettle();
+    expect(_models(tester)['a']!.autoArrange, isFalse);
+    expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
+    await _shortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(_models(tester)['a']!.autoArrange, isTrue);
+    expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
+    await _shortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
+  });
+
+  testWidgets('Auto switch applies to a mixed group and promotes immediately in one step', (tester) async {
+    final document = _document()..elements[2].autoArrange = true;
+    await pumpCanvas(tester, TestCanvasDocumentStore(document));
+    _models(tester)['a']!.selected = true;
+    _models(tester)['c']!.selected = true;
+    await _open(tester, const Offset(305, 305));
+    await _openArrange(tester);
+    expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.byType(MenuSurface), findsNothing);
+    expect(_canvas(tester).childOrder, ['b', 'd', 'a', 'c']);
+    expect(_models(tester)['a']!.autoArrange, isTrue);
+    expect(_models(tester)['c']!.autoArrange, isTrue);
+    expect(_models(tester)['b']!.autoArrange, isFalse);
+    await _shortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
+    expect(_models(tester)['a']!.autoArrange, isFalse);
+    expect(_models(tester)['c']!.autoArrange, isTrue);
+    await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+    expect(_canvas(tester).childOrder, ['b', 'd', 'a', 'c']);
+    _models(tester)['a']!.selected = true;
+    _models(tester)['c']!.selected = true;
+    await _open(tester, const Offset(355, 355));
+    await _openArrange(tester);
+    expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isTrue);
+    await tester.tap(find.text('Auto'));
+    await tester.pumpAndSettle();
+    expect(_canvas(tester).childOrder, ['b', 'd', 'a', 'c']);
+    expect(_models(tester)['a']!.autoArrange, isFalse);
+    expect(_models(tester)['c']!.autoArrange, isFalse);
+    await _shortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(_models(tester)['a']!.autoArrange, isTrue);
+    expect(_models(tester)['c']!.autoArrange, isTrue);
+  });
+
+  testWidgets('manual group shortcut disables Auto only for its targets', (tester) async {
+    await pumpCanvas(tester, TestCanvasDocumentStore(_document(auto: true)));
+    _models(tester)['a']!.selected = true;
+    _models(tester)['c']!.selected = true;
+    await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
+    expect(_canvas(tester).childOrder, ['b', 'd', 'a', 'c']);
+    expect(_models(tester)['a']!.autoArrange, isFalse);
+    expect(_models(tester)['c']!.autoArrange, isFalse);
+    expect(_models(tester)['b']!.autoArrange, isTrue);
+    await _shortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
+    expect(_models(tester)['a']!.autoArrange, isTrue);
+    expect(_models(tester)['c']!.autoArrange, isTrue);
+  });
+
+  testWidgets('Auto menu toggle supports native hover and keyboard activation', (tester) async {
+    await pumpCanvas(tester, TestCanvasDocumentStore(_document(auto: true)));
+    await _open(tester, const Offset(305, 305));
+    await _openArrange(tester);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.moveTo(tester.getCenter(find.text('Send to Back')));
+    await tester.pumpAndSettle();
+    expect(Focus.of(tester.element(find.text('Send to Back'))).hasFocus, isTrue);
+    await mouse.moveTo(tester.getCenter(find.text('Auto')));
+    await tester.pumpAndSettle();
+    expect(Focus.of(tester.element(find.text('Auto'))).hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.byType(MenuSurface), findsNothing);
+    expect(_models(tester)['a']!.autoArrange, isFalse);
+    await mouse.removePointer();
+  });
+
   testWidgets('direct heading is noninteractive and navigation skips disabled commands', (tester) async {
     await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
     await tester.tapAt(const Offset(375, 375));
@@ -41,7 +414,10 @@ void main() {
     expect(find.ancestor(of: find.text('Arrange'), matching: find.byType(MenuItemButton)), findsNothing);
     expect(_button(tester, 'Bring Forward').onPressed, isNull);
     expect(_button(tester, 'Bring to Front').onPressed, isNull);
-    expect(_button(tester, 'Send Backward').focusNode!.hasFocus, isTrue);
+    expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).focusNode!.hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(Focus.of(tester.element(find.text('Send Backward'))).hasFocus, isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
     expect(Focus.of(tester.element(find.text('Send to Back'))).hasFocus, isTrue);
@@ -59,8 +435,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Arrange'));
     await tester.pumpAndSettle();
-    for (final button in tester.widgetList<MenuItemButton>(find.byType(MenuItemButton))) {
-      expect(button.onPressed, isNull);
+    for (final label in ['Bring Forward', 'Send Backward', 'Bring to Front', 'Send to Back']) {
+      expect(_button(tester, label).onPressed, isNull);
     }
     await tester.tap(find.text('Bring Forward'));
     await tester.pumpAndSettle();
@@ -140,7 +516,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(focus.hasFocus, isFalse);
       expect(find.byType(ElementTransformControls), findsNothing);
-      expect(_button(tester, 'Bring to Front').focusNode!.hasFocus, isTrue);
+      expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).focusNode!.hasFocus, isTrue);
       if (editor == 'text') {
         final model = tester.widget<TextTool>(find.byType(TextTool)).model;
         expect(model.editing, isFalse);
@@ -252,7 +628,7 @@ void main() {
             await tester.tap(find.byTooltip('Arrange'));
             await tester.pumpAndSettle();
             expect(find.byType(SubmenuButton), findsNothing);
-            expect(find.byType(MenuItemButton), findsNWidgets(4));
+            expect(find.byType(MenuItemButton), findsNWidgets(5));
             expect(find.text('Arrange'), findsOneWidget);
             expect(find.byType(ElementTransformControls), findsNothing);
             expect(before[target]!.active, isFalse);
@@ -548,6 +924,9 @@ void main() {
     expect(_button(tester, 'Bring to Front').onPressed, isNull);
     expect(_button(tester, 'Send Backward').onPressed, isNotNull);
     expect(_button(tester, 'Send to Back').onPressed, isNotNull);
+    expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(_canvas(tester).childOrder, ['a', 'b', 'd', 'c']);
@@ -1021,6 +1400,75 @@ void main() {
 
 // ---------- Helpers ----------
 
+class _DelayedAttachmentStore extends TestAttachmentStore {
+  final resume = Completer<void>();
+
+  @override
+  Future<void> write(String path, Uint8List bytes) async {
+    await resume.future;
+    await super.write(path, bytes);
+  }
+}
+
+Future<void> _promoteOther(WidgetTester tester) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+  await tester.pump();
+  await tester.tapAt(const Offset(555, 405));
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+  await tester.pumpAndSettle();
+  expect(_canvas(tester).childOrder, ['editor', 'other']);
+}
+
+Offset _activeEditorHitPoint(WidgetTester tester, String kind) => switch (kind) {
+  'text' => tester.getCenter(find.byKey(const ValueKey('text-markdown-editor'))),
+  'title' => tester.getCenter(find.byKey(const ValueKey('code-title-input'))),
+  _ => _autoHitPoint(tester, kind),
+};
+
+CanvasDocument _autoDocument(String kind) {
+  final document = kind == 'shape' ? (_document()..elements.removeRange(2, 4)) : _editorDocument(kind);
+  if (kind == 'pen') {
+    document.elements[0] = PenElementData(
+      id: 'editor',
+      position: const Offset(150, 250),
+      size: const Size(160, 30),
+      hitSlop: 6,
+      points: const [PenPointData(Offset(0, 15), pressure: 0.5), PenPointData(Offset(160, 15), pressure: 0.5)],
+      color: 0xff000000,
+      width: 3,
+    );
+  } else if (kind == 'arrow') {
+    document.elements[0] = ArrowElementData(
+      id: 'editor',
+      start: const Offset(150, 250),
+      controls: const [Offset(230, 235)],
+      end: const Offset(310, 250),
+      color: 0xff000000,
+      strokeStyle: ArrowStrokeStyle.solid,
+      strokeWidth: 2,
+    );
+  }
+  final target = document.elements.first..autoArrange = true;
+  if (target is CodeElementData) target.size = const Size(300, 240);
+  return document;
+}
+
+Offset _autoHitPoint(WidgetTester tester, String kind) => switch (kind) {
+  'shape' => const Offset(305, 305),
+  'pen' => tester.getCenter(find.byType(PenStroke)),
+  'arrow' => const Offset(150, 250),
+  _ => tester.getCenter(
+    find.byKey(
+      ValueKey(switch (kind) {
+        'text' => 'text-markdown-preview',
+        'title' => 'code-title-text',
+        'media' => 'media-url-field',
+        _ => 'code-block-preview-surface',
+      }),
+    ),
+  ),
+};
+
 LazyCanvasController _canvas(WidgetTester tester) => tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
 
 Map<String, ShapeModel> _models(WidgetTester tester) => {
@@ -1070,11 +1518,12 @@ Future<void> _shortcut(
   await tester.pump();
 }
 
-CanvasDocument _document() => CanvasDocument(
+CanvasDocument _document({bool auto = false}) => CanvasDocument(
   background: CanvasBackgroundKind.plain,
   elements: [
     for (var index = 0; index < 4; index++)
       ShapeElementData(
+        autoArrange: auto,
         id: ['a', 'b', 'c', 'd'][index],
         kind: ShapeKind.rectangle,
         position: Offset(300 + index * 25, 300 + index * 25),
@@ -1087,6 +1536,7 @@ CanvasDocument _document() => CanvasDocument(
 );
 
 TextElementData _text(String id, Offset position) => TextElementData(
+  autoArrange: false,
   id: id,
   position: position,
   width: 280,
@@ -1101,9 +1551,10 @@ CanvasDocument _editorDocument(String editor) => CanvasDocument(
     if (editor == 'text')
       _text('editor', const Offset(150, 230))
     else if (editor == 'media')
-      MediaElementData(id: 'editor', position: const Offset(150, 230), width: 280, url: '')
+      MediaElementData(autoArrange: false, id: 'editor', position: const Offset(150, 230), width: 280, url: '')
     else
       CodeElementData(
+        autoArrange: false,
         id: 'editor',
         position: const Offset(150, 230),
         size: const Size(300, 220),
@@ -1113,6 +1564,7 @@ CanvasDocument _editorDocument(String editor) => CanvasDocument(
         showLineNumbers: false,
       ),
     ShapeElementData(
+      autoArrange: false,
       id: 'other',
       kind: ShapeKind.rectangle,
       position: const Offset(550, 400),

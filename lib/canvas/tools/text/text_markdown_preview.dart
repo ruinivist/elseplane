@@ -28,6 +28,7 @@ class TextMarkdownPreview extends StatefulWidget {
     required this.onEdit,
     required this.onMove,
     required this.attachmentStore,
+    this.onInteract,
     super.key,
   });
 
@@ -35,6 +36,7 @@ class TextMarkdownPreview extends StatefulWidget {
   final TextNodeStyle style;
   final ScrollController? scrollController;
   final VoidCallback onEdit;
+  final VoidCallback? onInteract;
   final ValueChanged<Offset> onMove;
   final AttachmentStore attachmentStore;
 
@@ -92,7 +94,10 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
             styleSheet: styleSheet,
             checkboxBuilder: (checked) => _buildCheckbox(checked, styleSheet),
             imageBuilder: (uri, title, alt) => _buildImage(uri, alt, widget.attachmentStore),
-            onTapLink: (_, href, _) => _openLink(context, href),
+            onTapLink: (_, href, _) {
+              widget.onInteract?.call();
+              unawaited(_openLink(context, href));
+            },
           );
     return GestureDetector(
       key: const ValueKey('text-markdown-preview-surface'),

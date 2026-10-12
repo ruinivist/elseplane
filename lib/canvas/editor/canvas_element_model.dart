@@ -48,6 +48,14 @@ abstract class CanvasElementModel<T extends CanvasElementData> extends ChangeNot
   @protected
   void synchronizeRestoredData(T previous) {}
 
+  bool get autoArrange => data.autoArrange;
+
+  set autoArrange(bool value) {
+    if (data.autoArrange == value) return;
+    data.autoArrange = value;
+    notifyDocumentChanged();
+  }
+
   bool get selected => _selected;
 
   set selected(bool value) {

@@ -11,11 +11,13 @@ class PenStroke extends StatefulWidget {
   const PenStroke({
     required this.model,
     required this.onMove,
+    this.onTap,
     super.key,
   });
 
   final PenStrokeModel model;
   final ValueChanged<Offset> onMove;
+  final VoidCallback? onTap;
 
   @override
   State<PenStroke> createState() => _PenStrokeState();
@@ -36,6 +38,8 @@ class _PenStrokeState extends State<PenStroke> {
           label: 'Drawing stroke',
           selected: widget.model.selected,
           child: GestureDetector(
+            dragStartBehavior: DragStartBehavior.down,
+            onTap: widget.onTap,
             onPanStart: (details) => _dragPosition = details.globalPosition,
             onPanUpdate: (details) {
               final previous = _dragPosition!;

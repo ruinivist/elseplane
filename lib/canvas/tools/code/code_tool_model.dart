@@ -20,6 +20,7 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
     options: const CodeLineOptions(indentSize: 4),
   );
   late final TextEditingController titleController;
+  VoidCallback? onContentChanged;
   final focusNode = FocusNode();
   final scrollController = CodeScrollController(
     verticalScroller: AnimatedScrollController(
@@ -86,6 +87,7 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
     data.title = value;
     if (titleController.text != value) titleController.text = value;
     notifyDocumentChanged();
+    onContentChanged?.call();
   }
 
   BlockBackgroundKind get background => data.background;
@@ -128,12 +130,14 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
     if (data.source == controller.text) return;
     data.source = controller.text;
     notifyDocumentChanged(rebuild: false);
+    onContentChanged?.call();
   }
 
   // ---------- Lifecycle ----------
 
   @override
   void dispose() {
+    onContentChanged = null;
     controller
       ..removeListener(_syncSource)
       ..dispose();

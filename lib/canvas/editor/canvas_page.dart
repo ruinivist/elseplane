@@ -800,7 +800,10 @@ class _CanvasPageState extends State<CanvasPage> {
 
   bool _toggleSelectionIfModifierPressed(CanvasElementModel model) {
     if (!_selectionModifierPressed.value) return false;
+    _finishHistoryOperation();
     model.selected = !model.selected;
+    _promoteAuto([model]);
+    _finishHistoryOperation();
     return true;
   }
 
@@ -919,6 +922,7 @@ class _CanvasPageState extends State<CanvasPage> {
   }
 
   void _setActiveElement(CanvasElementModel? model) {
+    if (model != null) _promoteAuto([model]);
     if (identical(_activeElement, model)) return;
     setState(() {
       _activeElement?.active = false;
@@ -986,12 +990,14 @@ class _CanvasPageState extends State<CanvasPage> {
 
   void _openCanvasContextMenu(CanvasElementModel? model, Offset position, {bool arrangeOnly = false}) {
     if ((model != null && !_elements.contains(model)) || _activeTool.value != _CanvasTool.select) return;
+    _clearElementEditing();
+    if (model != null) _promoteAuto([model]);
+    _finishHistoryOperation();
     if (model != null && !model.selected) _setSelection({model});
     _contextMenuTargets = model == null ? const [] : _selectedInStackingOrder;
     _arrangeMenuOpen = arrangeOnly;
     final box = _contextMenuKey.currentContext!.findRenderObject()! as RenderBox;
     _contextMenuPosition = _screenToCanvas(box.globalToLocal(position));
-    _clearElementEditing();
     _contextMenuView = (_canvasController.offset, _canvasController.scale);
     // Build the captured targets before opening; editor release callbacks finish first.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1023,9 +1029,10 @@ class _CanvasPageState extends State<CanvasPage> {
   }
 
   bool _canArrange(CanvasArrange action, List<CanvasElementModel> targets) {
-    if (targets.any((model) => !_elements.contains(model))) return false;
+    if (targets.isEmpty || targets.any((model) => !_elements.contains(model))) return false;
     try {
-      return _canvasController.canArrange(targets.map((model) => model.data.id), action);
+      return _canvasController.canArrange(targets.map((model) => model.data.id), action) ||
+          targets.any((model) => model.autoArrange);
       // The ordering API documents unknown layout sizes as a StateError.
       // ignore: avoid_catching_errors
     } on StateError {
@@ -1039,6 +1046,9 @@ class _CanvasPageState extends State<CanvasPage> {
   void _arrange(CanvasArrange action, List<CanvasElementModel> targets) {
     if (!_canArrange(action, targets)) return;
     _finishHistoryOperation();
+    for (final model in targets) {
+      model.autoArrange = false;
+    }
     final ids = targets.map((model) => model.data.id);
     final changed = switch (action) {
       CanvasArrange.forward => _canvasController.bringForward(ids),
@@ -1046,13 +1056,35 @@ class _CanvasPageState extends State<CanvasPage> {
       CanvasArrange.front => _canvasController.bringToFront(ids),
       CanvasArrange.back => _canvasController.sendToBack(ids),
     };
-    if (!changed) return;
+    if (changed) _syncElementOrder();
+    _finishHistoryOperation();
+    setState(() {});
+  }
+
+  void _setAutoArrange(List<CanvasElementModel> targets, bool value) {
+    if (targets.isEmpty || targets.any((model) => !_elements.contains(model))) return;
+    _finishHistoryOperation();
+    for (final model in targets) {
+      model.autoArrange = value;
+    }
+    if (value) _promoteAuto(targets);
+    _finishHistoryOperation();
+    setState(() {});
+  }
+
+  void _promoteAuto(Iterable<CanvasElementModel> targets) {
+    if (!_documentLoaded || _canvasInputBlocked) return;
+    final liveModels = _elements.toSet();
+    final ids = targets.where((model) => model.autoArrange && liveModels.contains(model)).map((model) => model.data.id);
+    if (_canvasController.bringToFront(ids)) _syncElementOrder();
+  }
+
+  void _syncElementOrder() {
     final models = {for (final model in _elements) model.data.id: model};
     _elements
       ..clear()
       ..addAll(_canvasController.childOrder.map((id) => models[id]!));
     _scheduleDocumentSave();
-    _finishHistoryOperation();
     setState(() {});
   }
 
@@ -1068,15 +1100,12 @@ class _CanvasPageState extends State<CanvasPage> {
   List<List<ContextMenuAction>> _arrangeContextMenuActions() {
     final targets = _contextMenuTargets;
     final macOS = Theme.of(context).platform == TargetPlatform.macOS;
-    var focusFirst = _arrangeMenuOpen;
+    final auto = targets.isNotEmpty && targets.every((model) => model.autoArrange);
     ContextMenuAction arrange(CanvasArrange action, String label, IconData icon) {
       final enabled = _canArrange(action, targets);
-      final focusNode = focusFirst && enabled ? _contextMenuFocusNode : null;
-      if (enabled) focusFirst = false;
       return ContextMenuAction(
         label: label,
         icon: icon,
-        focusNode: focusNode,
         onPressed: enabled ? () => _dispatchContextMenuAction(() => _arrange(action, targets)) : null,
         shortcut: SingleActivator(
           action == CanvasArrange.forward || action == CanvasArrange.front
@@ -1090,6 +1119,14 @@ class _CanvasPageState extends State<CanvasPage> {
     }
 
     return [
+      [
+        ContextMenuAction.toggle(
+          label: 'Auto',
+          value: auto,
+          focusNode: _arrangeMenuOpen ? _contextMenuFocusNode : null,
+          onPressed: () => _dispatchContextMenuAction(() => _setAutoArrange(targets, !auto)),
+        ),
+      ],
       [
         arrange(CanvasArrange.forward, 'Bring Forward', LucideIcons.arrowUp),
         arrange(CanvasArrange.backward, 'Send Backward', LucideIcons.arrowDown),
@@ -1190,6 +1227,7 @@ class _CanvasPageState extends State<CanvasPage> {
         .toList();
 
     if (affected.isEmpty) return;
+    _promoteAuto(affected);
     _canvasController.moveChildrenBy(
       affected.map((model) => model.data.id),
       gridDelta,
@@ -1209,6 +1247,7 @@ class _CanvasPageState extends State<CanvasPage> {
       return;
     }
     if (!_elements.contains(model)) return;
+    _promoteAuto([model]);
     model.resize(renderedSize, _localTransformDelta(model.rotation, screenDelta));
   }
 
@@ -1218,6 +1257,7 @@ class _CanvasPageState extends State<CanvasPage> {
       return;
     }
     if (!_elements.contains(model)) return;
+    _promoteAuto([model]);
     model.size = Size(
       model.size.width + localDelta.dx,
       model.size.height + localDelta.dy,
@@ -1229,6 +1269,7 @@ class _CanvasPageState extends State<CanvasPage> {
     if (!_documentLoaded || _activeTool.value != _CanvasTool.select || !_elements.contains(model)) {
       return;
     }
+    _promoteAuto([model]);
     model.resizeBy(_localTransformDelta(model.rotation, screenDelta));
   }
 
@@ -1240,6 +1281,7 @@ class _CanvasPageState extends State<CanvasPage> {
     if (_selectionBeforeWidgetPointer.contains(model)) {
       _setSelection(_selectionBeforeWidgetPointer);
     }
+    _promoteAuto([model]);
     model.resizeBy(screenDelta / _canvasController.scale);
   }
 
@@ -1260,6 +1302,7 @@ class _CanvasPageState extends State<CanvasPage> {
       return;
     }
     if (!_elements.contains(model)) return;
+    _promoteAuto([model]);
     model.rotate(angle);
   }
 
@@ -1322,6 +1365,12 @@ class _CanvasPageState extends State<CanvasPage> {
   }) {
     _elements.add(model);
     model.documentChanges.addListener(_scheduleDocumentSave);
+    switch (model) {
+      case TextBlockModel():
+        model.onContentChanged = () => _promoteAuto([model]);
+      case CodeBlockModel():
+        model.onContentChanged = () => _promoteAuto([model]);
+    }
     final child = switch (model) {
       final TextBlockModel text => _CanvasElementHost(
         key: _selectionKey(text),
@@ -1334,6 +1383,7 @@ class _CanvasPageState extends State<CanvasPage> {
           model: text,
           attachmentStore: _attachmentStore,
           onEdit: () => _editTextBlock(text),
+          onInteract: () => _promoteAuto([text]),
           onMove: (delta) => _moveSelectedChildren(text, delta),
           onResize: (size, delta) => _resizeTextBlock(text, size, delta),
         ),
@@ -1348,6 +1398,7 @@ class _CanvasPageState extends State<CanvasPage> {
         child: CodeTool(
           model: code,
           onEdit: () => _editCodeBlock(code),
+          onInteract: () => _promoteAuto([code]),
           onMove: (delta) => _moveSelectedChildren(code, delta),
           onResize: (delta) => _resizeCodeBlock(code, delta),
           onChangeBoundary: _finishHistoryOperation,
@@ -1397,6 +1448,9 @@ class _CanvasPageState extends State<CanvasPage> {
         onPointerDown: (event) => _handleStrokePointerDown(pen, event),
         child: PenStroke(
           model: pen,
+          onTap: () {
+            if (_activeTool.value == _CanvasTool.select) _promoteAuto([pen]);
+          },
           onMove: (delta) => _moveSelectedChildren(pen, delta),
         ),
       ),
@@ -1580,6 +1634,7 @@ class _CanvasPageState extends State<CanvasPage> {
   ) {
     if (_canvasInputBlocked) return;
     if (!_documentLoaded || !identical(_activeElement, model) || !_elements.contains(model)) return;
+    _promoteAuto([model]);
     model.setPoint(point, position);
   }
 

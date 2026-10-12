@@ -28,12 +28,14 @@ class TextTool extends StatelessWidget {
     required this.onEdit,
     required this.onMove,
     required this.onResize,
+    this.onInteract,
     super.key,
   });
 
   final TextBlockModel model;
   final AttachmentStore attachmentStore;
   final VoidCallback onEdit;
+  final VoidCallback? onInteract;
   final ValueChanged<Offset> onMove;
   final void Function(Size renderedSize, Offset delta) onResize;
 
@@ -50,12 +52,13 @@ class TextTool extends StatelessWidget {
           final transparent = model.style.background == BlockBackgroundKind.transparent;
           final glass = model.style.background == BlockBackgroundKind.glass;
           final body = model.editing
-              ? TextMarkdownEditor(model: model, attachmentStore: attachmentStore)
+              ? TextMarkdownEditor(model: model, attachmentStore: attachmentStore, onInteract: onInteract)
               : TextMarkdownPreview(
                   source: model.node.markdown,
                   style: model.style,
                   scrollController: model.node.height == null ? null : model.scrollController,
                   onEdit: onEdit,
+                  onInteract: onInteract,
                   onMove: onMove,
                   attachmentStore: attachmentStore,
                 );

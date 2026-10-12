@@ -29,6 +29,7 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
 
   TextElementData get node => data;
   late final TextEditingController controller;
+  VoidCallback? onContentChanged;
   final FocusNode focusNode = FocusNode();
   final scrollController = AnimatedScrollController(
     animationFactory: const ChromiumEaseInOut(),
@@ -156,6 +157,7 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
     if (node.markdown == controller.text) return;
     node.markdown = controller.text;
     notifyDocumentChanged(rebuild: false);
+    onContentChanged?.call();
   }
 
   // ---------- Lifecycle ----------
@@ -163,6 +165,7 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
   @override
   void dispose() {
     _disposed = true;
+    onContentChanged = null;
     controller
       ..removeListener(_syncMarkdown)
       ..dispose();

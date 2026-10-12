@@ -41,10 +41,12 @@ class _CodeTitleTab extends StatelessWidget {
   const _CodeTitleTab({
     required this.model,
     required this.editing,
+    this.onInteract,
   });
 
   final CodeBlockModel model;
   final bool editing;
+  final VoidCallback? onInteract;
 
   @override
   Widget build(BuildContext context) {
@@ -101,6 +103,8 @@ class _CodeTitleTab extends StatelessWidget {
                   child: TextFormField(
                     key: ValueKey(editing ? 'code-title-input' : 'code-title-text'),
                     contextMenuBuilder: null,
+                    onTap: onInteract,
+                    onTapAlwaysCalled: true,
                     controller: model.titleController,
                     style: style,
                     cursorColor: colors.accent,

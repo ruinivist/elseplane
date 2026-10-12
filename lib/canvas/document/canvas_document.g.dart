@@ -46,6 +46,7 @@ ShapeElementData _$ShapeElementDataFromJson(
     allowedKeys: const [
       'id',
       'type',
+      'autoArrange',
       'kind',
       'position',
       'size',
@@ -69,6 +70,7 @@ ShapeElementData _$ShapeElementDataFromJson(
     strokeColor: $checkedConvert('strokeColor', (v) => _jsonInt(v)),
     fillColor: $checkedConvert('fillColor', (v) => _nullableJsonInt(v)),
     strokeWidth: $checkedConvert('strokeWidth', (v) => (v as num).toDouble()),
+    autoArrange: $checkedConvert('autoArrange', (v) => v as bool? ?? true),
   );
   return val;
 });
@@ -77,6 +79,7 @@ Map<String, dynamic> _$ShapeElementDataToJson(ShapeElementData instance) =>
     <String, dynamic>{
       'id': instance.id,
       'type': instance.type,
+      'autoArrange': instance.autoArrange,
       'kind': _$ShapeKindEnumMap[instance.kind]!,
       'position': const _OffsetConverter().toJson(instance.position),
       'size': const _SizeConverter().toJson(instance.size),
@@ -101,6 +104,7 @@ MediaElementData _$MediaElementDataFromJson(Map<String, dynamic> json) =>
         allowedKeys: const [
           'id',
           'type',
+          'autoArrange',
           'position',
           'width',
           'url',
@@ -120,6 +124,7 @@ MediaElementData _$MediaElementDataFromJson(Map<String, dynamic> json) =>
           'rotation',
           (v) => (v as num?)?.toDouble() ?? 0.0,
         ),
+        autoArrange: $checkedConvert('autoArrange', (v) => v as bool? ?? true),
       );
       return val;
     });
@@ -128,6 +133,7 @@ Map<String, dynamic> _$MediaElementDataToJson(MediaElementData instance) =>
     <String, dynamic>{
       'id': instance.id,
       'type': instance.type,
+      'autoArrange': instance.autoArrange,
       'position': const _OffsetConverter().toJson(instance.position),
       'width': instance.width,
       'url': instance.url,
@@ -171,6 +177,7 @@ TextElementData _$TextElementDataFromJson(Map<String, dynamic> json) =>
         allowedKeys: const [
           'id',
           'type',
+          'autoArrange',
           'position',
           'size',
           'markdown',
@@ -192,6 +199,7 @@ TextElementData _$TextElementDataFromJson(Map<String, dynamic> json) =>
         markdown: $checkedConvert('markdown', (v) => v as String),
         style: $checkedConvert('style', (v) => TextNodeStyle.fromJson(v)),
         rotation: $checkedConvert('rotation', (v) => (v as num).toDouble()),
+        autoArrange: $checkedConvert('autoArrange', (v) => v as bool? ?? true),
       );
       return val;
     }, fieldKeyMap: const {'textSize': 'size'});
@@ -200,6 +208,7 @@ Map<String, dynamic> _$TextElementDataToJson(TextElementData instance) =>
     <String, dynamic>{
       'id': instance.id,
       'type': instance.type,
+      'autoArrange': instance.autoArrange,
       'position': const _OffsetConverter().toJson(instance.position),
       'size': _textSizeToJson(instance.textSize),
       'markdown': instance.markdown,
@@ -214,6 +223,7 @@ CodeElementData _$CodeElementDataFromJson(Map<String, dynamic> json) =>
         allowedKeys: const [
           'id',
           'type',
+          'autoArrange',
           'position',
           'size',
           'language',
@@ -252,6 +262,7 @@ CodeElementData _$CodeElementDataFromJson(Map<String, dynamic> json) =>
           'rotation',
           (v) => (v as num?)?.toDouble() ?? 0.0,
         ),
+        autoArrange: $checkedConvert('autoArrange', (v) => v as bool? ?? true),
       );
       return val;
     });
@@ -260,6 +271,7 @@ Map<String, dynamic> _$CodeElementDataToJson(CodeElementData instance) =>
     <String, dynamic>{
       'id': instance.id,
       'type': instance.type,
+      'autoArrange': instance.autoArrange,
       'position': const _OffsetConverter().toJson(instance.position),
       'size': const _SizeConverter().toJson(instance.size),
       'language': _$CodeLanguageEnumMap[instance.language]!,
@@ -320,6 +332,7 @@ PenElementData _$PenElementDataFromJson(Map<String, dynamic> json) =>
         allowedKeys: const [
           'id',
           'type',
+          'autoArrange',
           'position',
           'size',
           'hitSlop',
@@ -348,6 +361,7 @@ PenElementData _$PenElementDataFromJson(Map<String, dynamic> json) =>
         color: $checkedConvert('color', (v) => _jsonInt(v)),
         width: $checkedConvert('width', (v) => (v as num).toDouble()),
         streamline: $checkedConvert('streamline', (v) => (v as num).toDouble()),
+        autoArrange: $checkedConvert('autoArrange', (v) => v as bool? ?? true),
       );
       return val;
     });
@@ -356,6 +370,7 @@ Map<String, dynamic> _$PenElementDataToJson(PenElementData instance) =>
     <String, dynamic>{
       'id': instance.id,
       'type': instance.type,
+      'autoArrange': instance.autoArrange,
       'position': const _OffsetConverter().toJson(instance.position),
       'size': const _SizeConverter().toJson(instance.size),
       'hitSlop': instance.hitSlop,
@@ -373,6 +388,7 @@ ArrowElementData _$ArrowElementDataFromJson(
     allowedKeys: const [
       'id',
       'type',
+      'autoArrange',
       'start',
       'controls',
       'end',
@@ -406,6 +422,7 @@ ArrowElementData _$ArrowElementDataFromJson(
       (v) => $enumDecode(_$ArrowStrokeStyleEnumMap, v),
     ),
     strokeWidth: $checkedConvert('strokeWidth', (v) => (v as num).toDouble()),
+    autoArrange: $checkedConvert('autoArrange', (v) => v as bool? ?? true),
   );
   return val;
 });
@@ -415,6 +432,7 @@ Map<String, dynamic> _$ArrowElementDataToJson(
 ) => <String, dynamic>{
   'id': instance.id,
   'type': instance.type,
+  'autoArrange': instance.autoArrange,
   'start': const _OffsetConverter().toJson(instance.start),
   'controls': instance.controls.map(const _OffsetConverter().toJson).toList(),
   'end': const _OffsetConverter().toJson(instance.end),

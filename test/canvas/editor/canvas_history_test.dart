@@ -288,11 +288,13 @@ void main() {
       expect(attachments.reads, 1);
       expect(
         tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller.childOrder,
-        document.elements.map((data) => data.id).toList(),
+        redo
+            ? [...document.elements.skip(1).map((data) => data.id), 'text']
+            : document.elements.map((data) => data.id).toList(),
       );
     }
     await pumpPastSave(tester);
-    expect((store.persisted!.elements.first as TextElementData).markdown, 'changed');
+    expect(store.persisted!.elements.whereType<TextElementData>().single.markdown, 'changed');
   });
 
   testWidgets('code restore synchronizes source and visible title without extra history', (tester) async {
@@ -788,7 +790,7 @@ void main() {
   });
 
   testWidgets('code background choices persist as individual undo steps', (tester) async {
-    final store = TestCanvasDocumentStore(_codeDocument());
+    final store = TestCanvasDocumentStore(_codeDocument()..elements.first.autoArrange = false);
     await pumpCanvas(tester, store);
     CodeBlockModel model() => tester
         .widgetList<CodeTool>(find.byType(CodeTool))

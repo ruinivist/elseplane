@@ -497,6 +497,7 @@ void main() {
       background: CanvasBackgroundKind.plain,
       elements: [
         PenElementData(
+          autoArrange: false,
           id: 'pen',
           position: const Offset(100, 250),
           size: const Size(100, 30),
@@ -509,6 +510,7 @@ void main() {
           ],
         ),
         ArrowElementData(
+          autoArrange: false,
           id: 'arrow',
           start: const Offset(300, 250),
           controls: const [Offset(380, 235)],
@@ -1340,7 +1342,6 @@ void main() {
       ..updateScalebyDelta(-0.5, focalPoint: Offset.zero);
     text.rotate(math.pi / 6);
     await tester.pump();
-    final order = controller.childOrder;
     final originalPositions = [text.canvasPosition, code.canvasPosition, stroke.canvasPosition];
     final textPosition = tester.getTopLeft(textFinder);
     final codePosition = tester.getTopLeft(codeFinder);
@@ -1367,6 +1368,7 @@ void main() {
     expect(code.selected, isTrue);
     expect(stroke.selected, isTrue);
 
+    final order = controller.childOrder;
     const delta = Offset(48, 36);
     await tester.drag(strokeFinder, delta, kind: PointerDeviceKind.mouse);
     await tester.pump();

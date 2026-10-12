@@ -2,6 +2,7 @@
 // Used by interactive surfaces that expose grouped pointer actions.
 
 import 'package:elseplane/theme/theme.dart';
+import 'package:elseplane/ui/common/labeled_switch.dart';
 import 'package:elseplane/ui/common/menu_surface.dart';
 import 'package:flutter/material.dart';
 
@@ -16,10 +17,22 @@ class ContextMenuAction {
     this.destructive = false,
     this.groups = const [],
     this.focusNode,
-  });
+  }) : toggleValue = null;
+
+  const ContextMenuAction.toggle({
+    required this.label,
+    required bool value,
+    required VoidCallback this.onPressed,
+    this.focusNode,
+  }) : toggleValue = value,
+       icon = null,
+       shortcut = null,
+       destructive = false,
+       groups = const [];
 
   final String label;
-  final IconData icon;
+  final IconData? icon;
+  final bool? toggleValue;
   final VoidCallback? onPressed;
   final MenuSerializableShortcut? shortcut;
   final bool destructive;
@@ -86,6 +99,20 @@ class ContextMenu extends StatelessWidget {
   // ---------- Composition ----------
 
   Widget _item(BuildContext context, ContextMenuAction action) {
+    if (action.toggleValue case final value?) {
+      return SizedBox(
+        width: _menuWidth,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: LabeledSwitch.menu(
+            label: action.label,
+            value: value,
+            focusNode: action.focusNode,
+            onChanged: (_) => action.onPressed!(),
+          ),
+        ),
+      );
+    }
     final theme = BTheme.of(context);
     final style = _itemStyle(theme, destructive: action.destructive);
     final enabled = action.groups.isNotEmpty || action.onPressed != null;

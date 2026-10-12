@@ -13,6 +13,36 @@ import 'package:flutter_test/flutter_test.dart';
 // ---------- Tests ----------
 
 void main() {
+  test('Auto defaults, copies, and strict serialization cover every element type', () {
+    final fixtures = [
+      _encodedText(),
+      _encodedCode(),
+      _encodedMedia(),
+      _encodedPen(),
+      _encodedArrow(),
+      ShapeElementData(
+        id: 'shape',
+        kind: ShapeKind.rectangle,
+        position: Offset.zero,
+        size: const Size.square(80),
+        strokeColor: 0xff000000,
+        fillColor: null,
+        strokeWidth: 2,
+      ).toJson(),
+    ];
+    for (final fixture in fixtures) {
+      final element = CanvasElementData.fromJson(fixture);
+      expect(element.autoArrange, isTrue);
+      element.autoArrange = false;
+      expect(element.copy(id: 'copy').autoArrange, isFalse);
+      expect(CanvasElementData.fromJson(element.toJson()).autoArrange, isFalse);
+      expect(
+        () => CanvasElementData.fromJson({...fixture, 'autoArrange': 'yes'}),
+        throwsFormatException,
+      );
+    }
+  });
+
   test('canvas documents round-trip mixed element data', () {
     const source = '## Authentication\n\n- [x] OAuth callback\n\n\$a^2 + b^2 = c^2\$';
     final document = CanvasDocument(

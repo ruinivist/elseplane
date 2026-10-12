@@ -30,6 +30,12 @@ import '../test_helpers.dart';
 void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
+  test('clipboard preserves per-object Auto settings', () {
+    final document = _document.copy()..elements.first.autoArrange = false;
+    final restored = decodeCanvasClipboard(encodeCanvasClipboard(document.elements))!;
+    expect(restored.map((element) => element.autoArrange), document.elements.map((element) => element.autoArrange));
+  });
+
   test(
     'clipboard payload round-trips and rejects recognized malformed data',
     () {
@@ -704,6 +710,7 @@ final _menuDocument = CanvasDocument(
   elements: [
     for (final (id, x) in [('a', 300.0), ('b', 500.0)])
       ShapeElementData(
+        autoArrange: false,
         id: id,
         kind: ShapeKind.rectangle,
         position: Offset(x, 300),

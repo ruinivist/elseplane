@@ -33,6 +33,7 @@ class CodeTool extends StatefulWidget {
     required this.onMove,
     required this.onResize,
     required this.onChangeBoundary,
+    this.onInteract,
     this.onControlPointerDown,
     this.canHandlePointer,
     super.key,
@@ -40,6 +41,7 @@ class CodeTool extends StatefulWidget {
 
   final CodeBlockModel model;
   final VoidCallback onEdit;
+  final VoidCallback? onInteract;
   final ValueChanged<Offset> onMove;
   final ValueChanged<Offset> onResize;
   final VoidCallback onChangeBoundary;
@@ -56,10 +58,11 @@ class _CodeToolState extends State<CodeTool> {
   Offset? _previewPointerPosition;
   double _previewDragSlop = 0;
   bool _previewDragging = false;
+  bool _previewEditing = false;
 
   void _handlePreviewPointerDown(PointerDownEvent event) {
     if (widget.canHandlePointer?.call(event) == false) return;
-    if (widget.model.active || event.buttons != kPrimaryButton || _previewPointer != null) return;
+    if (event.buttons != kPrimaryButton || _previewPointer != null) return;
     _previewPointer = event.pointer;
     _previewPointerStart = event.position;
     _previewPointerPosition = event.position;
@@ -68,6 +71,7 @@ class _CodeToolState extends State<CodeTool> {
       MediaQuery.maybeGestureSettingsOf(context),
     );
     _previewDragging = false;
+    _previewEditing = widget.model.active;
   }
 
   void _handlePreviewPointerMove(PointerMoveEvent event) {
@@ -78,6 +82,13 @@ class _CodeToolState extends State<CodeTool> {
     }
     final start = _previewPointerStart!;
     final previous = _previewPointerPosition!;
+    if (_previewEditing) {
+      if (!_previewDragging && (event.position - start).distance > _previewDragSlop) {
+        _previewDragging = true;
+        widget.onInteract?.call();
+      }
+      return;
+    }
     if (!_previewDragging) {
       if ((event.position - start).distance <= _previewDragSlop) return;
       _previewDragging = true;
@@ -95,8 +106,13 @@ class _CodeToolState extends State<CodeTool> {
   void _handlePreviewPointerUp(PointerUpEvent event) {
     if (event.pointer != _previewPointer) return;
     final dragging = _previewDragging;
+    final editing = _previewEditing;
     _clearPreviewPointer();
     if (widget.canHandlePointer?.call(event) == false) return;
+    if (editing) {
+      if (!dragging) widget.onInteract?.call();
+      return;
+    }
     if (dragging) {
       widget.model
         ..focusNode.unfocus()
@@ -108,8 +124,9 @@ class _CodeToolState extends State<CodeTool> {
 
   void _handlePreviewPointerCancel(PointerCancelEvent event) {
     if (event.pointer != _previewPointer) return;
+    final editing = _previewEditing;
     _clearPreviewPointer();
-    if (widget.canHandlePointer?.call(event) == false) return;
+    if (editing || widget.canHandlePointer?.call(event) == false) return;
     widget.model
       ..focusNode.unfocus()
       ..controller.cancelSelection();
@@ -120,6 +137,7 @@ class _CodeToolState extends State<CodeTool> {
     _previewPointerStart = null;
     _previewPointerPosition = null;
     _previewDragging = false;
+    _previewEditing = false;
   }
 
   Widget _previewInteraction(Widget editor, {Key? key}) {
@@ -148,7 +166,7 @@ class _CodeToolState extends State<CodeTool> {
         final card = model.background == BlockBackgroundKind.card;
         final editing = model.active;
         final showTitle = editing || model.title.trim().isNotEmpty;
-        final titleTab = _CodeTitleTab(model: model, editing: editing);
+        final titleTab = _CodeTitleTab(model: model, editing: editing, onInteract: widget.onInteract);
         final codeBody = Stack(
           children: [
             Positioned.fill(
