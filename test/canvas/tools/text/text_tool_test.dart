@@ -363,9 +363,10 @@ void main() {
     const delta = Offset(80, 60);
 
     final gesture = await tester.startGesture(
-      tester.getCenter(
-        find.byKey(const ValueKey('text-markdown-preview-surface')),
-      ),
+      tester.getTopLeft(
+            find.byKey(const ValueKey('text-markdown-preview-surface')),
+          ) +
+          const Offset(32, 32),
       kind: PointerDeviceKind.mouse,
     );
     await gesture.moveBy(delta);
@@ -1333,7 +1334,7 @@ Inline $x^2$''';
     );
     await tester.pump();
 
-    final second = await _placeTextBlock(tester, const Offset(300, 360));
+    final second = await _placeTextBlock(tester, const Offset(240, 300));
     const secondSource = '- second\n\n\$x^2\$';
     await tester.enterText(
       find.byKey(const ValueKey('text-markdown-editor')),

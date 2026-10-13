@@ -1239,7 +1239,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(40, 520));
+    await tester.tapAt(const Offset(40, 350));
     await tester.pump();
     await tester.pump();
     await _placeCodeBlock(tester, const Offset(120, 140));
@@ -1247,9 +1247,11 @@ void main() {
 
     final text = tester.widget<TextTool>(find.byType(TextTool)).model;
     final code = tester.widget<CodeTool>(find.byType(CodeTool)).model;
-    final textCenter = tester.getCenter(
-      find.byKey(const ValueKey('text-markdown-preview-surface')),
-    );
+    final textTapPosition =
+        tester.getTopLeft(
+          find.byKey(const ValueKey('text-markdown-preview-surface')),
+        ) +
+        const Offset(32, 32);
     final codeSurfaceCenter = tester.getCenter(
       find.byKey(const ValueKey('code-block-surface')),
     );
@@ -1259,7 +1261,7 @@ void main() {
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    await tester.tapAt(textCenter);
+    await tester.tapAt(textTapPosition);
     await tester.pump();
     await tester.tapAt(codeSurfaceCenter);
     await tester.pump();
@@ -1293,9 +1295,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('text-markdown-preview-surface')),
-    );
+    await tester.tapAt(textTapPosition);
     await tester.pump();
     expect(text.active, isTrue);
     expect(code.active, isFalse);
@@ -1398,7 +1398,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(40, 520));
+    await tester.tapAt(const Offset(40, 350));
     await tester.pump();
     await tester.pump();
     await _placeCodeBlock(tester, const Offset(120, 140));
@@ -1409,9 +1409,10 @@ void main() {
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
     await tester.tapAt(
-      tester.getCenter(
-        find.byKey(const ValueKey('text-markdown-preview-surface')),
-      ),
+      tester.getTopLeft(
+            find.byKey(const ValueKey('text-markdown-preview-surface')),
+          ) +
+          const Offset(32, 32),
     );
     await tester.pump();
     await tester.tapAt(
@@ -1446,7 +1447,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(40, 520));
+    await tester.tapAt(const Offset(40, 350));
     await tester.pump();
     await tester.pump();
     await _placeCodeBlock(tester, const Offset(120, 140));
@@ -1463,9 +1464,10 @@ void main() {
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
     await tester.tapAt(
-      tester.getCenter(
-        find.byKey(const ValueKey('text-markdown-preview-surface')),
-      ),
+      tester.getTopLeft(
+            find.byKey(const ValueKey('text-markdown-preview-surface')),
+          ) +
+          const Offset(32, 32),
     );
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
