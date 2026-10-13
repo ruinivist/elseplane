@@ -1,5 +1,5 @@
-// Verifies native menu and dialog behavior with shared glass surfaces.
-// Exercises keyboard navigation, scrolling, dismissal, and confirmation actions.
+// Verifies shared glass rendering and native menu and dialog behavior.
+// Exercises exterior shadows, navigation, scrolling, dismissal, and confirmation.
 
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/theme/theme.dart';
@@ -8,8 +8,10 @@ import 'package:elseplane/ui/common/glass_surface.dart';
 import 'package:elseplane/ui/common/menu_surface.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -88,6 +90,62 @@ void main() {
       });
     }
   }
+
+  testWidgets('large glass keeps its center undarkened while casting an exterior shadow', (tester) async {
+    final disabledShadows = debugDisableShadows;
+    debugDisableShadows = false;
+    try {
+      final boundaryKey = GlobalKey();
+      for (final theme in [starlessLightThemeData, starlessDarkThemeData]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: theme,
+            home: RepaintBoundary(
+              key: boundaryKey,
+              child: ColoredBox(
+                color: const Color(0xffb0b0b0),
+                child: Stack(
+                  children: [
+                    const Positioned(
+                      left: 50,
+                      top: 50,
+                      child: GlassSurface(child: SizedBox(width: 300, height: 300)),
+                    ),
+                    Positioned(
+                      left: 450,
+                      top: 50,
+                      child: Material(
+                        color: theme.extension<BTheme>()!.colors.glassSurface,
+                        child: const SizedBox(width: 300, height: 300),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final boundary = tester.renderObject<RenderRepaintBoundary>(find.byKey(boundaryKey));
+        final pixels = await tester.runAsync(() async {
+          final image = await boundary.toImage();
+          try {
+            return (await image.toByteData())!;
+          } finally {
+            image.dispose();
+          }
+        });
+        final width = boundary.size.width.toInt();
+        int channel(int x, int y, int c) => pixels!.getUint8((y * width + x) * 4 + c);
+        for (var c = 0; c < 3; c++) {
+          expect(channel(200, 200, c), closeTo(channel(600, 200, c), 1), reason: '${theme.brightness}: interior');
+          expect(channel(42, 200, c), lessThan(channel(10, 200, c)), reason: '${theme.brightness}: exterior');
+        }
+      }
+    } finally {
+      debugDisableShadows = disabledShadows;
+    }
+  }, skip: !kIsWeb);
 
   testWidgets('glass dropdown retains keyboard selection, bounded scrolling, and dismissal', (tester) async {
     var selected = 0;

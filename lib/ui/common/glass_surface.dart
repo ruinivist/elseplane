@@ -45,7 +45,7 @@ class GlassSurface extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: radius,
-        boxShadow: [theme.geo.glassShadow.copyWith(color: theme.colors.shadow)],
+        boxShadow: [theme.geo.glassShadow],
       ),
       child: ClipRRect(
         borderRadius: radius,

@@ -70,7 +70,7 @@ const _starlessGeo = BGeo(
   elevationLow: 4,
   elevationMedium: 8,
   glassBlurSigma: 16,
-  glassShadow: BoxShadow(blurRadius: 16, offset: Offset(0, 4)),
+  glassShadow: BoxShadow(color: Color(0x1f000000), blurRadius: 24, blurStyle: BlurStyle.outer),
 );
 
 // ---------- Typography ----------
