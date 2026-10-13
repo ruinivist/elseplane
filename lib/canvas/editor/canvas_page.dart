@@ -107,6 +107,8 @@ class _CanvasPageState extends State<CanvasPage> {
   // ---------- State ----------
 
   final _canvasController = LazyCanvasController(
+    minScale: 0.5,
+    maxScale: 2,
     buildExtentMultiplier: 3.4,
     useIdsFromArgs: true,
   );

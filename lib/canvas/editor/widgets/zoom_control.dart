@@ -28,8 +28,6 @@ class _ZoomControlState extends State<ZoomControl> {
   static const _collapsedWidth = 48.0;
   static final double _expandedWidth = _collapsedWidth + 2 * BSizes.defaultIconButtonSize.width;
   static final double _height = BSizes.defaultIconButtonSize.height;
-  static const _minScale = 0.25;
-  static const _maxScale = 2.0;
   static const _scaleStep = 0.1;
 
   // ---------- State ----------
@@ -186,11 +184,7 @@ class _ZoomControlState extends State<ZoomControl> {
   // ---------- Actions ----------
 
   void _stepZoom(double delta) {
-    final current = widget.controller.scale;
-    if (delta > 0 && current >= _maxScale || delta < 0 && current <= _minScale) {
-      return;
-    }
-    _setZoom((current + delta).clamp(_minScale, _maxScale));
+    widget.controller.updateScalebyDelta(delta);
   }
 
   void _resetZoom() => _setZoom(1);
