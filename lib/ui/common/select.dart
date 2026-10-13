@@ -168,6 +168,7 @@ Widget _buildSelectTrigger({
       },
       child: TextButton(
         key: ValueKey('$keyPrefix-trigger'),
+        clipBehavior: Clip.antiAlias,
         onPressed: enabled ? () => controller.isOpen ? controller.close() : controller.open() : null,
         focusNode: focusNode,
         style: _selectTriggerStyle(
