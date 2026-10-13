@@ -33,7 +33,7 @@ class Surface extends StatelessWidget {
     final colors = theme.colors;
     final radius = kind == SurfaceKind.menu ? theme.geo.radiusMedium : theme.geo.radiusLarge;
     if (theme.surfaceStyle == SurfaceStyle.glass) {
-      return GlassSurface(selected: selected, raised: true, borderRadius: radius, child: child);
+      return GlassSurface(selected: selected, borderRadius: radius, child: child);
     }
     return Material(
       color: selected

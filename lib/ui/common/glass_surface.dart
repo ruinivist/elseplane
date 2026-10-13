@@ -12,7 +12,6 @@ class GlassSurface extends StatelessWidget {
   const GlassSurface({
     required this.child,
     this.selected = false,
-    this.raised = false,
     this.borderRadius,
     this.clipper,
     super.key,
@@ -20,7 +19,6 @@ class GlassSurface extends StatelessWidget {
 
   final Widget child;
   final bool selected;
-  final bool raised;
   final BorderRadius? borderRadius;
   final CustomClipper<Path>? clipper;
 
@@ -47,7 +45,7 @@ class GlassSurface extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: radius,
-        boxShadow: raised ? [theme.geo.glassShadow.copyWith(color: theme.colors.shadow)] : null,
+        boxShadow: [theme.geo.glassShadow.copyWith(color: theme.colors.shadow)],
       ),
       child: ClipRRect(
         borderRadius: radius,

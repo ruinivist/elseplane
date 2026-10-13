@@ -1210,14 +1210,6 @@ Inline $x^2$''';
 
       void expectGlass() {
         expect(filter, findsOneWidget);
-        final decoration =
-            tester
-                    .widget<DecoratedBox>(
-                      find.descendant(of: bounds, matching: find.byType(DecoratedBox)).first,
-                    )
-                    .decoration
-                as BoxDecoration;
-        expect(decoration.boxShadow, isNull);
         final clip = find.ancestor(of: filter, matching: find.byType(ClipRRect)).first;
         expect(tester.getSize(clip), tester.getSize(surface));
         expect(tester.widget<BackdropFilter>(filter).child, tester.widget<Material>(surface));

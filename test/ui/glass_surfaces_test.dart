@@ -7,7 +7,6 @@ import 'package:elseplane/ui/common/context_menu.dart';
 import 'package:elseplane/ui/common/glass_surface.dart';
 import 'package:elseplane/ui/common/menu_surface.dart';
 import 'package:elseplane/ui/common/select.dart';
-import 'package:elseplane/ui/common/surface.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -89,62 +88,6 @@ void main() {
       });
     }
   }
-
-  testWidgets(
-    'flat glass omits shadows while raised glass and floating surfaces retain them',
-    (tester) async {
-      for (final theme in [starlessLightThemeData, starlessDarkThemeData]) {
-        for (final selected in [false, true]) {
-          await tester.pumpWidget(
-            MaterialApp(
-              theme: theme.copyWith(
-                extensions: [
-                  theme.extension<BTheme>()!.copyWith(
-                    surfaceStyle: SurfaceStyle.glass,
-                  ),
-                ],
-              ),
-              home: Scaffold(
-                body: Column(
-                  children: [
-                    GlassSurface(
-                      selected: selected,
-                      child: const SizedBox(width: 80, height: 40),
-                    ),
-                    GlassSurface(
-                      raised: true,
-                      selected: selected,
-                      child: const SizedBox(width: 80, height: 40),
-                    ),
-                    Surface(
-                      selected: selected,
-                      child: const SizedBox(width: 80, height: 40),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-          final surfaces = find.byType(GlassSurface).evaluate().toList();
-          for (var i = 0; i < surfaces.length; i++) {
-            final decoration =
-                tester
-                        .widget<DecoratedBox>(
-                          find
-                              .descendant(
-                                of: find.byWidget(surfaces[i].widget),
-                                matching: find.byType(DecoratedBox),
-                              )
-                              .first,
-                        )
-                        .decoration
-                    as BoxDecoration;
-            expect(decoration.boxShadow, i == 0 ? isNull : isNotEmpty);
-          }
-        }
-      }
-    },
-  );
 
   testWidgets('glass dropdown retains keyboard selection, bounded scrolling, and dismissal', (tester) async {
     var selected = 0;

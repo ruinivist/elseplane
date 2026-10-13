@@ -35,7 +35,7 @@ Widget glassSurfacePreview() => _background(
         left: 32,
         top: 50,
         child: GlassSurface(
-          child: Padding(padding: EdgeInsets.all(32), child: Text('Flat glass')),
+          child: Padding(padding: EdgeInsets.all(32), child: Text('Glass')),
         ),
       ),
       Positioned(
@@ -44,14 +44,6 @@ Widget glassSurfacePreview() => _background(
         child: GlassSurface(
           selected: true,
           child: Padding(padding: EdgeInsets.all(32), child: Text('Selected')),
-        ),
-      ),
-      Positioned(
-        left: 32,
-        top: 190,
-        child: GlassSurface(
-          raised: true,
-          child: Padding(padding: EdgeInsets.all(24), child: Text('Raised glass')),
         ),
       ),
     ],
