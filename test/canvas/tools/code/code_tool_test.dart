@@ -4,6 +4,7 @@
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/theme/starless.dart';
+import 'package:elseplane/ui/common/glass_surface.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -174,6 +175,16 @@ void main() {
           }
           if (background == BlockBackgroundKind.glass) {
             expect(filters, findsNWidgets(2));
+            for (final glass in find.descendant(of: block, matching: find.byType(GlassSurface)).evaluate()) {
+              final decoration =
+                  tester
+                          .widget<DecoratedBox>(
+                            find.descendant(of: find.byWidget(glass.widget), matching: find.byType(DecoratedBox)).first,
+                          )
+                          .decoration
+                      as BoxDecoration;
+              expect(decoration.boxShadow, isNull);
+            }
             expect(body().color!.a, inExclusiveRange(0, 1));
             expect(title.color!.a, inExclusiveRange(0, 1));
             for (final filter in filters.evaluate()) {
