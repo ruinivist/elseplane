@@ -16,7 +16,7 @@ part 'json_serialisation.dart';
 // ---------- Constants ----------
 
 const textNodeDefaultWidth = 420.0;
-const textNodeDefaultHeight = 108.0;
+const textNodeDefaultHeight = 220.0;
 const textNodeMinimumWidth = 160.0;
 const textNodeMinimumHeight = 52.0;
 
