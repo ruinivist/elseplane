@@ -91,6 +91,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Movement remains aligned with screen direction under canvas zoom and element rotation. Screen deltas are converted to canvas coordinates before persistence.
 - Transform controls rotate with their block and remain anchored to its top-left corner.
 - Scrolling inside bounded text or code content does not pan the canvas.
+- Dropdowns, context menus, and submenus absorb pointer scrolling over their contents, search fields, and padding, including at either scroll limit or when no scrolling is needed.
 - Primary-button gestures perform block activation, editing, and movement. In the Select tool, a secondary click opens the object menu; secondary dragging still pans. Drawing tools retain their secondary-button gestures.
 
 ## Stacking order

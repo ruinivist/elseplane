@@ -1,5 +1,5 @@
 // Provides a boundary that consumes pointer scrolling without blocking drags.
-// Used around nested scrollable editors on the infinite canvas.
+// Used around menus and nested scrollable editors on the infinite canvas.
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';

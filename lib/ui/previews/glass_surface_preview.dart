@@ -4,6 +4,7 @@
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/glass_surface.dart';
 import 'package:elseplane/ui/common/menu_surface.dart';
+import 'package:elseplane/ui/common/pointer_scroll_boundary.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:elseplane/ui/previews/theme_preview.dart';
@@ -11,6 +12,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
 
 // ---------- Annotated previews ----------
+
+@Preview(name: 'PointerScrollBoundary', size: Size(420, 300), theme: previewTheme)
+Widget pointerScrollBoundaryPreview() => _background(
+  Center(
+    child: SizedBox(
+      width: 224,
+      height: 160,
+      child: PointerScrollBoundary(
+        child: ListView(children: [for (var i = 0; i < 20; i++) ListTile(title: Text('Item $i'))]),
+      ),
+    ),
+  ),
+);
 
 @Preview(name: 'GlassSurface light', size: Size(420, 300), theme: previewTheme, brightness: Brightness.light)
 @Preview(name: 'GlassSurface dark', size: Size(420, 300), theme: previewTheme, brightness: Brightness.dark)

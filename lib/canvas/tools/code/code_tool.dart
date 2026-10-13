@@ -5,12 +5,12 @@ import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
-import 'package:elseplane/canvas/editor/widgets/pointer_scroll_boundary.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
 import 'package:elseplane/canvas/tools/code/code_language.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/glass_surface.dart';
 import 'package:elseplane/ui/common/labeled_switch.dart';
+import 'package:elseplane/ui/common/pointer_scroll_boundary.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';

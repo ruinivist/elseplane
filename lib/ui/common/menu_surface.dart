@@ -3,6 +3,7 @@
 
 import 'dart:math' as math;
 
+import 'package:elseplane/ui/common/pointer_scroll_boundary.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:flutter/material.dart';
 import 'package:scroll_animator/scroll_animator.dart';
@@ -34,20 +35,22 @@ class MenuSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    return Surface(
-      kind: SurfaceKind.menu,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: math.max(0, media.size.height - media.padding.vertical - media.viewInsets.bottom - 48),
-        ),
-        child: AnimatedPrimaryScrollController(
-          child: SingleChildScrollView(
-            primary: true,
-            padding: const EdgeInsets.all(4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: children,
+    return PointerScrollBoundary(
+      child: Surface(
+        kind: SurfaceKind.menu,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: math.max(0, media.size.height - media.padding.vertical - media.viewInsets.bottom - 48),
+          ),
+          child: AnimatedPrimaryScrollController(
+            child: SingleChildScrollView(
+              primary: true,
+              padding: const EdgeInsets.all(4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: children,
+              ),
             ),
           ),
         ),

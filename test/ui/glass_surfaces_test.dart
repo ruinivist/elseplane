@@ -8,6 +8,7 @@ import 'package:elseplane/ui/common/glass_surface.dart';
 import 'package:elseplane/ui/common/menu_surface.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +16,79 @@ import 'package:flutter_test/flutter_test.dart';
 // ---------- Tests ----------
 
 void main() {
+  for (final kind in ['dropdown', 'searchable', 'context']) {
+    for (final count in [2, 30]) {
+      testWidgets('$kind menu with $count items contains pointer scrolling', (tester) async {
+        var ancestorScrolls = 0;
+        final controller = MenuController();
+        final options = [for (var i = 0; i < count; i++) SelectOption(value: i, label: 'Option $i')];
+        final menu = switch (kind) {
+          'dropdown' => Select<int>(value: 0, options: options, onChanged: (_) {}),
+          'searchable' => SearchableSelect<int>(value: 0, options: options, searchHint: 'Search', onChanged: (_) {}),
+          _ => ContextMenu(
+            controller: controller,
+            groups: [
+              [
+                for (var i = 0; i < count; i++)
+                  ContextMenuAction(label: 'Option $i', icon: Icons.copy, onPressed: () {}),
+              ],
+            ],
+            child: const SizedBox(width: 20, height: 20),
+          ),
+        };
+        await tester.pumpWidget(
+          Listener(
+            onPointerSignal: (event) {
+              if (event is PointerScrollEvent) {
+                GestureBinding.instance.pointerSignalResolver.register(event, (_) => ancestorScrolls++);
+              }
+            },
+            child: _app(menu),
+          ),
+        );
+        if (kind == 'context') {
+          controller.open();
+        } else {
+          await tester.tap(find.byKey(ValueKey(kind == 'dropdown' ? 'select-trigger' : 'searchable-select-trigger')));
+        }
+        await tester.pumpAndSettle();
+
+        final surface = find.byType(MenuSurface);
+        final scrollable = find.descendant(of: surface, matching: find.byType(Scrollable)).last;
+        final position = tester.state<ScrollableState>(scrollable).position;
+        final point = tester.getCenter(scrollable);
+        await _wheel(tester, point, const Offset(0, -60));
+        expect(position.pixels, position.minScrollExtent);
+        position.jumpTo(position.maxScrollExtent);
+        await tester.pump();
+        await _wheel(tester, point, const Offset(0, 60));
+        expect(position.pixels, position.maxScrollExtent);
+        await _wheel(tester, point, const Offset(60, 0));
+        await _wheel(
+          tester,
+          tester.getTopLeft(surface) + Offset(tester.getSize(surface).width / 2, 2),
+          const Offset(0, 60),
+        );
+        await _wheel(tester, point, const Offset(0, -60));
+        if (count == 30) expect(position.pixels, lessThan(position.maxScrollExtent));
+
+        if (kind == 'searchable') {
+          final search = find.byKey(const ValueKey('searchable-select-search'));
+          await tester.enterText(search, 'missing option');
+          await tester.pumpAndSettle();
+          await _wheel(tester, tester.getCenter(search), const Offset(0, 60));
+          await _wheel(tester, tester.getCenter(find.text('No results')), const Offset(0, -60));
+        }
+        expect(ancestorScrolls, 0);
+        await tester.sendEventToBinding(
+          const PointerScrollEvent(position: Offset(780, 580), scrollDelta: Offset(0, 60)),
+        );
+        await tester.pumpAndSettle();
+        expect(ancestorScrolls, 1);
+      });
+    }
+  }
+
   testWidgets('glass dropdown retains keyboard selection, bounded scrolling, and dismissal', (tester) async {
     var selected = 0;
     await tester.pumpWidget(
@@ -110,6 +184,7 @@ void main() {
     await tester.tap(find.text('Arrange'));
     await tester.pumpAndSettle();
     expect(find.byType(GlassSurface), findsNWidgets(2));
+    await _wheel(tester, tester.getCenter(find.text('Bring forward')), const Offset(0, 60));
     await tester.tap(find.text('Bring forward'));
     await tester.pumpAndSettle();
     expect(called, isTrue);
@@ -157,6 +232,19 @@ void main() {
 }
 
 // ---------- Harness ----------
+
+Future<void> _wheel(WidgetTester tester, Offset position, Offset delta) async {
+  bool? platformDefault;
+  await tester.sendEventToBinding(
+    PointerScrollEvent(
+      position: position,
+      scrollDelta: delta,
+      onRespond: ({required allowPlatformDefault}) => platformDefault = allowPlatformDefault,
+    ),
+  );
+  await tester.pumpAndSettle();
+  expect(platformDefault, isFalse);
+}
 
 Widget _app(Widget child) => MaterialApp(
   theme: starlessLightThemeData.copyWith(
