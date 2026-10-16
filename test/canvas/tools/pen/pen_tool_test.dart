@@ -570,7 +570,7 @@ void main() {
     expect(elementIds(), ['pen', 'arrow']);
     expect(pen.active, isFalse);
     expect(arrow.active, isTrue);
-    expect(arrow.selected, isTrue);
+    expect(arrow.selected, isFalse);
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();

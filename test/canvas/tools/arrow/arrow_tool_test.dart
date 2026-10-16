@@ -7,6 +7,7 @@ import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
 import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
 import 'package:elseplane/theme/preset_colors.dart';
+import 'package:elseplane/ui/common/menu_surface.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -389,16 +390,76 @@ void main() {
     await drag.up();
     await tester.pumpAndSettle();
     expect(model.active, isFalse);
-    expect(model.selected, isTrue);
+    expect(model.selected, isFalse);
     expect(canvas.childOrder, order);
+    model.selected = true;
     await tester.tapAt(model.start);
     await tester.pumpAndSettle();
     expect(model.active, isTrue);
+    expect(model.selected, isFalse);
     expect(tester.widget<LazyCanvas>(find.byType(LazyCanvas)).foregroundChildId, model.data.id);
     expect(canvas.childOrder, order);
   });
 
-  testWidgets('arrows place once, select by click and marquee, and move', (
+  for (final platform in [TargetPlatform.linux, TargetPlatform.macOS]) {
+    testWidgets('$platform arrow menu dismissal preserves modifier selection and group dragging', (tester) async {
+      final document = _arrowDocument();
+      document.elements.add(
+        ArrowElementData(
+          id: 'other',
+          start: const Offset(480, 350),
+          controls: const [Offset(550, 300)],
+          end: const Offset(650, 390),
+          color: Colors.black.toARGB32(),
+          strokeStyle: ArrowStrokeStyle.solid,
+          strokeWidth: 2,
+        ),
+      );
+      await pumpCanvas(tester, TestCanvasDocumentStore(document), platform: platform);
+      final models = tester.widgetList<Arrow>(find.byType(Arrow)).map((arrow) => arrow.model).toList();
+      final first = models.first;
+      final second = models.last;
+      first.selected = true;
+      second.selected = true;
+      Future<void> openMenu() async {
+        final click = await tester.startGesture(second.start, kind: PointerDeviceKind.mouse, buttons: kSecondaryButton);
+        await click.up();
+        await tester.pumpAndSettle();
+        expect(find.byType(MenuSurface), findsOneWidget);
+      }
+
+      await openMenu();
+      await tester.tapAt(first.start);
+      await tester.pumpAndSettle();
+      expect(find.byType(MenuSurface), findsNothing);
+      expect(first.active, isTrue);
+      expect(models.every((model) => !model.selected), isTrue);
+
+      await openMenu();
+      final modifier = platform == TargetPlatform.macOS ? LogicalKeyboardKey.metaLeft : LogicalKeyboardKey.controlLeft;
+      await tester.sendKeyDownEvent(modifier);
+      await tester.pump();
+      await tester.tapAt(first.start);
+      await tester.sendKeyUpEvent(modifier);
+      await tester.pumpAndSettle();
+      expect(find.byType(MenuSurface), findsNothing);
+      expect(models.every((model) => model.selected && !model.active), isTrue);
+
+      await openMenu();
+      final starts = models.map((model) => model.start).toList();
+      const delta = Offset(30, 20);
+      await tester.dragFrom(first.start, delta);
+      await tester.pumpAndSettle();
+      expect(find.byType(MenuSurface), findsNothing);
+      for (var index = 0; index < models.length; index++) {
+        expect(models[index].start, starts[index] + delta);
+        expect(models[index].selected, isTrue);
+        expect(models[index].active, isFalse);
+      }
+    });
+  }
+
+  testWidgets('arrows place once, activate by click, select by marquee, and move', (
     tester,
   ) async {
     await pumpElseplaneApp(tester);
@@ -458,7 +519,7 @@ void main() {
     await tester.tapAt(startPoint);
     await tester.pump();
     expect(first.active, isTrue);
-    expect(first.selected, isTrue);
+    expect(first.selected, isFalse);
     expect(find.byKey(const ValueKey('arrow-block-handle')), findsWidgets);
     expect(find.byKey(const ValueKey('arrow-block-delete-control')), findsWidgets);
     expect(find.byKey(const ValueKey('arrow-block-rotate-control')), findsNothing);

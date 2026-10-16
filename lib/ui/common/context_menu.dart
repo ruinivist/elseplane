@@ -52,6 +52,8 @@ class ContextMenu extends StatelessWidget {
     this.title,
     this.controller,
     this.onClose,
+    this.onTapOutside,
+    this.consumeOutsideTap = true,
     this.tapRegionGroupId,
     super.key,
   });
@@ -62,6 +64,8 @@ class ContextMenu extends StatelessWidget {
   final String? title;
   final MenuController? controller;
   final VoidCallback? onClose;
+  final TapRegionCallback? onTapOutside;
+  final bool consumeOutsideTap;
   final Object? tapRegionGroupId;
 
   static const _menuWidth = 224.0;
@@ -100,7 +104,7 @@ class ContextMenu extends StatelessWidget {
             style: style,
             menuStyle: menuShellStyle(),
             leadingIcon: Icon(action.icon, size: 16),
-            menuChildren: [MenuSurface(children: _items(context, action.groups))],
+            menuChildren: [_surface(_items(context, action.groups))],
             child: label,
           )
         : MenuItemButton(
@@ -124,16 +128,20 @@ class ContextMenu extends StatelessWidget {
           width: _menuWidth,
           child: Divider(height: 8, color: BTheme.of(context).colors.borderSubtle),
         ),
-      for (final action in groups[index])
-        if (tapRegionGroupId != null)
-          TapRegion(
-            groupId: tapRegionGroupId,
-            child: _item(context, action),
-          )
-        else
-          _item(context, action),
+      for (final action in groups[index]) _item(context, action),
     ],
   ];
+
+  Widget _surface(List<Widget> children, {TapRegionCallback? onTapOutside}) {
+    final surface = MenuSurface(children: children);
+    if (tapRegionGroupId == null && onTapOutside == null) return surface;
+    return TapRegion(
+      behavior: HitTestBehavior.opaque,
+      groupId: tapRegionGroupId,
+      onTapOutside: onTapOutside,
+      child: surface,
+    );
+  }
 
   // ---------- Rendering ----------
 
@@ -141,13 +149,13 @@ class ContextMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = BTheme.of(context);
     return MenuAnchor(
-      consumeOutsideTap: true,
+      consumeOutsideTap: consumeOutsideTap,
       style: menuShellStyle(),
       controller: controller,
       onClose: onClose,
       menuChildren: [
-        MenuSurface(
-          children: [
+        _surface(
+          [
             if (title case final title?)
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
@@ -155,6 +163,7 @@ class ContextMenu extends StatelessWidget {
               ),
             ..._items(context, groups),
           ],
+          onTapOutside: onTapOutside,
         ),
       ],
       builder: (context, menuController, child) => controller != null

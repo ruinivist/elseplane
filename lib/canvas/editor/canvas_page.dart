@@ -119,6 +119,7 @@ class _CanvasPageState extends State<CanvasPage> {
   final _elements = <CanvasElementModel>[];
   final MenuController _contextMenuController = MenuController();
   final GlobalKey _contextMenuKey = GlobalKey();
+  final Object _contextMenuTapRegionGroup = Object();
   final _contextMenuFocusNode = FocusNode(debugLabel: 'Canvas context menu');
   List<CanvasElementModel> _contextMenuTargets = const [];
   ({int pointer, Offset start, CanvasElementModel? model, double slop})? _secondaryClick;
@@ -467,8 +468,6 @@ class _CanvasPageState extends State<CanvasPage> {
   Offset _screenToCanvas(Offset screenPosition) => _canvasController.offset + screenPosition / _canvasController.scale;
 
   void _handleCanvasPointerDown(PointerDownEvent event) {
-    // Menu overlays share this raw listener; their clicks and dismissal own the pointer.
-    if (_contextMenuController.isOpen) return;
     final allowed = _canHandleCanvasPointer(event);
     _canvasPointers[event.pointer] = event.kind;
     if (_canvasInputBlocked) _blockedCanvasPointers.add(event.pointer);
@@ -683,7 +682,7 @@ class _CanvasPageState extends State<CanvasPage> {
     }
     if (event.pointer == _dragArrowPointer) {
       if (!_dragArrowMoving && _dragArrow != null) _activateElement(_dragArrow!);
-      _finishArrowDrag(select: true);
+      _finishArrowDrag();
       return;
     }
     if (event.pointer != _dragSelectionPointer) return;
@@ -997,6 +996,16 @@ class _CanvasPageState extends State<CanvasPage> {
       _contextMenuController.open(position: box.globalToLocal(position));
       _contextMenuFocusNode.requestFocus();
     });
+  }
+
+  void _handleContextMenuOutsideTap(PointerDownEvent event) {
+    _contextMenuController.close();
+    // Canvas presses already capture selection for group dragging before clearing it.
+    if (!_canvasPointers.containsKey(event.pointer) &&
+        event.buttons == kPrimaryButton &&
+        !_selectionModifierPressed.value) {
+      _clearSelection();
+    }
   }
 
   void _contextMenuClosed() {
@@ -1609,8 +1618,7 @@ class _CanvasPageState extends State<CanvasPage> {
     _dragArrowMoving = false;
   }
 
-  void _finishArrowDrag({bool select = false}) {
-    if (select) _dragArrow?.selected = true;
+  void _finishArrowDrag() {
     _dragArrowPointer = null;
     _dragArrow = null;
     _finishHistoryOperation();
@@ -2776,15 +2784,7 @@ class _CanvasPageState extends State<CanvasPage> {
         ],
       ),
     );
-    return ContextMenu(
-      key: _contextMenuKey,
-      controller: _contextMenuController,
-      onClose: _contextMenuClosed,
-      title: _arrangeMenuOpen ? 'Arrange' : null,
-      groups: _arrangeMenuOpen ? _arrangeContextMenuActions() : _objectContextMenuActions(),
-      tapRegionGroupId: _activeElement,
-      child: canvas,
-    );
+    return canvas;
   }
 
   @override
@@ -2815,6 +2815,21 @@ class _CanvasPageState extends State<CanvasPage> {
                       (_spaceHeld ? kPrimaryMouseButton : 0),
                 ),
               ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            top: 0,
+            child: ContextMenu(
+              key: _contextMenuKey,
+              controller: _contextMenuController,
+              onClose: _contextMenuClosed,
+              onTapOutside: _handleContextMenuOutsideTap,
+              consumeOutsideTap: false,
+              title: _arrangeMenuOpen ? 'Arrange' : null,
+              groups: _arrangeMenuOpen ? _arrangeContextMenuActions() : _objectContextMenuActions(),
+              tapRegionGroupId: _contextMenuTapRegionGroup,
+              child: const SizedBox.shrink(),
             ),
           ),
           SafeArea(

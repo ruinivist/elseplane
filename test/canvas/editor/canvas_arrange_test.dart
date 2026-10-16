@@ -450,7 +450,7 @@ void main() {
   });
 
   for (final escape in [false, true]) {
-    testWidgets('direct ${escape ? 'Escape' : 'click-away'} preserves single selection', (tester) async {
+    testWidgets('direct ${escape ? 'Escape preserves' : 'click-away clears'} single selection', (tester) async {
       await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
       await tester.tapAt(const Offset(305, 305));
       await tester.pumpAndSettle();
@@ -466,7 +466,7 @@ void main() {
       }
       await tester.pumpAndSettle();
       expect(find.byType(MenuSurface), findsNothing);
-      expect(_models(tester)['a']!.selected, isTrue);
+      expect(_models(tester)['a']!.selected, escape);
       expect(_models(tester)['a']!.active, isFalse);
     });
   }
@@ -938,7 +938,125 @@ void main() {
     expect(_models(tester)['c']!.selected, isTrue);
   });
 
-  testWidgets('hover opens the submenu and click-away leaves selection inactive', (tester) async {
+  for (final kind in ['text', 'code', 'title']) {
+    for (final sameObject in [false, true]) {
+      for (final multiple in [false, true]) {
+        testWidgets(
+          '$kind outside click activates after ${sameObject ? 'same' : 'other'} object menu, group=$multiple',
+          (
+            tester,
+          ) async {
+            await pumpCanvas(tester, TestCanvasDocumentStore(_editorDocument(kind)));
+            final point = _autoHitPoint(tester, kind);
+            final model = kind == 'text'
+                ? tester.widget<TextTool>(find.byType(TextTool)).model as CanvasElementModel
+                : tester.widget<CodeTool>(find.byType(CodeTool)).model;
+            final other = _models(tester)['other']!;
+            model.selected = sameObject || multiple;
+            other.selected = !sameObject || multiple;
+            await _open(tester, sameObject ? point : const Offset(555, 405));
+            await tester.tapAt(point - const Offset(25, 0));
+            await tester.pumpAndSettle();
+            expect(find.byType(MenuSurface), findsNothing);
+            expect(model.active, isTrue);
+            expect(model.selected, isFalse);
+            expect(other.selected, isFalse);
+            if (kind == 'text') {
+              final text = tester.widget<TextTool>(find.byType(TextTool)).model;
+              expect(text.editing, isTrue);
+              expect(text.focusNode.hasFocus, isTrue);
+              expect(text.controller.text, 'contents');
+            } else {
+              final code = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+              expect(code.focusNode.hasFocus, isTrue);
+              expect(code.controller.text, 'contents');
+              expect(code.title, 'Title');
+            }
+          },
+        );
+      }
+    }
+  }
+
+  testWidgets('outside modifier-click toggles selection and selected drag keeps the group', (tester) async {
+    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    final models = _models(tester);
+    models['a']!.selected = true;
+    models['c']!.selected = true;
+    await _open(tester, const Offset(355, 355));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    await tester.tapAt(const Offset(330, 330));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(find.byType(MenuSurface), findsNothing);
+    expect(models['a']!.selected, isTrue);
+    expect(models['b']!.selected, isTrue);
+    expect(models['c']!.selected, isTrue);
+    expect(models.values.every((model) => !model.active), isTrue);
+
+    await _open(tester, const Offset(355, 355));
+    final before = {for (final entry in models.entries) entry.key: entry.value.canvasPosition};
+    await tester.dragFrom(const Offset(305, 305), const Offset(-40, -20));
+    await tester.pumpAndSettle();
+    expect(find.byType(MenuSurface), findsNothing);
+    for (final id in ['a', 'b', 'c']) {
+      expect(models[id]!.selected, isTrue);
+      expect(models[id]!.canvasPosition, before[id]! - const Offset(40, 20));
+      expect(models[id]!.active, isFalse);
+    }
+    expect(models['d']!.canvasPosition, before['d']);
+  });
+
+  testWidgets('menu padding stays inside and a toolbar click dismisses and clears selection', (tester) async {
+    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await _open(tester, const Offset(305, 305));
+    await tester.tapAt(tester.getTopLeft(find.byType(MenuSurface)) + const Offset(2, 2));
+    await tester.pumpAndSettle();
+    expect(find.byType(MenuSurface), findsOneWidget);
+    expect(_models(tester)['a']!.selected, isTrue);
+    await _openArrange(tester);
+    final submenu = find.byType(MenuSurface).last;
+    await tester.tapAt(tester.getTopLeft(submenu) + const Offset(2, 2));
+    await tester.pumpAndSettle();
+    expect(find.byType(MenuSurface), findsNWidgets(2));
+    expect(_models(tester)['a']!.selected, isTrue);
+    await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
+    await tester.pumpAndSettle();
+    expect(find.byType(MenuSurface), findsNothing);
+    expect(_models(tester).values.every((model) => !model.selected), isTrue);
+    expect(tester.widget<ToolbarButton>(find.byKey(const ValueKey('toolbar-draw'))).selected, isTrue);
+  });
+
+  testWidgets('outside right-click replaces the menu targets', (tester) async {
+    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await _open(tester, const Offset(375, 375));
+    await _open(tester, const Offset(305, 305));
+    expect(find.byType(MenuSurface), findsOneWidget);
+    expect(_models(tester)['a']!.selected, isTrue);
+    expect(_models(tester)['d']!.selected, isFalse);
+  });
+
+  testWidgets('Arrange outside editor click clears selection and resumes editing', (tester) async {
+    await pumpCanvas(tester, TestCanvasDocumentStore(_editorDocument('code')));
+    final point = _autoHitPoint(tester, 'code');
+    await tester.tapAt(point);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Arrange'));
+    await tester.pumpAndSettle();
+    final outside =
+        tester.getTopRight(find.byKey(const ValueKey('code-block-preview-surface'))) + const Offset(-10, 100);
+    expect(tester.getRect(find.byType(MenuSurface)).contains(outside), isFalse);
+    await tester.tapAt(outside);
+    await tester.pumpAndSettle();
+    final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+    expect(find.byType(MenuSurface), findsNothing);
+    expect(model.selected, isFalse);
+    expect(model.active, isTrue);
+    expect(model.focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('hover opens the submenu and click-away clears selection', (tester) async {
     await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
     await tester.tapAt(const Offset(305, 305));
     await tester.pumpAndSettle();
@@ -952,7 +1070,7 @@ void main() {
     expect(find.text('Bring Forward'), findsOneWidget);
     await tester.tapAt(const Offset(790, 590));
     await tester.pumpAndSettle();
-    expect(model.selected, isTrue);
+    expect(model.selected, isFalse);
     expect(model.active, isFalse);
     expect(find.text('Arrange'), findsNothing);
     await mouse.removePointer();
