@@ -32,14 +32,21 @@ class _MediaUrlPanel extends StatelessWidget {
           children: [
             TextField(
               key: const ValueKey('media-url-field'),
+              groupId: model,
               contextMenuBuilder: null,
               controller: model.controller,
               focusNode: model.focusNode,
               onTap: onActivate,
+              onTapOutside: (_) {
+                model.commitUrl();
+                model.focusNode.unfocus();
+              },
+              onSubmitted: (_) => model.commitUrl(),
               minLines: 1,
               maxLines: 3,
               textAlignVertical: TextAlignVertical.center,
               keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.done,
               cursorColor: colors.accent,
               style: theme.typo.body.copyWith(color: colors.textPrimary),
               decoration: InputDecoration(

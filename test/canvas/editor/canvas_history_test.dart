@@ -371,6 +371,7 @@ void main() {
     expect(media.rotation, 0.3);
     expect(media.image, same(image));
     media.controller.text = 'attachments/22222222-2222-4222-8222-222222222222.png';
+    media.commitUrl();
     await tester.pumpAndSettle();
     expect(attachments.reads, 2);
     await _shortcut(tester);

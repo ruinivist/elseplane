@@ -864,7 +864,8 @@ class _CanvasPageState extends State<CanvasPage> {
     _interactiveCanvasPointerIds.add(event.pointer);
     if (_toggleSelectionIfModifierPressed(model)) return;
     if (!model.active) _setActiveElement(null);
-    FocusManager.instance.primaryFocus?.unfocus();
+    final editingMediaPath = model is MediaModel && !model.hasImage && model.focusNode.hasFocus;
+    if (!editingMediaPath) FocusManager.instance.primaryFocus?.unfocus();
     _clearTextEditing();
   }
 
@@ -906,6 +907,9 @@ class _CanvasPageState extends State<CanvasPage> {
   }
 
   void _clearElementEditing() {
+    for (final model in _elements.whereType<MediaModel>()) {
+      if (model.focusNode.hasFocus) model.commitUrl();
+    }
     FocusManager.instance.primaryFocus?.unfocus();
     _clearTextEditing();
     _setActiveElement(null);
@@ -2588,7 +2592,8 @@ class _CanvasPageState extends State<CanvasPage> {
         _mountElement(added);
         restored.add(added);
       } else {
-        if (jsonEncode(model.data.toJson()) != jsonEncode(snapshot.toJson())) {
+        // Reset media drafts before deferred focus-loss callbacks can apply them.
+        if (model is MediaModel || jsonEncode(model.data.toJson()) != jsonEncode(snapshot.toJson())) {
           model.restoreData(snapshot);
         } else {
           model.invalidatePendingEdits();

@@ -135,6 +135,7 @@ void main() {
       find.byKey(const ValueKey('media-url-field')),
       'http://example.com/image.png',
     );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
     expect(model.hasImage, isFalse);
     expect(find.byKey(const ValueKey('media-url-field')), findsOneWidget);
@@ -145,6 +146,10 @@ void main() {
       find.byKey(const ValueKey('media-url-field')),
       validUrl,
     );
+    await tester.pump();
+    expect(model.hasImage, isFalse);
+    expect(model.data.url, 'http://example.com/image.png');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
     expect(model.hasImage, isTrue);
     expect(model.active, isTrue);
@@ -159,6 +164,46 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     expect(model.selected, isTrue);
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('URL-only media keeps its draft while moving the caret and selecting text', (tester) async {
+    const url = 'https://example.com/image.png';
+    await _cacheImage(url);
+    await pumpCanvas(
+      tester,
+      TestCanvasDocumentStore(
+        _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: 'original')),
+      ),
+    );
+    final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final field = find.byKey(const ValueKey('media-url-field'));
+    await tester.enterText(field, url);
+    await tester.pump();
+
+    final rect = tester.getRect(field);
+    final click = await tester.startGesture(
+      Offset(rect.left + 30, rect.center.dy),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    expect(model.focusNode.hasFocus, isTrue);
+    expect(model.data.url, 'original');
+    expect(model.hasImage, isFalse);
+    await click.moveBy(const Offset(80, 0));
+    await tester.pump();
+    await click.up();
+    await tester.pump();
+    expect(model.focusNode.hasFocus, isTrue);
+    expect(model.controller.selection.isCollapsed, isFalse);
+    expect(model.controller.text, url);
+    expect(model.data.url, 'original');
+    expect(model.hasImage, isFalse);
+
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(model.data.url, url);
+    expect(model.hasImage, isTrue);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('loaded media path accepts mouse editing and Escape', (tester) async {
@@ -207,16 +252,123 @@ void main() {
     expect(model.controller.selection.baseOffset, lessThan(selection.baseOffset));
     tester.testTextInput.enterText(editedUrl);
     await tester.pump();
-    expect(model.data.url, editedUrl);
+    expect(model.data.url, url);
     model.selected = true;
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(model.focusNode.hasFocus, isFalse);
+    expect(model.data.url, editedUrl);
     expect(model.active, isFalse);
     expect(model.selected, isFalse);
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.byKey(const ValueKey('media-url-field')), findsNothing);
+  });
+
+  for (final exit in ['Enter', 'mouse outside', 'touch outside', 'focus loss']) {
+    testWidgets('loaded media keeps its image while drafting until $exit', (tester) async {
+      const url = 'https://example.com/image.png';
+      const editedUrl = 'https://example.com/edited.png';
+      await _cacheImage(url);
+      await _cacheImage(editedUrl);
+      final store = TestCanvasDocumentStore(
+        _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
+      );
+      await pumpCanvas(tester, store);
+      final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+      final image = model.image;
+      final size = model.canvasSize;
+      var changes = 0;
+      model.documentChanges.addListener(() => changes++);
+      await tester.tap(find.byKey(const ValueKey('media-image')));
+      await tester.pumpAndSettle();
+      final field = find.byKey(const ValueKey('media-url-field'));
+
+      for (final draft in ['', 'incomplete path', editedUrl]) {
+        await tester.enterText(field, draft);
+        await tester.pump();
+        expect(model.controller.text, draft);
+        expect(model.data.url, url);
+        expect(model.image, same(image));
+        expect(model.canvasSize, size);
+        expect(find.byKey(const ValueKey('media-image')), findsOneWidget);
+        expect(changes, 0);
+      }
+
+      switch (exit) {
+        case 'Enter':
+          await tester.testTextInput.receiveAction(TextInputAction.done);
+        case 'mouse outside':
+          await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
+        case 'touch outside':
+          await tester.tapAt(const Offset(700, 500));
+        case 'focus loss':
+          model.focusNode.unfocus();
+      }
+      await tester.pumpAndSettle();
+      expect(model.data.url, editedUrl);
+      expect(model.image, const NetworkImage(editedUrl));
+      expect(model.hasImage, isTrue);
+      expect(changes, 1);
+      model.commitUrl();
+      expect(changes, 1);
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+      expect((store.persisted!.elements.single as MediaElementData).url, editedUrl);
+      await _shortcut(tester, LogicalKeyboardKey.keyZ);
+      expect(model.data.url, url);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  for (final draft in ['', 'invalid path']) {
+    testWidgets('loaded media clears only after submitting "$draft"', (tester) async {
+      const url = 'https://example.com/image.png';
+      await _cacheImage(url);
+      await pumpCanvas(
+        tester,
+        TestCanvasDocumentStore(
+          _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
+        ),
+      );
+      final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+      await tester.tap(find.byKey(const ValueKey('media-image')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('media-url-field')), draft);
+      await tester.pump();
+      expect(model.hasImage, isTrue);
+      expect(model.data.url, url);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(model.data.url, draft);
+      expect(model.hasImage, isFalse);
+      expect(find.byKey(const ValueKey('media-image')), findsNothing);
+      expect(find.byKey(const ValueKey('media-url-field')), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  testWidgets('restoring media clears a draft before focus loss can apply it', (tester) async {
+    const url = 'https://example.com/image.png';
+    await _cacheImage(url);
+    await pumpCanvas(
+      tester,
+      TestCanvasDocumentStore(
+        _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
+      ),
+    );
+    final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final image = model.image;
+    await tester.tap(find.byKey(const ValueKey('media-image')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('media-url-field')), 'unfinished');
+    model.focusNode.unfocus();
+    model.restoreData(model.data.copy());
+    await tester.pumpAndSettle();
+    expect(model.controller.text, url);
+    expect(model.data.url, url);
+    expect(model.image, same(image));
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('device images are stored and rendered from memory', (
@@ -284,6 +436,7 @@ void main() {
     });
     await tester.pump();
     expect(model.controller.text, 'keep me');
+    expect(model.data.url, 'replace me');
 
     await tester.runAsync(() async {
       _dispatchImagePaste(onePixelPngBytes);

@@ -11,7 +11,8 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
   // ---------- Construction ----------
 
   MediaModel(MediaElementData data, this.attachmentStore) : super(data) {
-    controller = TextEditingController(text: data.url)..addListener(_syncUrl);
+    controller = TextEditingController(text: data.url);
+    focusNode.addListener(_commitOnFocusLost);
     _loadImage();
   }
 
@@ -72,6 +73,13 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
 
   // ---------- Image updates ----------
 
+  void commitUrl() {
+    if (data.url == controller.text) return;
+    data.url = controller.text;
+    _loadImage();
+    notifyDocumentChanged();
+  }
+
   Future<void> paste(Future<ClipboardReader> readerFuture) async {
     final generation = asyncEditGeneration;
     try {
@@ -83,6 +91,7 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
         await setDeviceImage(image.bytes, image.extension);
       } else if (clipboard.text case final text?) {
         _insertPastedText(text);
+        if (!focusNode.hasFocus) commitUrl();
       }
     } on Object {
       if (generation != asyncEditGeneration) return;
@@ -138,11 +147,8 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
     if (previous.url.trim() != data.url.trim()) _loadImage();
   }
 
-  void _syncUrl() {
-    if (data.url == controller.text) return;
-    data.url = controller.text;
-    _loadImage();
-    notifyDocumentChanged();
+  void _commitOnFocusLost() {
+    if (!focusNode.hasFocus) commitUrl();
   }
 
   void _loadImage() {
@@ -208,10 +214,10 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
   @override
   void dispose() {
     _detachImage();
-    controller
-      ..removeListener(_syncUrl)
+    controller.dispose();
+    focusNode
+      ..removeListener(_commitOnFocusLost)
       ..dispose();
-    focusNode.dispose();
     super.dispose();
   }
 }
