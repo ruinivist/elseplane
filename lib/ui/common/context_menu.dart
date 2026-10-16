@@ -67,54 +67,22 @@ class ContextMenu extends StatelessWidget {
   static const _menuWidth = 224.0;
   static const double width = _menuWidth + 8; // Includes the menu surface's padding.
 
-  // ---------- Styling ----------
-
-  ButtonStyle _itemStyle(BTheme theme, {required bool destructive}) {
-    final colors = theme.colors;
-    final foreground = destructive ? colors.destructive : colors.textPrimary;
-    return MenuItemButton.styleFrom(
-      foregroundColor: colors.textMuted,
-      disabledForegroundColor: colors.textMuted,
-      iconColor: foreground,
-      disabledIconColor: colors.textMuted,
-      backgroundColor: Colors.transparent,
-      disabledBackgroundColor: Colors.transparent,
-      textStyle: theme.typo.body,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      minimumSize: const Size(0, 34),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      alignment: Alignment.centerLeft,
-      shape: RoundedRectangleBorder(borderRadius: theme.geo.radiusSmall),
-    ).copyWith(
-      overlayColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.pressed)) return colors.surfacePressed;
-        if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) {
-          return colors.surfaceHover;
-        }
-        return Colors.transparent;
-      }),
-    );
-  }
-
   // ---------- Composition ----------
 
   Widget _item(BuildContext context, ContextMenuAction action) {
     if (action.toggleValue case final value?) {
       return SizedBox(
         width: _menuWidth,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: LabeledSwitch.menu(
-            label: action.label,
-            value: value,
-            focusNode: action.focusNode,
-            onChanged: (_) => action.onPressed!(),
-          ),
+        child: LabeledSwitch.menu(
+          label: action.label,
+          value: value,
+          focusNode: action.focusNode,
+          onChanged: (_) => action.onPressed!(),
         ),
       );
     }
     final theme = BTheme.of(context);
-    final style = _itemStyle(theme, destructive: action.destructive);
+    final style = menuItemStyle(theme, destructive: action.destructive);
     final enabled = action.groups.isNotEmpty || action.onPressed != null;
     final label = Text(
       action.label,

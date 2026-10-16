@@ -3,6 +3,7 @@
 
 import 'dart:math' as math;
 
+import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/pointer_scroll_boundary.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +25,35 @@ MenuStyle menuShellStyle({double Function()? width, AlignmentGeometry? alignment
   shape: const WidgetStatePropertyAll(RoundedRectangleBorder()),
   alignment: alignment,
 );
+
+// ---------- Menu items ----------
+
+ButtonStyle menuItemStyle(BTheme theme, {required bool destructive}) {
+  final colors = theme.colors;
+  final foreground = destructive ? colors.destructive : colors.textPrimary;
+  return MenuItemButton.styleFrom(
+    foregroundColor: colors.textMuted,
+    disabledForegroundColor: colors.textMuted,
+    iconColor: foreground,
+    disabledIconColor: colors.textMuted,
+    backgroundColor: Colors.transparent,
+    disabledBackgroundColor: Colors.transparent,
+    textStyle: theme.typo.body,
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    minimumSize: const Size(0, 34),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    alignment: Alignment.centerLeft,
+    shape: RoundedRectangleBorder(borderRadius: theme.geo.radiusSmall),
+  ).copyWith(
+    overlayColor: WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.pressed)) return colors.surfacePressed;
+      if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) {
+        return colors.surfaceHover;
+      }
+      return Colors.transparent;
+    }),
+  );
+}
 
 // ---------- Menu content ----------
 

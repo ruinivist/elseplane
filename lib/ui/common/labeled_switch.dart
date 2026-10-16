@@ -2,6 +2,7 @@
 // Used by app-wide settings, preference surfaces, and menu toggles.
 
 import 'package:elseplane/theme/theme.dart';
+import 'package:elseplane/ui/common/menu_surface.dart';
 import 'package:flutter/material.dart';
 
 // ---------- Geometry ----------
@@ -102,7 +103,12 @@ class LabeledSwitch extends StatelessWidget {
     return Semantics(
       toggled: value,
       child: _menuItem
-          ? MenuItemButton(focusNode: focusNode, onPressed: toggle, style: style, child: content)
+          ? MenuItemButton(
+              focusNode: focusNode,
+              onPressed: toggle,
+              style: menuItemStyle(theme, destructive: false),
+              child: content,
+            )
           : TextButton(focusNode: focusNode, onPressed: toggle, style: style, child: content),
     );
   }
