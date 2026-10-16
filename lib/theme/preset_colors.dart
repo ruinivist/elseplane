@@ -4,8 +4,11 @@
 import 'package:flutter/material.dart';
 
 // ---------- Presets ----------
+// TODO(plane): Fixed white defaults have poor contrast in Light mode; revisit before enabling it.
+const defaultCanvasColor = Color(0xffb8b8b8);
+
 const presetColors = <({String label, Color color})>[
-  (label: 'Black', color: Color(0xff2b2725)),
+  (label: 'White', color: defaultCanvasColor),
   (label: 'Gray', color: Color.fromARGB(255, 116, 109, 106)),
   (label: 'Red', color: Color(0xffd85b5b)),
   (label: 'Orange', color: Color(0xffdf824d)),

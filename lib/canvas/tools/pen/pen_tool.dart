@@ -3,6 +3,7 @@
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -26,7 +27,7 @@ class PenTool extends ChangeNotifier {
   final _points = <PenPointData>[];
   int? _activePointer;
   Offset? _pointerPosition;
-  Color _color = Colors.black;
+  Color _color = defaultCanvasColor;
   double _strokeWidth = 4;
   double _streamline = penStreamlineDefault;
   Color? _pendingColor;

@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
+import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/icon_drag.dart';
 import 'package:flutter/gestures.dart';
@@ -29,7 +30,7 @@ class ShapeTool extends ChangeNotifier {
   final ValueChanged<ShapeModel> onShape;
   final _uuid = const Uuid();
   ShapeKind _kind = ShapeKind.roundedRectangle;
-  Color _strokeColor = Colors.black;
+  Color _strokeColor = defaultCanvasColor;
   Color? _fillColor;
   double _strokeWidth = 2;
   int? _pointer;

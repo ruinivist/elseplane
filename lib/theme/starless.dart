@@ -2,6 +2,7 @@
 // Used by the app shell and themed editor widgets.
 
 import 'package:elseplane/theme/fonts.dart';
+import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:re_highlight/styles/atom-one-dark.dart';
@@ -47,7 +48,7 @@ const _starlessDarkColors = BColors(
   surfaceHover: Color(0xff30363f),
   surfacePressed: Color(0xff38414c),
   textHeading: Color(0xffd0d0d0),
-  textPrimary: Color(0xffb8b8b8),
+  textPrimary: defaultCanvasColor,
   textSecondary: Color(0xffa3a3a3),
   textMuted: Color(0xff989898),
   destructive: Color(0xffd09a9a),

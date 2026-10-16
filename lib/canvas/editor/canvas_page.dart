@@ -60,7 +60,7 @@ typedef _CanvasHistoryEntry = ({String document, _CanvasTool tool, bool touchSel
 final List<({String label, Color color})> _toolColorSwatches = presetColors
     .where(
       (swatch) => switch (swatch.label) {
-        'Black' || 'Gray' || 'Red' => true,
+        'White' || 'Gray' || 'Red' => true,
         _ => false,
       },
     )
@@ -158,8 +158,6 @@ class _CanvasPageState extends State<CanvasPage> {
   late final ArrowTool _arrowTool;
   late final ShapeTool _shapeTool;
   Color? _customPenColor;
-  Color? _customShapeStrokeColor;
-  Color? _customArrowColor;
   double _penWidth = 4;
   double _penStreamline = penStreamlineDefault;
   final ValueNotifier<_CanvasTool> _activeTool = ValueNotifier(
@@ -193,7 +191,7 @@ class _CanvasPageState extends State<CanvasPage> {
   var _arrowColorPickerExpanded = false;
   var _textColorPickerExpanded = false;
 
-  Color get _penColor => _customPenColor ?? BTheme.of(context).colors.textPrimary;
+  Color get _penColor => _customPenColor ?? defaultCanvasColor;
 
   bool get _penEnabled => _activeTool.value == _CanvasTool.pen;
 
@@ -270,13 +268,6 @@ class _CanvasPageState extends State<CanvasPage> {
     if (platform == TargetPlatform.android || platform == TargetPlatform.iOS) _touchControlsVisible = true;
     final colors = BTheme.of(context).colors;
     _canvasController.background = _canvasBackgroundKind.build(colors);
-    if (_customPenColor == null) _penTool.setColor(colors.textPrimary);
-    if (_customShapeStrokeColor == null) {
-      _shapeTool.setStrokeColor(colors.textSecondary);
-    }
-    if (_customArrowColor == null) {
-      _arrowTool.setColor(colors.textSecondary);
-    }
   }
 
   FocusNode? _editorFocusNode(CanvasElementModel model) => switch (model) {
@@ -383,12 +374,10 @@ class _CanvasPageState extends State<CanvasPage> {
   }
 
   void _setShapeStrokeColor(Color color) {
-    _customShapeStrokeColor = color;
     _shapeTool.setStrokeColor(color);
   }
 
   void _setArrowColor(Color color) {
-    _customArrowColor = color;
     _arrowTool.setColor(color);
   }
 
@@ -1332,7 +1321,11 @@ class _CanvasPageState extends State<CanvasPage> {
       width: textNodeDefaultWidth,
       height: textNodeDefaultHeight,
       markdown: '',
-      style: TextNodeStyle(fontFamily: defaultFontFamily, background: _newBlockBackground),
+      style: TextNodeStyle(
+        fontFamily: defaultFontFamily,
+        color: colorToHex(defaultCanvasColor),
+        background: _newBlockBackground,
+      ),
     );
     final model = TextBlockModel(node);
 

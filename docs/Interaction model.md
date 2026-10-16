@@ -23,6 +23,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - New users start in Dark theme and Glass surface style.
 - Compile-time flags independently control theme and surface-style selection. With a flag disabled, the app uses Dark or Glass and omits that selector. With both disabled, Settings omits the Appearance section. Enabling a flag restores its selector and normal preference persistence.
 - All glass surfaces, including toolbars, menus, and dialogs, use a faint, centered halo outside their rounded bounds; the shadow does not darken the translucent interior.
+- The first color preset is White, matching the Dark theme’s body-text shade. New text, pen strokes, shape outlines, and arrows default to this fixed color; shapes start without a fill. Existing objects retain their saved colors.
 - App-wide surface style controls the backgrounds of future text and code blocks. Existing and pasted blocks retain their backgrounds and per-block options.
 
 ## Text blocks
@@ -32,7 +33,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Using an option or starting a move or rotation closes the source editor but leaves the block active. Options and transform controls remain available.
 - Resizing is available whenever the block is active, including while editing.
 - Clicking empty canvas or another block, changing tools, or pressing Escape returns the block to its inactive preview.
-- Text options control font, color, and background. New text blocks use the theme's heading and body colors; picking a color applies that fixed color to both. Existing saved custom colors remain fixed when switching themes. The Background dropdown offers Transparent, Card, and Glass; new text blocks use Glass in app-wide Glass mode and Card in Solid mode. Changing the app mode affects only future blocks; existing and pasted blocks retain their backgrounds. Transparent hides the surface, shadow, and preview border while preserving editing borders and selection highlighting. Glass blurs the canvas behind its rounded bounds and retains a translucent surface, fine border, and faint exterior shadow during preview, activation, and editing. Selected Glass keeps its blur and translucency with an accent tint and outline.
+- Text options control font, color, and background. New text blocks use the first color preset for both headings and body text; picking a color applies that fixed color to both. Saved blocks without an explicit color continue to use the theme’s heading and body colors. Existing saved custom colors remain fixed when switching themes. The Background dropdown offers Transparent, Card, and Glass; new text blocks use Glass in app-wide Glass mode and Card in Solid mode. Changing the app mode affects only future blocks; existing and pasted blocks retain their backgrounds. Transparent hides the surface, shadow, and preview border while preserving editing borders and selection highlighting. Glass blurs the canvas behind its rounded bounds and retains a translucent surface, fine border, and faint exterior shadow during preview, activation, and editing. Selected Glass keeps its blur and translucency with an accent tint and outline.
 
 ## Code blocks
 

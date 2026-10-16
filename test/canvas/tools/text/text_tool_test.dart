@@ -1048,7 +1048,7 @@ Inline $x^2$''';
       expect(find.byType(ElementTransformControls), findsOneWidget);
 
       expect(
-        find.byKey(const ValueKey('color-preset-Black')),
+        find.byKey(const ValueKey('color-preset-White')),
         findsOneWidget,
       );
       expect(
@@ -1133,11 +1133,11 @@ Inline $x^2$''';
 
     final second = await _placeTextBlock(tester, const Offset(480, 360));
     await tester.pumpAndSettle();
-    expect(second.style.color, isNull);
+    expect(second.style.color, colorToHex(presetColors.first.color));
     expect(pickerFinder, findsOneWidget);
     expect(
       tester.widget<ColorControl>(controlFinder).color,
-      BTheme.of(tester.element(controlFinder)).colors.textPrimary,
+      presetColors.first.color,
     );
 
     await tester.tap(

@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -33,7 +34,7 @@ class ArrowTool extends ChangeNotifier {
   Offset? _end;
   final _controls = <Offset>[];
   int _buttons = 0;
-  Color _color = Colors.black;
+  Color _color = defaultCanvasColor;
   ArrowStrokeStyle _strokeStyle = ArrowStrokeStyle.solid;
   double _strokeWidth = 2;
 
