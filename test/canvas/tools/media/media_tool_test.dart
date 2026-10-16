@@ -161,9 +161,11 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('escape dismisses a focused media editor', (tester) async {
+  testWidgets('loaded media path accepts mouse editing and Escape', (tester) async {
     const url = 'https://example.com/image.png';
+    const editedUrl = 'https://example.com/edited.png';
     await _cacheImage(url);
+    await _cacheImage(editedUrl);
     await pumpCanvas(
       tester,
       TestCanvasDocumentStore(
@@ -181,10 +183,32 @@ void main() {
     final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
     await tester.tap(find.byKey(const ValueKey('media-image')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('media-url-field')));
+    final field = find.byKey(const ValueKey('media-url-field'));
+    final fieldRect = tester.getRect(field);
+    final click = await tester.startGesture(
+      Offset(fieldRect.left + 100, fieldRect.center.dy),
+      kind: PointerDeviceKind.mouse,
+    );
     await tester.pump();
-    model.selected = true;
+    expect(model.active, isTrue);
+    await click.up();
+    await tester.pump();
     expect(model.focusNode.hasFocus, isTrue);
+    final selection = model.controller.selection;
+    expect(selection.isCollapsed, isTrue);
+    expect(selection.isValid, isTrue);
+
+    await tester.tapAt(
+      Offset(fieldRect.left + 20, fieldRect.center.dy),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    expect(model.focusNode.hasFocus, isTrue);
+    expect(model.controller.selection.baseOffset, lessThan(selection.baseOffset));
+    tester.testTextInput.enterText(editedUrl);
+    await tester.pump();
+    expect(model.data.url, editedUrl);
+    model.selected = true;
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();

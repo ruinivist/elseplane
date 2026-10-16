@@ -1422,7 +1422,10 @@ class _CanvasPageState extends State<CanvasPage> {
           onActivate: () => _activateElement(media),
           onMove: (delta) => _moveSelectedChildren(media, delta),
           onResize: (delta) => _resizeMedia(media, delta),
-          onPanelPointerDown: (event) => _handleObjectSecondaryDown(media, event),
+          onPanelPointerDown: (event) {
+            _handleObjectControlPointerDown(event);
+            _handleObjectSecondaryDown(media, event);
+          },
           onDeactivate: () {
             if (_contextMenuController.isOpen || _secondaryClick != null) return;
             if (identical(_activeElement, media)) _setActiveElement(null);
