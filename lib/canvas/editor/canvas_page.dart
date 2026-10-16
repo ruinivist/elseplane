@@ -57,15 +57,6 @@ enum _CanvasTool { select, text, code, media, shape, pen, arrow, eraser }
 
 typedef _CanvasHistoryEntry = ({String document, _CanvasTool tool, bool touchSelectionEnabled});
 
-final List<({String label, Color color})> _toolColorSwatches = presetColors
-    .where(
-      (swatch) => switch (swatch.label) {
-        'White' || 'Gray' || 'Red' => true,
-        _ => false,
-      },
-    )
-    .toList(growable: false);
-
 // ---------- Canvas workspace ----------
 
 /// Coordinates the infinite canvas, element tools, persistence, and transfer.
@@ -189,6 +180,7 @@ class _CanvasPageState extends State<CanvasPage> {
   var _historyOperationActive = false;
   var _penColorPickerExpanded = false;
   var _shapeOutlineColorPickerExpanded = false;
+  var _shapeFillColorPickerExpanded = false;
   var _arrowColorPickerExpanded = false;
   var _textColorPickerExpanded = false;
 
@@ -2953,10 +2945,14 @@ class _CanvasPageState extends State<CanvasPage> {
               fillColor: activeShape.fillColor,
               strokeWidth: activeShape.strokeWidth,
               outlineColorPickerExpanded: _shapeOutlineColorPickerExpanded,
+              fillColorPickerExpanded: _shapeFillColorPickerExpanded,
               onKindChanged: (kind) => _editElement(activeShape, () => activeShape.kind = kind),
               onStrokeColorChanged: (color) => _editElement(activeShape, () => activeShape.strokeColor = color),
               onFillColorChanged: (color) => _editElement(activeShape, () => activeShape.fillColor = color),
               onStrokeWidthChanged: (width) => _editElement(activeShape, () => activeShape.strokeWidth = width),
+              onFillColorPickerExpandedChanged: (expanded) => setState(
+                () => _shapeFillColorPickerExpanded = expanded,
+              ),
               onOutlineColorPickerExpandedChanged: (expanded) => setState(
                 () => _shapeOutlineColorPickerExpanded = expanded,
               ),
@@ -3001,10 +2997,14 @@ class _CanvasPageState extends State<CanvasPage> {
               fillColor: _shapeTool.fillColor,
               strokeWidth: _shapeTool.strokeWidth,
               outlineColorPickerExpanded: _shapeOutlineColorPickerExpanded,
+              fillColorPickerExpanded: _shapeFillColorPickerExpanded,
               onKindChanged: _shapeTool.setKind,
               onStrokeColorChanged: _setShapeStrokeColor,
               onFillColorChanged: _shapeTool.setFillColor,
               onStrokeWidthChanged: _shapeTool.setStrokeWidth,
+              onFillColorPickerExpandedChanged: (expanded) => setState(
+                () => _shapeFillColorPickerExpanded = expanded,
+              ),
               onOutlineColorPickerExpandedChanged: (expanded) => setState(
                 () => _shapeOutlineColorPickerExpanded = expanded,
               ),
@@ -3096,11 +3096,13 @@ class _ShapeSettings extends StatelessWidget {
     required this.fillColor,
     required this.strokeWidth,
     required this.outlineColorPickerExpanded,
+    required this.fillColorPickerExpanded,
     required this.onKindChanged,
     required this.onStrokeColorChanged,
     required this.onFillColorChanged,
     required this.onStrokeWidthChanged,
     required this.onOutlineColorPickerExpandedChanged,
+    required this.onFillColorPickerExpandedChanged,
   });
 
   final ShapeKind kind;
@@ -3108,11 +3110,13 @@ class _ShapeSettings extends StatelessWidget {
   final Color? fillColor;
   final double strokeWidth;
   final bool outlineColorPickerExpanded;
+  final bool fillColorPickerExpanded;
   final ValueChanged<ShapeKind> onKindChanged;
   final ValueChanged<Color> onStrokeColorChanged;
   final ValueChanged<Color?> onFillColorChanged;
   final ValueChanged<double> onStrokeWidthChanged;
   final ValueChanged<bool> onOutlineColorPickerExpandedChanged;
+  final ValueChanged<bool> onFillColorPickerExpandedChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -3144,19 +3148,45 @@ class _ShapeSettings extends StatelessWidget {
         Text('Outline', style: theme.typo.label),
         const SizedBox(height: 6),
         ColorControl(
+          key: const ValueKey('shape-outline-color'),
           color: strokeColor,
           expanded: outlineColorPickerExpanded,
           onChanged: onStrokeColorChanged,
           onExpandedChanged: onOutlineColorPickerExpandedChanged,
         ),
         const SizedBox(height: 10),
-        Text('Fill', style: theme.typo.label),
+        Row(
+          children: [
+            Expanded(child: Text('Fill', style: theme.typo.label)),
+            Semantics(
+              selected: fillColor == null,
+              child: IconButton(
+                key: const ValueKey('shape-fill-none'),
+                tooltip: 'No fill',
+                constraints: BoxConstraints.tight(BSizes.colorButtonSize),
+                iconSize: BSizes.defaultIconSize,
+                style: IconButton.styleFrom(
+                  padding: const EdgeInsets.all(6),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: const CircleBorder(),
+                  side: BorderSide(
+                    color: fillColor == null ? theme.colors.focusRing : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+                onPressed: () => onFillColorChanged(null),
+                icon: const Icon(LucideIcons.ban),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 6),
-        _ColorSwatches(
-          selectedColor: fillColor,
-          keyPrefix: 'shape-fill',
-          allowNone: true,
-          onColorChanged: onFillColorChanged,
+        ColorControl(
+          key: const ValueKey('shape-fill-color'),
+          color: fillColor,
+          expanded: fillColorPickerExpanded,
+          onChanged: onFillColorChanged,
+          onExpandedChanged: onFillColorPickerExpandedChanged,
         ),
         const SizedBox(height: 10),
         Text('Width', style: theme.typo.label),
@@ -3233,67 +3263,6 @@ class _StrokeSettings extends StatelessWidget {
             onChanged: onStreamlineChanged,
           ),
         ],
-      ],
-    );
-  }
-}
-
-class _ColorSwatches extends StatelessWidget {
-  const _ColorSwatches({
-    required this.selectedColor,
-    required this.keyPrefix,
-    required this.onColorChanged,
-    this.allowNone = false,
-  });
-
-  final Color? selectedColor;
-  final String keyPrefix;
-  final ValueChanged<Color?> onColorChanged;
-  final bool allowNone;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = BTheme.of(context).colors;
-    return Wrap(
-      children: [
-        if (allowNone)
-          Tooltip(
-            message: 'No fill',
-            child: ToolbarButton(
-              key: ValueKey('$keyPrefix-none'),
-              selected: selectedColor == null,
-              onPressed: () => onColorChanged(null),
-              child: const Icon(LucideIcons.ban, semanticLabel: 'No fill'),
-            ),
-          ),
-        for (final swatch in _toolColorSwatches)
-          Tooltip(
-            message: swatch.label,
-            child: Semantics(
-              button: true,
-              selected: selectedColor == swatch.color,
-              label: swatch.label,
-              child: InkWell(
-                key: ValueKey('$keyPrefix-${swatch.label.toLowerCase()}'),
-                customBorder: const CircleBorder(),
-                onTap: () => onColorChanged(swatch.color),
-                child: Padding(
-                  padding: const EdgeInsets.all(5),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: swatch.color,
-                      border: Border.all(
-                        color: selectedColor == swatch.color ? colors.focusRing : colors.borderSubtle,
-                        width: selectedColor == swatch.color ? 2 : 1,
-                      ),
-                    ),
-                    child: const SizedBox.square(dimension: 22),
-                  ),
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }

@@ -224,10 +224,85 @@ void main() {
       }
       final noFill = tester.getRect(find.byKey(const ValueKey('shape-fill-none')));
       expect(noFill.width, noFill.height);
-      expect(tester.getRect(find.byKey(const ValueKey('shape-fill-red'))).top, lessThan(noFill.bottom));
+      final outline = find.byKey(const ValueKey('shape-outline-color'));
+      final fill = find.byKey(const ValueKey('shape-fill-color'));
+      for (final swatch in presetColors) {
+        final key = ValueKey('color-preset-${swatch.label}');
+        final outlineRect = tester.getRect(find.descendant(of: outline, matching: find.byKey(key)));
+        final fillRect = tester.getRect(find.descendant(of: fill, matching: find.byKey(key)));
+        expect(fillRect.left, outlineRect.left);
+        expect(fillRect.size, outlineRect.size);
+        expect(fillRect.top - tester.getTopLeft(fill).dy, outlineRect.top - tester.getTopLeft(outline).dy);
+        expect(fillRect.top, greaterThan(noFill.bottom));
+      }
+      final fillLabel = tester.getRect(find.text('Fill'));
+      expect(noFill.center.dy, fillLabel.center.dy);
+      expect(noFill.right, tester.getRect(fill).right);
+      expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());
     }
+  });
+
+  testWidgets('fill palette supports presets, custom alpha, clearing, and undo', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 1000);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final store = TestCanvasDocumentStore();
+    await pumpCanvas(tester, store);
+    await tester.tap(find.byKey(const ValueKey('toolbar-shape')));
+    await tester.pumpAndSettle();
+    final fill = find.byKey(const ValueKey('shape-fill-color'));
+    final outline = find.byKey(const ValueKey('shape-outline-color'));
+    Finder within(Finder control, String key) => find.descendant(of: control, matching: find.byKey(ValueKey(key)));
+
+    expect(tester.widget<ColorControl>(fill).color, isNull);
+    await tester.tap(within(fill, 'color-picker-toggle'));
+    await tester.pumpAndSettle();
+    expect(within(fill, 'color-picker-custom'), findsOneWidget);
+    expect(within(outline, 'color-picker-custom'), findsNothing);
+    expect(tester.widget<ColorControl>(fill).color, isNull);
+
+    await tester.tap(within(outline, 'color-picker-toggle'));
+    await tester.pumpAndSettle();
+    expect(within(outline, 'color-picker-custom'), findsOneWidget);
+    await tester.tap(within(outline, 'color-picker-toggle'));
+    await tester.pumpAndSettle();
+    expect(within(fill, 'color-picker-custom'), findsOneWidget);
+
+    await tester.enterText(find.descendant(of: fill, matching: find.byType(TextField)), '#12345680');
+    await tester.pump();
+    final custom = tester.widget<ColorControl>(fill).color!;
+    expect(custom.toARGB32(), 0x80123456);
+    await tester.tap(within(fill, 'color-picker-toggle'));
+    await tester.pumpAndSettle();
+    await tester.tap(within(fill, 'color-preset-Blue'));
+    await tester.pump();
+    final blue = presetColors.firstWhere((swatch) => swatch.label == 'Blue').color;
+    expect(tester.widget<ColorControl>(fill).color, blue);
+
+    await tester.dragFrom(const Offset(100, 180), const Offset(140, 100));
+    await tester.pumpAndSettle();
+    ShapeModel model() => tester.widget<Shape>(find.byType(Shape)).model;
+    expect(model().fillColor, blue);
+    tester.widget<ColorControl>(fill).onChanged(custom);
+    await tester.pump();
+    expect(model().fillColor, custom);
+    await tester.tap(find.byKey(const ValueKey('shape-fill-none')));
+    await tester.pumpAndSettle();
+    expect(model().fillColor, isNull);
+    expect(tester.widget<ColorControl>(fill).color, isNull);
+    await pumpPastSave(tester);
+    expect((store.persisted!.elements.single as ShapeElementData).fillColor, isNull);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(model().fillColor, custom);
+    await pumpPastSave(tester);
+    expect((store.persisted!.elements.single as ShapeElementData).fillColor, custom.toARGB32());
   });
 
   testWidgets('toolbar places one shape, then activates, moves, and resizes', (
@@ -240,7 +315,7 @@ void main() {
     final toolbar = find.byKey(const ValueKey('toolbar-shape'));
     expect(tester.widget<ToolbarButton>(toolbar).selected, isTrue);
     expect(find.byKey(const ValueKey('shape-settings-panel')), findsOneWidget);
-    final colorControl = tester.widget<ColorControl>(find.byType(ColorControl));
+    final colorControl = tester.widget<ColorControl>(find.byKey(const ValueKey('shape-outline-color')));
     final blue = presetColors.firstWhere((swatch) => swatch.label == 'Blue').color;
     expect(colorControl.enableAlpha, isTrue);
     colorControl.onChanged(blue);
@@ -306,10 +381,10 @@ void main() {
           .selected,
       isTrue,
     );
-    tester.widget<ColorControl>(find.byType(ColorControl)).onExpandedChanged(true);
+    tester.widget<ColorControl>(find.byKey(const ValueKey('shape-outline-color'))).onExpandedChanged(true);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('color-picker-custom')), findsOneWidget);
-    tester.widget<ColorControl>(find.byType(ColorControl)).onExpandedChanged(false);
+    tester.widget<ColorControl>(find.byKey(const ValueKey('shape-outline-color'))).onExpandedChanged(false);
     await tester.pumpAndSettle();
     final thirdDrag = await tester.startGesture(
       const Offset(500, 180),
@@ -414,9 +489,14 @@ void main() {
     await tester.pump();
     final green = presetColors.firstWhere((swatch) => swatch.label == 'Green').color;
     final red = presetColors.firstWhere((swatch) => swatch.label == 'Red').color;
-    tester.widget<ColorControl>(find.byType(ColorControl)).onChanged(green);
-    await tester.pump();
-    tester.widget<InkWell>(find.byKey(const ValueKey('shape-fill-red'))).onTap!();
+    tester.widget<ColorControl>(find.byKey(const ValueKey('shape-outline-color'))).onChanged(green);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('shape-fill-color')),
+        matching: find.byKey(const ValueKey('color-preset-Red')),
+      ),
+    );
     await tester.pump();
     tester.widget<DiscreteSlider>(find.byType(DiscreteSlider)).onChanged!(4);
     await tester.pump();

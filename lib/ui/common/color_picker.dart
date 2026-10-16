@@ -14,7 +14,6 @@ const _trackRadius = BorderRadius.all(Radius.circular(5));
 const _trackHeight = 10.0;
 const _handleRadius = 7.0;
 const _fieldHeight = 30.0;
-const _colorButtonSize = Size.square(32);
 
 // ---------- Color control ----------
 
@@ -29,7 +28,7 @@ class ColorControl extends StatelessWidget {
     super.key,
   });
 
-  final Color color;
+  final Color? color;
   final ValueChanged<Color> onChanged;
   final bool expanded;
   final ValueChanged<bool> onExpandedChanged;
@@ -53,7 +52,7 @@ class ColorControl extends StatelessWidget {
                   label: 'Use ${swatch.label}',
                   child: IconButton(
                     key: ValueKey('color-preset-${swatch.label}'),
-                    constraints: BoxConstraints.tight(_colorButtonSize),
+                    constraints: BoxConstraints.tight(BSizes.colorButtonSize),
                     onPressed: () => onChanged(swatch.color),
                     style: IconButton.styleFrom(
                       padding: const EdgeInsets.all(6),
@@ -78,7 +77,7 @@ class ColorControl extends StatelessWidget {
             IconButton(
               key: const ValueKey('color-picker-toggle'),
               tooltip: expanded ? 'Hide custom color picker' : 'Show custom color picker',
-              constraints: BoxConstraints.tight(_colorButtonSize),
+              constraints: BoxConstraints.tight(BSizes.colorButtonSize),
               iconSize: BSizes.defaultIconSize,
               style: IconButton.styleFrom(
                 padding: const EdgeInsets.all(6),
@@ -111,7 +110,7 @@ class ColorControl extends StatelessWidget {
           child: expanded
               ? _ArbitraryColorPicker(
                   key: const ValueKey('color-picker-custom'),
-                  color: color,
+                  color: color ?? presetColors.first.color,
                   enableAlpha: enableAlpha,
                   onChanged: onChanged,
                 )
