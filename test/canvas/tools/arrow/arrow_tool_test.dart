@@ -467,10 +467,17 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('toolbar-arrow')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('arrow-settings-panel')), findsOneWidget);
+    Slider widthSlider() => tester.widget<Slider>(find.byKey(const ValueKey('discrete-slider')));
+    expect(widthSlider().label, '5');
+    expect(widthSlider().value, 2);
+    expect(widthSlider().divisions, 19);
+    expect(widthSlider().semanticFormatterCallback!(widthSlider().min), '1');
+    expect(widthSlider().semanticFormatterCallback!(widthSlider().max), '20');
     await tester.tap(find.byKey(const ValueKey('arrow-style-dashed')));
     await tester.tap(find.byKey(const ValueKey('color-preset-Red')));
-    tester.widget<Slider>(find.byKey(const ValueKey('discrete-slider'))).onChanged!(3);
+    widthSlider().onChanged!(widthSlider().min);
     await tester.pump();
+    expect(widthSlider().label, '1');
     final firstDrag = await tester.startGesture(
       const Offset(120, 200),
       kind: PointerDeviceKind.mouse,
@@ -491,8 +498,12 @@ void main() {
       first.color.toARGB32(),
       presetColors.firstWhere((swatch) => swatch.label == 'Red').color.toARGB32(),
     );
-    expect(first.strokeWidth, 3);
+    expect(first.strokeWidth, arrowStrokeWidthMinimum);
     expect(find.byKey(const ValueKey('arrow-settings-panel')), findsOneWidget);
+    widthSlider().onChanged!(widthSlider().max);
+    await tester.pump();
+    expect(widthSlider().label, '20');
+    expect(first.strokeWidth, arrowStrokeWidthMaximum);
     await tester.tap(find.byKey(const ValueKey('arrow-style-solid')));
     await tester.pump();
     expect(first.strokeStyle, ArrowStrokeStyle.solid);

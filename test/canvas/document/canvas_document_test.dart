@@ -482,6 +482,13 @@ void main() {
     expect(node.toJson()['size'], isNot(contains('height')));
   });
 
+  test('arrow width boundaries round trip', () {
+    for (final width in [arrowStrokeWidthMinimum, arrowStrokeWidthMaximum]) {
+      final arrow = ArrowElementData.fromJson(_encodedArrow()..['strokeWidth'] = width);
+      expect(ArrowElementData.fromJson(arrow.toJson()).strokeWidth, width);
+    }
+  });
+
   test('malformed non-text elements are rejected', () {
     final code = _encodedCode();
     expect(
@@ -531,8 +538,8 @@ void main() {
       _encodedArrow()..['controls'] = null,
       _encodedArrow()..['color'] = -1,
       _encodedArrow()..['strokeStyle'] = 'dotted',
-      _encodedArrow()..['strokeWidth'] = 0.0,
-      _encodedArrow()..['strokeWidth'] = 5.25,
+      _encodedArrow()..['strokeWidth'] = arrowStrokeWidthMinimum - 0.25,
+      _encodedArrow()..['strokeWidth'] = arrowStrokeWidthMaximum + 0.25,
     ]) {
       expect(
         () => CanvasDocument.fromJson(_document(elements: [invalid])),

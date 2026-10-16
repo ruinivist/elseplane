@@ -25,6 +25,7 @@ class DiscreteSlider extends StatelessWidget {
     this.min = _defaultMinimum,
     this.max = _defaultMaximum,
     this.stepSize = _defaultStepSize,
+    this.labelOffset = 0,
     super.key,
   }) : assert(min < max, 'min must be less than max'),
        assert(stepSize > 0, 'stepSize must be greater than 0'),
@@ -38,8 +39,11 @@ class DiscreteSlider extends StatelessWidget {
   final double min;
   final double max;
   final double stepSize;
+  final int labelOffset;
 
   int get divisions => ((max - min) / stepSize).round();
+
+  String _label(double value) => '${(value / stepSize).round() + labelOffset}';
 
   // ---------- Rendering ----------
 
@@ -87,8 +91,8 @@ class DiscreteSlider extends StatelessWidget {
             min: min,
             max: max,
             divisions: divisions,
-            label: '${(value / stepSize).round()}',
-            semanticFormatterCallback: (value) => '${(value / stepSize).round()}',
+            label: _label(value),
+            semanticFormatterCallback: _label,
             onChanged: onChanged == null ? null : (next) => onChanged!(next.clamp(min, max)),
           ),
         ),

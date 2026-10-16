@@ -3079,6 +3079,9 @@ class _ArrowSettings extends StatelessWidget {
         _StrokeSettings(
           color: color,
           width: strokeWidth,
+          widthMinimum: arrowStrokeWidthMinimum,
+          widthMaximum: arrowStrokeWidthMaximum,
+          widthLabelOffset: -3,
           colorPickerExpanded: colorPickerExpanded,
           onColorChanged: onColorChanged,
           onColorPickerExpandedChanged: onColorPickerExpandedChanged,
@@ -3216,6 +3219,9 @@ class _StrokeSettings extends StatelessWidget {
     required this.onColorChanged,
     required this.onColorPickerExpandedChanged,
     required this.onWidthChanged,
+    this.widthMinimum = 0.25,
+    this.widthMaximum = 5.0,
+    this.widthLabelOffset = 0,
     this.streamline,
     this.onStreamlineChanged,
     super.key,
@@ -3223,6 +3229,9 @@ class _StrokeSettings extends StatelessWidget {
 
   final Color color;
   final double width;
+  final double widthMinimum;
+  final double widthMaximum;
+  final int widthLabelOffset;
   final double? streamline;
   final bool colorPickerExpanded;
   final ValueChanged<Color> onColorChanged;
@@ -3250,6 +3259,9 @@ class _StrokeSettings extends StatelessWidget {
         DiscreteSlider(
           key: const ValueKey('pen-width-slider'),
           value: width,
+          min: widthMinimum,
+          max: widthMaximum,
+          labelOffset: widthLabelOffset,
           onChanged: onWidthChanged,
         ),
         if ((streamline, onStreamlineChanged) case (final streamline?, final onStreamlineChanged?)) ...[
