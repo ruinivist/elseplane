@@ -58,13 +58,19 @@ ButtonStyle menuItemStyle(BTheme theme, {required bool destructive}) {
 // ---------- Menu content ----------
 
 class MenuSurface extends StatelessWidget {
-  const MenuSurface({required this.children, super.key});
+  const MenuSurface({required this.children, this.scrollable = true, super.key});
 
   final List<Widget> children;
+  final bool scrollable;
 
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
     return PointerScrollBoundary(
       child: Surface(
         kind: SurfaceKind.menu,
@@ -72,17 +78,15 @@ class MenuSurface extends StatelessWidget {
           constraints: BoxConstraints(
             maxHeight: math.max(0, media.size.height - media.padding.vertical - media.viewInsets.bottom - 48),
           ),
-          child: AnimatedPrimaryScrollController(
-            child: SingleChildScrollView(
-              primary: true,
-              padding: const EdgeInsets.all(4),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: children,
-              ),
-            ),
-          ),
+          child: scrollable
+              ? AnimatedPrimaryScrollController(
+                  child: SingleChildScrollView(
+                    primary: true,
+                    padding: const EdgeInsets.all(4),
+                    child: content,
+                  ),
+                )
+              : Padding(padding: const EdgeInsets.all(4), child: content),
         ),
       ),
     );

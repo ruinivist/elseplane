@@ -147,6 +147,251 @@ void main() {
     }
   }, skip: !kIsWeb);
 
+  for (final searchable in [false, true]) {
+    testWidgets('${searchable ? 'searchable' : 'plain'} dropdown supports keyboard opening and dismissal', (
+      tester,
+    ) async {
+      int? selected;
+      final options = [for (var i = 0; i < 3; i++) SelectOption(value: i, label: 'Option $i')];
+      await tester.pumpWidget(
+        _app(
+          searchable
+              ? SearchableSelect<int>(value: 0, options: options, searchHint: 'Search', onChanged: (v) => selected = v)
+              : Select<int>(value: 0, options: options, onChanged: (v) => selected = v),
+        ),
+      );
+      final trigger = find.byKey(ValueKey(searchable ? 'searchable-select-trigger' : 'select-trigger'));
+      final focus = tester.widget<TextButton>(trigger).focusNode!..requestFocus();
+      await tester.pump();
+      for (final key in [
+        LogicalKeyboardKey.arrowDown,
+        LogicalKeyboardKey.arrowUp,
+        LogicalKeyboardKey.enter,
+        LogicalKeyboardKey.space,
+      ]) {
+        await tester.sendKeyEvent(key);
+        await tester.pumpAndSettle();
+        expect(find.byType(MenuSurface), findsOneWidget);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(find.byType(MenuSurface), findsNothing);
+        expect(focus.hasFocus, isTrue);
+        expect(selected, isNull);
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      if (!searchable) await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(selected, 0);
+      expect(find.byType(MenuSurface), findsNothing);
+      expect(focus.hasFocus, isTrue);
+    });
+
+    testWidgets('${searchable ? 'searchable' : 'plain'} disabled dropdown stays closed', (tester) async {
+      const options = [SelectOption(value: 0, label: 'Option')];
+      await tester.pumpWidget(
+        _app(
+          searchable
+              ? const SearchableSelect<int>(value: 0, options: options, searchHint: 'Search', onChanged: null)
+              : const Select<int>(value: 0, options: options, onChanged: null),
+        ),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.byType(MenuSurface), findsNothing);
+    });
+  }
+
+  testWidgets('hovering searchable results preserves typing and keyboard navigation', (tester) async {
+    int? selected;
+    await tester.pumpWidget(
+      _app(
+        SearchableSelect<int>(
+          value: 0,
+          searchHint: 'Search',
+          options: [
+            for (var i = 0; i < 30; i++) SelectOption(value: i, label: 'Option ${i.toString().padLeft(2, '0')}'),
+          ],
+          onChanged: (value) => selected = value,
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('searchable-select-trigger')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(700, 500));
+    await mouse.moveTo(tester.getCenter(find.text('Option 02')));
+    await tester.pumpAndSettle();
+    final search = find.byKey(const ValueKey('searchable-select-search'));
+    expect(tester.widget<TextField>(search).focusNode!.hasFocus, isTrue);
+    expect(selected, isNull);
+    await tester.enterText(search, 'Option 2');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(selected, 21);
+    expect(find.byType(MenuSurface), findsNothing);
+    await mouse.removePointer();
+  });
+
+  testWidgets('search keyboard navigation reveals results in a short viewport', (tester) async {
+    tester.view.physicalSize = const Size(800, 300);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    int? selected;
+    await tester.pumpWidget(
+      _app(
+        SearchableSelect<int>(
+          value: 0,
+          searchHint: 'Search',
+          options: [
+            for (var i = 0; i < 30; i++) SelectOption(value: i, label: 'Option ${i.toString().padLeft(2, '0')}'),
+          ],
+          onChanged: (value) => selected = value,
+        ),
+      ),
+    );
+    final trigger = find.byKey(const ValueKey('searchable-select-trigger'));
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 7; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      expect(find.byKey(ValueKey('searchable-select-option-$i')).hitTestable(), findsOneWidget);
+    }
+    final surfaceBounds = tester.getRect(find.byType(MenuSurface));
+    final optionBounds = tester.getRect(find.byKey(const ValueKey('searchable-select-option-6')));
+    expect(surfaceBounds.contains(optionBounds.topLeft), isTrue);
+    expect(surfaceBounds.contains(optionBounds.bottomRight), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(selected, 6);
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pumpAndSettle();
+    expect(find.text('Option 29').hitTestable(), findsOneWidget);
+    final search = find.byKey(const ValueKey('searchable-select-search'));
+    expect(search.hitTestable(), findsOneWidget);
+    expect(tester.widget<TextField>(search).focusNode!.hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(selected, 29);
+  });
+
+  testWidgets('search arrows retain typing focus, reveal offscreen results, and reset on filtering', (tester) async {
+    int? selected;
+    await tester.pumpWidget(
+      _app(
+        SearchableSelect<int>(
+          value: 0,
+          options: [
+            for (var i = 0; i < 30; i++) SelectOption(value: i, label: 'Option ${i.toString().padLeft(2, '0')}'),
+          ],
+          searchHint: 'Search',
+          onChanged: (value) => selected = value,
+        ),
+      ),
+    );
+    final trigger = find.byKey(const ValueKey('searchable-select-trigger'));
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    final search = find.byKey(const ValueKey('searchable-select-search'));
+    final searchFocus = tester.widget<TextField>(search).focusNode!;
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
+    for (var i = 0; i < 29; i++) {
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+    }
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(searchFocus.hasFocus, isTrue);
+    expect(find.text('Option 29').hitTestable(), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(selected, 29);
+
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pumpAndSettle();
+    expect(find.text('Option 29').hitTestable(), findsOneWidget);
+    await tester.enterText(search, 'Option 1');
+    await tester.pumpAndSettle();
+    expect(searchFocus.hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(selected, 10);
+
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    await tester.enterText(search, 'Option 2');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(selected, 20);
+
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    await tester.enterText(search, 'Option 1');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.numpadEnter);
+    await tester.pumpAndSettle();
+    expect(selected, 11);
+
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'Option 1',
+        selection: TextSelection.collapsed(offset: 8),
+        composing: TextRange(start: 0, end: 8),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(selected, 11);
+    expect(searchFocus.hasFocus, isTrue);
+    await tester.enterText(search, 'Option 1');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(selected, 10);
+
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    await tester.enterText(search, 'no match');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('No results'), findsOneWidget);
+    expect(selected, 10);
+    expect(searchFocus.hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(MenuSurface), findsNothing);
+  });
+
   testWidgets('glass dropdown retains keyboard selection, bounded scrolling, and dismissal', (tester) async {
     var selected = 0;
     await tester.pumpWidget(

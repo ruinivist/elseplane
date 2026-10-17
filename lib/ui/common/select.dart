@@ -29,6 +29,7 @@ final double _selectMinimumWidth = BSizes.defaultTextButtonSize.width;
 final double _selectTriggerHeight = BSizes.defaultTextButtonSize.height;
 const _selectTriggerHorizontalPadding = 16.0;
 const _selectTriggerIconSize = 16.0;
+const _selectOptionVerticalPadding = 10.0;
 
 // ---------- Shared rendering ----------
 
@@ -114,12 +115,14 @@ ButtonStyle _selectTriggerStyle({
 ButtonStyle _selectOptionStyle({
   required BTheme theme,
   required bool isSelected,
+  required bool isHighlighted,
 }) {
   final colors = theme.colors;
   return ButtonStyle(
     foregroundColor: _selectForegroundColor(colors),
     backgroundColor: WidgetStateProperty.resolveWith((states) {
       if (states.contains(WidgetState.disabled)) return Colors.transparent;
+      if (isHighlighted) return colors.surfaceHover;
       if (isSelected || states.contains(WidgetState.pressed)) return colors.surfacePressed;
       if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) {
         return colors.surfaceHover;
@@ -128,7 +131,7 @@ ButtonStyle _selectOptionStyle({
     }),
     textStyle: WidgetStatePropertyAll(theme.typo.body),
     padding: const WidgetStatePropertyAll(
-      EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      EdgeInsets.symmetric(horizontal: 12, vertical: _selectOptionVerticalPadding),
     ),
     minimumSize: const WidgetStatePropertyAll(Size(0, 32)),
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -206,19 +209,23 @@ Widget _buildSelectOption<T>({
   required ValueChanged<T>? onChanged,
   required BTheme theme,
   required String keyPrefix,
+  bool isHighlighted = false,
+  bool requestFocusOnHover = true,
 }) {
   final isSelected = option.value == value;
   return Semantics(
     container: true,
     selected: isSelected,
+    focused: isHighlighted ? true : null,
     inMutuallyExclusiveGroup: true,
     child: MenuItemButton(
       key: ValueKey('$keyPrefix-option-$index'),
       focusNode: focusNode,
+      requestFocusOnHover: requestFocusOnHover,
       onPressed: () => onChanged?.call(option.value),
       semanticsLabel: option.label,
-      style: _selectOptionStyle(theme: theme, isSelected: isSelected),
-      child: Text(option.label),
+      style: _selectOptionStyle(theme: theme, isSelected: isSelected, isHighlighted: isHighlighted),
+      child: Text(option.label, maxLines: 1, overflow: TextOverflow.ellipsis),
     ),
   );
 }
@@ -402,6 +409,21 @@ class _SearchableSelectState<T> extends State<SearchableSelect<T>> {
   final _triggerFocusNode = FocusNode();
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode(debugLabel: 'Searchable select search');
+  final _resultsScrollController = ScrollController();
+  int? _highlightedIndex;
+  String _query = '';
+
+  double get _optionExtent {
+    final painter = TextPainter(
+      text: TextSpan(text: ' ', style: _textStyle),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      locale: Localizations.maybeLocaleOf(context),
+    )..layout();
+    final height = math.max<double>(32, painter.height + _selectOptionVerticalPadding * 2);
+    painter.dispose();
+    return height;
+  }
 
   bool get _enabled => widget.onChanged != null;
   BTheme get _theme => BTheme.of(context);
@@ -446,6 +468,7 @@ class _SearchableSelectState<T> extends State<SearchableSelect<T>> {
     _searchController
       ..removeListener(_handleSearchChanged)
       ..dispose();
+    _resultsScrollController.dispose();
     _searchFocusNode.dispose();
     _triggerFocusNode.dispose();
     super.dispose();
@@ -454,10 +477,42 @@ class _SearchableSelectState<T> extends State<SearchableSelect<T>> {
   // ---------- Search and selection ----------
 
   void _handleSearchChanged() {
-    if (mounted) setState(() {});
+    if (_query == _searchController.text) return;
+    _query = _searchController.text;
+    setState(() => _highlightedIndex = null);
+    if (_resultsScrollController.hasClients) _resultsScrollController.jumpTo(0);
+  }
+
+  void _moveHighlight(int direction) {
+    final options = _visibleOptions;
+    if (options.isEmpty) return;
+    final index = _highlightedIndex == null
+        ? (direction > 0 ? 0 : options.length - 1)
+        : (_highlightedIndex! + direction).clamp(0, options.length - 1);
+    setState(() => _highlightedIndex = index);
+    if (!_resultsScrollController.hasClients) return;
+    final position = _resultsScrollController.position;
+    final top = index * _optionExtent;
+    final bottom = top + _optionExtent;
+    final offset = top < position.pixels ? top : math.max(position.pixels, bottom - position.viewportDimension);
+    _resultsScrollController.jumpTo(offset.clamp(0, position.maxScrollExtent));
+  }
+
+  void _confirmHighlight() {
+    if (_searchController.value.composing.isValid && !_searchController.value.composing.isCollapsed) return;
+    final options = _visibleOptions;
+    if (options.isEmpty) return;
+    final index = (_highlightedIndex ?? 0).clamp(0, options.length - 1);
+    _chooseOption(options[index].value);
+  }
+
+  void _chooseOption(T value) {
+    _menuController.close();
+    widget.onChanged?.call(value);
   }
 
   void _prepareSearch() {
+    _highlightedIndex = null;
     _searchController.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_menuController.isOpen) return;
@@ -521,31 +576,43 @@ class _SearchableSelectState<T> extends State<SearchableSelect<T>> {
           behavior: HitTestBehavior.opaque,
           onPointerDown: widget.onMenuPointerDown,
           child: MenuSurface(
+            scrollable: false,
             children: <Widget>[
               SizedBox(
                 width: menuWidth,
-                child: TextField(
-                  key: const ValueKey('searchable-select-search'),
-                  controller: _searchController,
-                  focusNode: _searchFocusNode,
-                  style: _textStyle,
-                  decoration: InputDecoration(
-                    hintText: widget.searchHint,
-                    hintStyle: _textStyle.copyWith(color: _colors.textMuted),
-                    isDense: true,
-                    filled: true,
-                    fillColor: _colors.surface,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: _theme.geo.radiusSmall,
-                      borderSide: BorderSide(color: _colors.borderSubtle),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: _theme.geo.radiusSmall,
-                      borderSide: BorderSide(color: _colors.focusRing, width: 2),
+                child: DefaultTextEditingShortcuts(
+                  child: CallbackShortcuts(
+                    bindings: {
+                      const SingleActivator(LogicalKeyboardKey.arrowDown): () => _moveHighlight(1),
+                      const SingleActivator(LogicalKeyboardKey.arrowUp): () => _moveHighlight(-1),
+                      const SingleActivator(LogicalKeyboardKey.enter): _confirmHighlight,
+                      const SingleActivator(LogicalKeyboardKey.numpadEnter): _confirmHighlight,
+                      const SingleActivator(LogicalKeyboardKey.escape): _menuController.close,
+                    },
+                    child: TextField(
+                      key: const ValueKey('searchable-select-search'),
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      style: _textStyle,
+                      decoration: InputDecoration(
+                        hintText: widget.searchHint,
+                        hintStyle: _textStyle.copyWith(color: _colors.textMuted),
+                        isDense: true,
+                        filled: true,
+                        fillColor: _colors.surface,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: _theme.geo.radiusSmall,
+                          borderSide: BorderSide(color: _colors.borderSubtle),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: _theme.geo.radiusSmall,
+                          borderSide: BorderSide(color: _colors.focusRing, width: 2),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -563,11 +630,13 @@ class _SearchableSelectState<T> extends State<SearchableSelect<T>> {
                   ),
                 )
               else
-                SizedBox(
-                  width: menuWidth,
+                Flexible(
                   child: SizedBox(
                     height: 280,
+                    width: menuWidth,
                     child: ListView.builder(
+                      controller: _resultsScrollController,
+                      itemExtent: _optionExtent,
                       padding: EdgeInsets.zero,
                       primary: false,
                       itemCount: visibleOptions.length,
@@ -600,10 +669,9 @@ class _SearchableSelectState<T> extends State<SearchableSelect<T>> {
       index: index,
       value: widget.value,
       focusNode: null,
-      onChanged: (value) {
-        widget.onChanged?.call(value);
-        _menuController.close();
-      },
+      isHighlighted: index == _highlightedIndex,
+      requestFocusOnHover: false,
+      onChanged: _chooseOption,
       theme: _theme,
       keyPrefix: 'searchable-select',
     );

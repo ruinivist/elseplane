@@ -101,6 +101,9 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(search, findsNothing);
+      expect(model.active, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
       expect(model.active, isFalse);
       expect(model.controller.text, source);
     });

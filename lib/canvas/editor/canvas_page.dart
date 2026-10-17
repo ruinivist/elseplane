@@ -2281,6 +2281,12 @@ class _CanvasPageState extends State<CanvasPage> {
         !HardwareKeyboard.instance.isMetaPressed &&
         !HardwareKeyboard.instance.isAltPressed &&
         !HardwareKeyboard.instance.isShiftPressed;
+    final focusContext = FocusManager.instance.primaryFocus?.context;
+    if (!_contextMenuController.isOpen &&
+        focusContext != null &&
+        MenuController.maybeOf(focusContext)?.isOpen == true) {
+      return false;
+    }
     final keyboard = HardwareKeyboard.instance;
     final macOS = Theme.of(context).platform == TargetPlatform.macOS;
     final arrangeModifier = macOS

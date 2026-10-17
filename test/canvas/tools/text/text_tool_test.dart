@@ -1272,6 +1272,26 @@ Inline $x^2$''';
     expect(find.byType(ElementTransformControls), findsNothing);
   });
 
+  for (final picker in ['text-font-select', 'text-background-select']) {
+    testWidgets('$picker owns Escape before the active canvas block', (tester) async {
+      await pumpCanvas(tester, TestCanvasDocumentStore(_rendererDocument()));
+      await tester.tap(find.byKey(const ValueKey('text-markdown-preview-surface')));
+      await tester.pumpAndSettle();
+      final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+      expect(model.active, isTrue);
+      await tester.tap(_selectTrigger(picker));
+      await tester.pumpAndSettle();
+      expect(find.byType(MenuItemButton), findsWidgets);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.byType(MenuItemButton), findsNothing);
+      expect(model.active, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(model.active, isFalse);
+    });
+  }
+
   testWidgets('editing a second text rebinds top-right settings', (
     tester,
   ) async {
