@@ -18,7 +18,11 @@ const _$_demoJsonJsonLiteral = {
         'position': {'x': 380, 'y': 100},
         'size': {'width': 540, 'height': 340},
         'markdown': '# A place for ideas\n## The shape of a thought\n### Small details matter\n#### A closer look\n##### Notes in the margin\n###### One last thing',
-        'style': {'fontFamily': 'JetBrains Mono', 'background': 'card'},
+        'style': {
+          'fontFamily': 'JetBrains Mono',
+          'color': '#B8B8B8',
+          'background': 'glass',
+        },
         'rotation': 0,
       },
       {
@@ -27,7 +31,11 @@ const _$_demoJsonJsonLiteral = {
         'position': {'x': 380, 'y': 470},
         'size': {'width': 540, 'height': 310},
         'markdown': 'A canvas for thinking out loud. Try a new typeface, move a block, or rewrite a sentence.\n\nThe quick brown fox jumps over the lazy dog. 0123456789\n\n**Strong ideas**, *quiet emphasis*, ~~old drafts~~, and `inline code`.\n\n> Leave enough room for the next idea.',
-        'style': {'fontFamily': 'JetBrains Mono', 'background': 'card'},
+        'style': {
+          'fontFamily': 'JetBrains Mono',
+          'color': '#B8B8B8',
+          'background': 'glass',
+        },
         'rotation': 0,
       },
       {
@@ -36,7 +44,11 @@ const _$_demoJsonJsonLiteral = {
         'position': {'x': 960, 'y': 100},
         'size': {'width': 540, 'height': 290},
         'markdown': '## Make something useful\n- Gather the pieces\n- Find the connections\n- Keep what matters\n\n1. Sketch a possibility\n2. Try it on the canvas\n3. Refine the details\n\n- [x] Start with a question\n- [ ] Follow your curiosity',
-        'style': {'fontFamily': 'JetBrains Mono', 'background': 'card'},
+        'style': {
+          'fontFamily': 'JetBrains Mono',
+          'color': '#B8B8B8',
+          'background': 'glass',
+        },
         'rotation': 0,
       },
       {
@@ -45,7 +57,11 @@ const _$_demoJsonJsonLiteral = {
         'position': {'x': 960, 'y': 410},
         'size': {'width': 540, 'height': 340},
         'markdown': "## Type in context\n| Role | Where it appears |\n| :--- | :--- |\n| Display | Big ideas |\n| Heading | Sections |\n| Body | Everyday reading |\n| Code | Precise instructions |\n\n```dart\nfinal idea = 'Hello, canvas';\nprint(idea);\n```",
-        'style': {'fontFamily': 'JetBrains Mono', 'background': 'card'},
+        'style': {
+          'fontFamily': 'JetBrains Mono',
+          'color': '#B8B8B8',
+          'background': 'glass',
+        },
         'rotation': 0,
       },
       {
@@ -57,7 +73,7 @@ const _$_demoJsonJsonLiteral = {
         'source': '// Every idea starts somewhere.\nclass Idea {\n  const Idea(this.title);\n  final String title;\n\n  String describe() => \'An idea: \$title\';\n}\n\nvoid main() {\n  const idea = Idea(\'Make room for curiosity\');\n  print(idea.describe());\n}',
         'title': 'ideas.dart',
         'showLineNumbers': true,
-        'background': 'card',
+        'background': 'glass',
         'rotation': 0,
       },
       {
