@@ -39,7 +39,7 @@ class CanvasTitle extends StatefulWidget {
 
   static TextStyle _textStyleOf(BuildContext context) {
     final theme = BTheme.of(context);
-    return theme.typo.body.copyWith(color: theme.colors.textMuted, fontSize: 12);
+    return theme.typo.body.copyWith(color: theme.colors.textPrimary, fontSize: 14);
   }
 
   @override
