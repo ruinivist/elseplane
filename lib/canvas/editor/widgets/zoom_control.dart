@@ -130,9 +130,7 @@ class _ZoomControlState extends State<ZoomControl> {
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(borderRadius: theme.geo.radiusMedium),
           ),
-          textStyle: WidgetStatePropertyAll(
-            theme.typo.body.copyWith(fontSize: 12),
-          ),
+          textStyle: WidgetStatePropertyAll(theme.typo.body),
           minimumSize: const WidgetStatePropertyAll(Size.zero),
           fixedSize: WidgetStatePropertyAll(Size(_collapsedWidth, _height)),
           padding: const WidgetStatePropertyAll(EdgeInsets.zero),
