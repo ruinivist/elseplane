@@ -27,6 +27,154 @@ import '../test_helpers.dart';
 void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
+  for (final platform in [TargetPlatform.linux, TargetPlatform.macOS]) {
+    for (final releaseModifier in [true, false]) {
+      testWidgets('$platform picker dismissal tracks modifier release: $releaseModifier', (tester) async {
+        final store = TestCanvasDocumentStore(
+          CanvasDocument(
+            background: CanvasBackgroundKind.plain,
+            elements: [
+              TextElementData(
+                id: 'text',
+                position: const Offset(100, 150),
+                width: 280,
+                height: null,
+                markdown: 'Original',
+                style: const TextNodeStyle(fontFamily: defaultFontFamily),
+              ),
+            ],
+          ),
+        );
+        await pumpCanvas(tester, store, platform: platform);
+        final modifier = platform == TargetPlatform.macOS
+            ? LogicalKeyboardKey.metaLeft
+            : LogicalKeyboardKey.controlLeft;
+        await tester.sendKeyDownEvent(modifier);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
+        await tester.pumpAndSettle();
+        expect(find.byType(CanvasFilePicker), findsOneWidget);
+        if (releaseModifier) await tester.sendKeyUpEvent(modifier);
+        await tester.tap(find.byKey(const ValueKey('file-tree-close')), kind: PointerDeviceKind.mouse);
+        await tester.pumpAndSettle();
+        expect(find.byType(CanvasFilePicker), findsNothing);
+        await tester.tapAt(tester.getCenter(find.byType(TextTool)), kind: PointerDeviceKind.mouse);
+        await tester.pumpAndSettle();
+        final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+        expect(model.editing, releaseModifier);
+        expect(model.selected, !releaseModifier);
+        if (!releaseModifier) await tester.sendKeyUpEvent(modifier);
+      });
+    }
+
+    testWidgets('$platform shortcut opens while editing and Enter switches canvases', (tester) async {
+      final store = TestCanvasDocumentStore(
+        CanvasDocument(
+          background: CanvasBackgroundKind.plain,
+          elements: [
+            TextElementData(
+              id: 'text',
+              position: const Offset(100, 150),
+              width: 280,
+              height: null,
+              markdown: 'Original',
+              style: const TextNodeStyle(fontFamily: defaultFontFamily),
+            ),
+          ],
+        ),
+      );
+      await pumpCanvas(tester, store, platform: platform);
+      final originalId = store.library.currentId;
+      store.library = CanvasLibrary(
+        files: [
+          ...store.library.files,
+          const CanvasFile(id: 'next', name: 'Next', document: CanvasLibrary.emptyDocument),
+        ],
+        currentId: originalId,
+      );
+      final text = tester.widget<TextTool>(find.byType(TextTool));
+      text.onEdit();
+      await tester.pumpAndSettle();
+      expect(text.model.focusNode.hasFocus, isTrue);
+      text.model.insertPastedText(' edited');
+      final modifier = platform == TargetPlatform.macOS ? LogicalKeyboardKey.metaLeft : LogicalKeyboardKey.controlLeft;
+      await tester.sendKeyDownEvent(modifier);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyP);
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.keyP);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyP);
+      await tester.sendKeyUpEvent(modifier);
+      await tester.pumpAndSettle();
+      expect(find.byType(CanvasFilePicker), findsOneWidget);
+      expect(
+        store.library.file(originalId).document!.elements.whereType<TextElementData>().single.markdown,
+        contains('edited'),
+      );
+      expect(text.model.editing, isFalse);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      expect(store.library.currentId, originalId);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(store.library.currentId, 'next');
+      expect(find.byType(CanvasFilePicker), findsNothing);
+      expect(find.byType(TextTool), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('keyboard open failure retains current file and picker for retry', (tester) async {
+    final store = _FailingLibraryStore();
+    await pumpCanvas(tester, store);
+    final originalId = store.library.currentId;
+    store.library = CanvasLibrary(
+      files: [
+        ...store.library.files,
+        const CanvasFile(id: 'next', name: 'Next', document: CanvasLibrary.emptyDocument),
+      ],
+      currentId: originalId,
+    );
+    await _open(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    store.fail = true;
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(store.library.currentId, originalId);
+    expect(find.byType(CanvasFilePicker), findsOneWidget);
+    expect(find.text('Could not save changes. Please try again.'), findsOneWidget);
+    store.fail = false;
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(store.library.currentId, 'next');
+    expect(find.byType(CanvasFilePicker), findsNothing);
+  });
+
+  testWidgets('name editing keeps arrows and returns tree focus after Escape', (tester) async {
+    final store = TestCanvasDocumentStore();
+    await pumpCanvas(tester, store);
+    await _open(tester);
+    await tester.tap(find.byTooltip('New folder'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Notes');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsOneWidget);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(store.library.files.any((file) => file.name == 'Notes'), isTrue);
+    await tester.tap(find.byTooltip('New canvas'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Discard');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(CanvasFilePicker), findsOneWidget);
+    expect(FocusManager.instance.primaryFocus?.debugLabel, startsWith('File tree '));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(CanvasFilePicker), findsNothing);
+    expect(store.library.files.any((file) => file.name == 'Discard'), isFalse);
+  });
+
   test('bundled demo validates and round-trips every element type and its image', () async {
     final demo = await loadDemoCanvas();
     expect(demo.document.elements.map((element) => element.type).toSet(), {

@@ -293,6 +293,7 @@ class _CanvasFilePickerState extends State<CanvasFilePicker> {
                   if (_editing != null) unawaited(_saveName());
                 },
                 child: FileTreePopup(
+                  enabled: !_busy,
                   nodes: _nodes(null),
                   selectedId: _library.currentId,
                   expandedIds: _expanded,

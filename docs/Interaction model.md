@@ -150,7 +150,8 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 ## Canvas files
 
-- Clicking the canvas title opens the file picker; hovering the title reveals its folder path.
+- Clicking the canvas title or pressing Cmd+P on macOS, Ctrl+P elsewhere, opens the file picker, including while editing. Hovering the title reveals its folder path. The shortcut saves and ends editing just like clicking the title; open dropdowns and modal dialogs retain keyboard priority.
+- The picker initially focuses the current canvas and scrolls it into view. Up and Down move through visible rows without wrapping or switching files. Right expands a folder or enters its first child; Left collapses a folder or moves to its parent. Enter opens the focused canvas or toggles the focused folder. Keyboard focus is separate from the current-file marker; focused rows stay visible. Name fields retain normal editing keys, and menus and confirmation dialogs own keyboard navigation. Tree navigation is disabled while saving.
 - Clicking a canvas saves the current file and opens the chosen one. Each file has separate contents; switching clears undo and selection state.
 - Clicking a folder expands or collapses it. Header actions create root-level canvases and folders; right-click a folder to create items inside it.
 - Debug builds also show a Demo header button beside New folder and Close. It imports the bundled sample, including its image, into a new root-level canvas and opens it. Names use Demo, Demo 2, and the first available numbered suffix; existing canvases are preserved. The button and bundled sample are excluded from release and profile builds.

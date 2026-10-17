@@ -44,7 +44,7 @@ class ContextMenuAction {
 
 /// Renders a context menu around a pointer-interactive child.
 /// Used by canvas elements and other surfaces with grouped actions.
-class ContextMenu extends StatelessWidget {
+class ContextMenu extends StatefulWidget {
   const ContextMenu({
     required this.groups,
     required this.child,
@@ -68,19 +68,47 @@ class ContextMenu extends StatelessWidget {
   final bool consumeOutsideTap;
   final Object? tapRegionGroupId;
 
+  static const double width = _ContextMenuState._menuWidth + 8; // Includes the menu surface's padding.
+
+  @override
+  State<ContextMenu> createState() => _ContextMenuState();
+}
+
+class _ContextMenuState extends State<ContextMenu> {
+  final _firstItemFocus = FocusNode(debugLabel: 'Context menu first action');
+
+  ContextMenuAction? get _firstAction => widget.groups
+      .expand((group) => group)
+      .where((action) => action.onPressed != null || action.groups.isNotEmpty)
+      .firstOrNull;
+
+  @override
+  void dispose() {
+    _firstItemFocus.dispose();
+    super.dispose();
+  }
+
+  void _focusFirstAction() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final action = _firstAction;
+      if (action != null) (action.focusNode ?? _firstItemFocus).requestFocus();
+    });
+  }
+
   static const _menuWidth = 224.0;
-  static const double width = _menuWidth + 8; // Includes the menu surface's padding.
 
   // ---------- Composition ----------
 
   Widget _item(BuildContext context, ContextMenuAction action) {
+    final focusNode = action.focusNode ?? (identical(action, _firstAction) ? _firstItemFocus : null);
     if (action.toggleValue case final value?) {
       return SizedBox(
         width: _menuWidth,
         child: LabeledSwitch.menu(
           label: action.label,
           value: value,
-          focusNode: action.focusNode,
+          focusNode: focusNode,
           onChanged: (_) => action.onPressed!(),
         ),
       );
@@ -100,7 +128,7 @@ class ContextMenu extends StatelessWidget {
     );
     final item = action.groups.isNotEmpty
         ? SubmenuButton(
-            focusNode: action.focusNode,
+            focusNode: focusNode,
             style: style,
             menuStyle: menuShellStyle(),
             leadingIcon: Icon(action.icon, size: 16),
@@ -108,7 +136,7 @@ class ContextMenu extends StatelessWidget {
             child: label,
           )
         : MenuItemButton(
-            focusNode: action.focusNode,
+            focusNode: focusNode,
             onPressed: action.onPressed,
             shortcut: action.shortcut,
             style: style,
@@ -134,10 +162,10 @@ class ContextMenu extends StatelessWidget {
 
   Widget _surface(List<Widget> children, {TapRegionCallback? onTapOutside}) {
     final surface = MenuSurface(children: children);
-    if (tapRegionGroupId == null && onTapOutside == null) return surface;
+    if (widget.tapRegionGroupId == null && onTapOutside == null) return surface;
     return TapRegion(
       behavior: HitTestBehavior.opaque,
-      groupId: tapRegionGroupId,
+      groupId: widget.tapRegionGroupId,
       onTapOutside: onTapOutside,
       child: surface,
     );
@@ -149,27 +177,28 @@ class ContextMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = BTheme.of(context);
     return MenuAnchor(
-      consumeOutsideTap: consumeOutsideTap,
+      consumeOutsideTap: widget.consumeOutsideTap,
       style: menuShellStyle(),
-      controller: controller,
-      onClose: onClose,
+      controller: widget.controller,
+      onOpen: widget.controller == null ? _focusFirstAction : null,
+      onClose: widget.onClose,
       menuChildren: [
         _surface(
           [
-            if (title case final title?)
+            if (widget.title case final title?)
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
                 child: Text(title, style: theme.typo.label.copyWith(color: theme.colors.textMuted)),
               ),
-            ..._items(context, groups),
+            ..._items(context, widget.groups),
           ],
-          onTapOutside: onTapOutside,
+          onTapOutside: widget.onTapOutside,
         ),
       ],
-      builder: (context, menuController, child) => controller != null
+      builder: (context, menuController, child) => widget.controller != null
           ? child!
           : Semantics(
-              label: semanticLabel,
+              label: widget.semanticLabel,
               button: true,
               child: InkWell(
                 mouseCursor: SystemMouseCursors.contextMenu,
@@ -186,7 +215,7 @@ class ContextMenu extends StatelessWidget {
               ),
             ),
       // MenuAnchor's traversal shortcuts must yield to editing inside its content.
-      child: DefaultTextEditingShortcuts(child: child),
+      child: DefaultTextEditingShortcuts(child: widget.child),
     );
   }
 }

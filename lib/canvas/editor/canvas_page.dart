@@ -2270,10 +2270,12 @@ class _CanvasPageState extends State<CanvasPage> {
   // ---------- Keyboard commands ----------
 
   bool _handleKeyEvent(KeyEvent event) {
-    if (!_documentLoaded || _filePickerOpen || ModalRoute.of(context)?.isCurrent == false) return false;
-    _selectionModifierPressed.value = Theme.of(context).platform == TargetPlatform.macOS
-        ? HardwareKeyboard.instance.isMetaPressed
-        : HardwareKeyboard.instance.isControlPressed;
+    final keyboard = HardwareKeyboard.instance;
+    final macOS = Theme.of(context).platform == TargetPlatform.macOS;
+    _selectionModifierPressed.value = macOS ? keyboard.isMetaPressed : keyboard.isControlPressed;
+    final openPicker = SingleActivator(LogicalKeyboardKey.keyP, meta: macOS, control: !macOS).accepts(event, keyboard);
+    if (_filePickerOpen) return openPicker;
+    if (!_documentLoaded || ModalRoute.of(context)?.isCurrent == false) return false;
     final unmodifiedKeyDown =
         event is KeyDownEvent &&
         ModalRoute.of(context)?.isCurrent != false &&
@@ -2287,11 +2289,13 @@ class _CanvasPageState extends State<CanvasPage> {
         MenuController.maybeOf(focusContext)?.isOpen == true) {
       return false;
     }
-    final keyboard = HardwareKeyboard.instance;
-    final macOS = Theme.of(context).platform == TargetPlatform.macOS;
     final arrangeModifier = macOS
         ? keyboard.isMetaPressed && !keyboard.isControlPressed
         : keyboard.isControlPressed && !keyboard.isMetaPressed;
+    if (openPicker) {
+      if (event is KeyDownEvent) unawaited(_showFilePicker());
+      return true;
+    }
     if ((!_editingElement || _contextMenuController.isOpen) &&
         (event is KeyDownEvent || event is KeyRepeatEvent) &&
         arrangeModifier &&
