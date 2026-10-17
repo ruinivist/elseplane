@@ -722,6 +722,100 @@ Inline $x^2$''';
     }
   });
 
+  testWidgets('Markdown code highlights labeled blocks and aliases in both themes', (tester) async {
+    const examples = {
+      'python': 'class Greeter:\n    def greet(self):\n        return "hello"',
+      'py': 'return "alias"',
+      'js': 'class Person {}\nfunction welcome() { return `hello \${42}`; }\nconst value = 42;',
+      'ts': 'const value: number = 42;',
+      'PYTHON': 'return "uppercase"',
+    };
+    const plain = {
+      '': 'def unlabeled(): pass',
+      'unknown': 'def unknown(): pass',
+      'text': 'def plain(): pass',
+    };
+    final source = [
+      for (final entry in {...examples, ...plain}.entries) '```${entry.key}\n${entry.value}\n```',
+      '`inline`',
+    ].join('\n\n');
+
+    for (final theme in [starlessLightThemeData, starlessDarkThemeData]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: TextMarkdownPreview(
+                source: source,
+                style: const TextNodeStyle(fontFamily: defaultFontFamily),
+                scrollController: null,
+                onEdit: () {},
+                onMove: (_) {},
+                attachmentStore: _FakeAttachmentStore(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final preview = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
+      final keywordColor = theme.extension<BTheme>()!.syntaxTheme['keyword']!.color;
+      for (final code in examples.values) {
+        final span = tester.widget<Text>(find.text(code)).textSpan!;
+        var highlighted = false;
+        span.visitChildren((child) {
+          if (child is TextSpan && child.style?.color == keywordColor) highlighted = true;
+          return true;
+        });
+        expect(highlighted, isTrue, reason: code);
+        expect(span.toPlainText(), code);
+      }
+      for (final (language, token, role) in [
+        ('python', 'Greeter', 'title'),
+        ('python', 'greet', 'title'),
+        ('python', 'class', 'keyword'),
+        ('python', '"hello"', 'string'),
+        ('js', 'Person', 'title'),
+        ('js', 'welcome', 'title'),
+        ('js', '42', 'number'),
+        ('js', '`hello ', 'string'),
+        ('js', r'${', 'subst'),
+      ]) {
+        final span = tester.widget<Text>(find.text(examples[language]!)).textSpan!;
+        final tokens = <TextSpan>[];
+        span.visitChildren((child) {
+          if (child is TextSpan && child.text == token) tokens.add(child);
+          return true;
+        });
+        expect(tokens, isNotEmpty, reason: '$language: $token');
+        for (final tokenSpan in tokens) {
+          expect(
+            tokenSpan.style?.color,
+            theme.extension<BTheme>()!.syntaxTheme[role]!.color,
+            reason: '$language: $token',
+          );
+        }
+      }
+      for (final code in plain.values) {
+        final span = tester.widget<Text>(find.text(code)).textSpan! as TextSpan;
+        expect(span.children, isNull);
+        expect(span.style, preview.styleSheet!.code);
+      }
+      expect(find.text('inline'), findsOneWidget);
+      expect(preview.data, source);
+
+      final highlighter = preview.syntaxHighlighter!;
+      for (final oversized in ['a' * (1024 * 1024 + 1), 'a\n' * (2 * 1024 * 1024 + 1)]) {
+        final span = highlighter.format(oversized, language: 'python');
+        expect(span.children, isNull);
+        expect(span.text, oversized);
+      }
+      expect(highlighter.format('', language: 'python').toPlainText(), isEmpty);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('task checkboxes align with the first line in both themes', (tester) async {
     const tasks = ['Checked task', 'Unchecked task with enough words to wrap onto several lines'];
     for (final theme in [starlessLightThemeData, starlessDarkThemeData]) {

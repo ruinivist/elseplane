@@ -2,10 +2,12 @@
 // Used by the text tool whenever a text element is not being edited.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
+import 'package:elseplane/canvas/tools/code/code_language.dart';
 import 'package:elseplane/canvas/tools/text/text_tool_settings.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
@@ -14,6 +16,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart';
 import 'package:markdown/markdown.dart' as md;
+import 'package:re_editor/re_editor.dart';
+import 'package:re_highlight/re_highlight.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // ---------- Preview ----------
@@ -92,6 +96,7 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
               ),
             },
             styleSheet: styleSheet,
+            syntaxHighlighter: _MarkdownCodeHighlighter(styleSheet.code!, BTheme.of(context).syntaxTheme),
             checkboxBuilder: (checked) => _buildCheckbox(checked, styleSheet),
             imageBuilder: (uri, title, alt) => _buildImage(uri, alt, widget.attachmentStore),
             onTapLink: (_, href, _) {
@@ -121,6 +126,72 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
             ),
     );
   }
+}
+
+// ---------- Code highlighting ----------
+
+class _MarkdownCodeHighlighter extends SyntaxHighlighter {
+  _MarkdownCodeHighlighter(this.style, this.theme);
+
+  static final _highlight = Highlight()
+    ..registerLanguages({
+      for (final language in CodeLanguage.values) language.name: ?language.mode,
+    });
+
+  final TextStyle style;
+  final Map<String, TextStyle> theme;
+
+  @override
+  TextSpan format(String source, {String? language}) {
+    final name = language?.trim().toLowerCase();
+    final mode = name == null ? null : _highlight.getLanguage(name);
+    final plain = TextSpan(text: source, style: style);
+    if (mode == null) return plain;
+
+    final limits = CodeHighlightThemeMode(mode: mode);
+    if (source.length > limits.maxSize ||
+        LineSplitter.split(source).any((line) => line.length > limits.maxLineLength)) {
+      return plain;
+    }
+
+    final renderer = _MarkdownCodeRenderer(theme);
+    _highlight.highlight(code: source, language: name!).render(renderer);
+    return TextSpan(style: style, children: renderer.spans);
+  }
+}
+
+// re_highlight's TextSpanRenderer copies growing lists and misses dotted token scopes.
+// Remove this renderer when those fixes are available upstream or in a maintained fork.
+class _MarkdownCodeRenderer implements HighlightRenderer {
+  _MarkdownCodeRenderer(this.theme);
+
+  final Map<String, TextStyle> theme;
+  final spans = <TextSpan>[];
+  final _scopes = <String?>[];
+
+  @override
+  void addText(String text) {
+    var scope = _scopes.last;
+    TextStyle? style;
+    while (scope != null) {
+      style = theme[scope];
+      if (style != null) break;
+      final separator = scope.indexOf('-');
+      if (separator < 0) break;
+      scope = scope.substring(separator + 1);
+    }
+    spans.add(TextSpan(text: text, style: style));
+  }
+
+  @override
+  void openNode(DataNode node) {
+    final parent = _scopes.isEmpty ? null : _scopes.last;
+    final scope = parent == null || node.scope == null ? node.scope : '$parent-${node.scope}';
+    _scopes.add(scope?.split('.').first);
+  }
+
+  @override
+  void closeNode(DataNode node) => _scopes.removeLast();
 }
 
 // ---------- Empty state ----------
