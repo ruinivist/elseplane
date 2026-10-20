@@ -1,6 +1,6 @@
 # Architecture
 
-This is the target architecture for a rewrite of Elseplane. The current implementation has not yet adopted these boundaries; follow the [refactor roadmap](REFACTOR_PLAN.md) to get there. [Interaction model](Interaction%20model.md) defines product behavior. Change the relevant document whenever an intentional design decision changes.
+This document is Elseplane's architectural constitution: it defines target ownership and allowed dependencies for the rewrite. The current implementation has not yet adopted these boundaries; follow the [refactor roadmap](REFACTOR_PLAN.md) to get there. The [interaction model](Interaction%20model.md) governs product behavior. Older notes do not override either document. Change the relevant document whenever an intentional design decision changes.
 
 **Saved values describe the canvas. The editor owns changes. Views own rendering resources. Storage owns durability.**
 

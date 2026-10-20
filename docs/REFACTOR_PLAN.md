@@ -17,7 +17,9 @@ Keep current dependencies and browser storage initially. Shared code must isolat
 
 ## 1. Establish the architectural contract
 
-- Publish the short constitution and link it and this roadmap from root `AGENTS.md`.
+**Status:** complete.
+
+- Publish the [architectural constitution](ARCHITECTURE.md) and link it and this roadmap from root `AGENTS.md`.
 - Clearly distinguish target ownership from the current implementation.
 - Treat the interaction model as the behavioral authority; older notes do not override it.
 
@@ -39,7 +41,7 @@ Keep current dependencies and browser storage initially. Shared code must isolat
 - Establish `LibraryController` as the library owner and single persistence-queue owner. Make `LibraryStore` an injectable snapshot read/write contract, without a mutable public library.
 - Capture file identity, revision, and immutable content for every save. Keep failures visible and preserve dirty state until its corresponding revision is durable.
 - Move create, rename, move, delete, import, export, backup, and restore orchestration out of canvas/file-picker widgets. Widgets own inline drafts, navigation, focus, and confirmations.
-- Use the staged import protocol in the constitution. Preserve path, byte-size, archive-entry, image, and attachment-reference validation. Attachment preparation must not overwrite bytes reachable from the existing library.
+- Use the [staged import protocol](ARCHITECTURE.md#operations-and-correctness). Preserve path, byte-size, archive-entry, image, and attachment-reference validation. Attachment preparation must not overwrite bytes reachable from the existing library.
 - Let Workspace connect outgoing editor snapshots to the library. Flush before switching; failed flushes preserve the open editor and entered data for retry.
 
 **Exit:** file widgets never write storage directly. Failed saves or transfers preserve current content and existing attachment bytes. Late saves cannot target a subsequently selected file.

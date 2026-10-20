@@ -1,7 +1,8 @@
 # Project Guidance
 
 - This is an infinite canvas project under active development.
-- Read [the target architecture](docs/ARCHITECTURE.md) before structural changes; follow [the refactor roadmap](docs/REFACTOR_PLAN.md) when migrating existing code. The architecture describes the intended rewrite, not the current implementation.
+- Before structural changes, read [the architectural constitution](docs/ARCHITECTURE.md) for target ownership and allowed dependencies; follow [the refactor roadmap](docs/REFACTOR_PLAN.md) when migrating existing code. The architecture describes the intended rewrite, not the current implementation.
+- The [interaction model](docs/Interaction%20model.md) governs product behavior. Older notes do not override it or the architectural constitution.
 - Backward compatibility is not required yet.
 - Prefer globally coherent, root-cause changes over local patches, even when they require breaking changes.
 - We own `infinite_lazy_grid`. When a change is better suited to that library, suggest making it there.
@@ -18,7 +19,7 @@
 - Keep concrete Starless Light palette, typography, syntax theme, and reusable geometry in the app theme; keep component-specific geometry local to each componen. Example: instead of hardcoding random number sizes that we are using repeatedly across the app as a "preferred size" make it owned
   by the app. Example something like an icon should be consistent unless component-specific override is needed, so an icons size belongs some place
   in theme but a widget specific larger icon size can be hardcoded inline.
-- Before changing widget behavior or interactions, read and follow the app-wide rules in `docs/Interaction model.md`.
+- Before changing widget behavior or interactions, read and follow the app-wide [interaction model](docs/Interaction%20model.md).
 
 # Testing guidance
 
