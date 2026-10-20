@@ -52,7 +52,7 @@ class _PenStrokeState extends State<PenStroke> {
               painter: _PenStrokePainter(
                 path: widget.model.path,
                 points: widget.model.data.points,
-                color: Color(widget.model.data.color),
+                color: widget.model.data.color,
                 width: widget.model.data.width,
                 hitSlop: widget.model.data.hitSlop,
                 selected: widget.model.selected,
@@ -108,21 +108,7 @@ class _PenStrokePainter extends CustomPainter {
 
   @override
   bool hitTest(Offset position) {
-    final radiusSquared = (width + hitSlop) * (width + hitSlop);
-    if (points.length == 1) {
-      return (position - points.single.position).distanceSquared <= radiusSquared;
-    }
-    for (var index = 1; index < points.length; index++) {
-      if (distanceToSegmentSquared(
-            position,
-            points[index - 1].position,
-            points[index].position,
-          ) <=
-          radiusSquared) {
-        return true;
-      }
-    }
-    return false;
+    return hitTestPenStroke(position, points: points, width: width, hitSlop: hitSlop);
   }
 
   @override

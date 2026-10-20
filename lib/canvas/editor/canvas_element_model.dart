@@ -27,12 +27,6 @@ abstract class CanvasElementModel<T extends CanvasElementData> extends ChangeNot
 
   Listenable get documentChanges => _documentRevision;
 
-  @protected
-  void notifyDocumentChanged({bool rebuild = true}) {
-    _documentRevision.value++;
-    if (rebuild) notifyListeners();
-  }
-
   /// Restores persisted state without recording a document edit.
   void restoreData(covariant T snapshot) {
     if (snapshot.id != data.id || snapshot.runtimeType != data.runtimeType) {
@@ -48,12 +42,22 @@ abstract class CanvasElementModel<T extends CanvasElementData> extends ChangeNot
   @protected
   void synchronizeRestoredData(T previous) {}
 
+  @protected
+  void replaceData(T next, {bool rebuild = true, VoidCallback? synchronize}) {
+    if (next.id != data.id || next.runtimeType != data.runtimeType) {
+      throw ArgumentError('Edits must preserve element identity and type');
+    }
+    _data = next;
+    synchronize?.call();
+    _documentRevision.value++;
+    if (rebuild) notifyListeners();
+  }
+
   bool get autoArrange => data.autoArrange;
 
   set autoArrange(bool value) {
     if (data.autoArrange == value) return;
-    data.autoArrange = value;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(autoArrange: value) as T);
   }
 
   bool get selected => _selected;
@@ -99,18 +103,4 @@ abstract class RotatableCanvasElementModel<T extends CanvasElementData> extends 
   double get rotation;
 
   void rotate(double angle);
-}
-
-// ---------- Geometry helpers ----------
-
-double distanceToSegmentSquared(Offset point, Offset start, Offset end) {
-  final segment = end - start;
-  final lengthSquared = segment.distanceSquared;
-  if (lengthSquared == 0) return (point - start).distanceSquared;
-  final offset = point - start;
-  final ratio = ((offset.dx * segment.dx + offset.dy * segment.dy) / lengthSquared).clamp(
-    0.0,
-    1.0,
-  );
-  return (point - (start + segment * ratio)).distanceSquared;
 }

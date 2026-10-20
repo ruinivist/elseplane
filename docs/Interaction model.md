@@ -34,6 +34,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Resizing is available whenever the block is active, including while editing.
 - Clicking empty canvas or another block, changing tools, or pressing Escape returns the block to its inactive preview.
 - Text options control font, color, and background. New text blocks use the first color preset for both headings and body text; picking a color applies that fixed color to both. Saved blocks without an explicit color continue to use the theme’s heading and body colors. Existing saved custom colors remain fixed when switching themes. The Background dropdown offers Transparent, Card, and Glass; new text blocks use Glass in app-wide Glass mode and Card in Solid mode. Changing the app mode affects only future blocks; existing and pasted blocks retain their backgrounds. Transparent hides the surface, shadow, and preview border while preserving editing borders and selection highlighting. Glass blurs the canvas behind its rounded bounds and retains a translucent surface, fine border, and faint exterior shadow during preview, activation, and editing. Selected Glass keeps its blur and translucency with an accent tint and outline.
+- Saved font names remain valid when a font is unavailable or absent from the current catalog. The picker preserves the saved name, and previews render the bundled font until the requested font can load.
 
 ## Code blocks
 

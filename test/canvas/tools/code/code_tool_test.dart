@@ -12,6 +12,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:re_editor/re_editor.dart';
 
 void main() {
+  test('title changes publish the synchronized controller and value once', () {
+    final model = _codeModel();
+    addTearDown(model.dispose);
+    final changes = <(String, String)>[];
+    model.documentChanges.addListener(() => changes.add((model.title, model.titleController.text)));
+    model.title = 'New title';
+    expect(changes, [('New title', 'New title')]);
+  });
+
   test('separates presentation and document changes', () {
     final model = _codeModel();
     addTearDown(model.dispose);

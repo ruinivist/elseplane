@@ -2,7 +2,6 @@
 // Exercises the arrow tool through model and canvas widget flows.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
 import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
@@ -182,42 +181,6 @@ void main() {
     tool.dispose();
   });
 
-  test('joined curves stay smooth and later handles affect only nearby sections', () {
-    final geometry = ArrowGeometry(
-      start: Offset.zero,
-      controls: const [Offset(40, 80), Offset(100, -40), Offset(180, 60)],
-      end: const Offset(240, 0),
-    );
-    final changed = ArrowGeometry(
-      start: geometry.start,
-      controls: [geometry.controls[0], geometry.controls[1], const Offset(180, 120)],
-      end: geometry.end,
-    );
-    final join = (geometry.controls[0] + geometry.controls[1]) / 2;
-    final first = Path()
-      ..moveTo(0, 0)
-      ..quadraticBezierTo(40, 80, join.dx, join.dy);
-    final metric = geometry.shaftPath.computeMetrics().single;
-    final firstLength = first.computeMetrics().single.length;
-    final tangentBefore = metric.getTangentForOffset(firstLength - 0.01)!;
-    final tangentAfter = metric.getTangentForOffset(firstLength + 0.01)!;
-    expect((tangentBefore.position - join).distance, lessThan(0.1));
-    expect((tangentAfter.position - join).distance, lessThan(0.1));
-    expect((tangentBefore.vector - tangentAfter.vector).distance, lessThan(0.01));
-    expect(
-      changed.shaftPath.computeMetrics().single.getTangentForOffset(firstLength / 2)!.position,
-      metric.getTangentForOffset(firstLength / 2)!.position,
-    );
-
-    final coincident = ArrowGeometry(
-      start: Offset.zero,
-      controls: const [Offset(100, 0), Offset(100, 0)],
-      end: const Offset(100, 0),
-    );
-    expect(coincident.endTangent, const Offset(1, 0));
-    expect(coincident.bounds.isFinite, isTrue);
-  });
-
   test('arrow points edit independently and preserve minimum length', () {
     final model = ArrowModel(
       ArrowElementData(
@@ -225,19 +188,19 @@ void main() {
         start: const Offset(10, 20),
         controls: const [Offset(60, 5), Offset(80, 20)],
         end: const Offset(110, 40),
-        color: Colors.black.toARGB32(),
+        color: Colors.black,
         strokeStyle: ArrowStrokeStyle.solid,
         strokeWidth: 2,
       ),
     );
 
     final geometry = model.geometry;
-    final copied = model.data.copy();
+    final snapshot = model.data;
     expect(model.setPoint(1, const Offset(70, 10)), isTrue);
     expect(model.start, const Offset(10, 20));
     expect(model.controls, const [Offset(70, 10), Offset(80, 20)]);
     expect(geometry.controls, const [Offset(60, 5), Offset(80, 20)]);
-    expect(copied.controls, geometry.controls);
+    expect(snapshot.controls, geometry.controls);
     expect(model.end, const Offset(110, 40));
 
     model.setPoint(model.pointCount - 1, model.start);
@@ -299,7 +262,7 @@ void main() {
   });
 
   testWidgets('multi-handle dragging stays on canvas, edits at zoom, saves and undoes', (tester) async {
-    final store = TestCanvasDocumentStore(const CanvasDocument(background: CanvasBackgroundKind.plain, elements: []));
+    final store = TestCanvasDocumentStore(CanvasDocument(background: CanvasBackgroundKind.plain, elements: []));
     await pumpCanvas(tester, store);
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller
       ..updateScalebyDelta(1, focalPoint: Offset.zero);
@@ -403,16 +366,18 @@ void main() {
 
   for (final platform in [TargetPlatform.linux, TargetPlatform.macOS]) {
     testWidgets('$platform arrow menu dismissal preserves modifier selection and group dragging', (tester) async {
-      final document = _arrowDocument();
-      document.elements.add(
-        ArrowElementData(
-          id: 'other',
-          start: const Offset(480, 350),
-          controls: const [Offset(550, 300)],
-          end: const Offset(650, 390),
-          color: Colors.black.toARGB32(),
-          strokeStyle: ArrowStrokeStyle.solid,
-          strokeWidth: 2,
+      var document = _arrowDocument();
+      document = document.withElements(
+        (elements) => elements.add(
+          ArrowElementData(
+            id: 'other',
+            start: const Offset(480, 350),
+            controls: const [Offset(550, 300)],
+            end: const Offset(650, 390),
+            color: Colors.black,
+            strokeStyle: ArrowStrokeStyle.solid,
+            strokeWidth: 2,
+          ),
         ),
       );
       await pumpCanvas(tester, TestCanvasDocumentStore(document), platform: platform);
@@ -564,7 +529,7 @@ CanvasDocument _arrowDocument() => CanvasDocument(
       start: const Offset(120, 200),
       controls: const [Offset(210, 160)],
       end: const Offset(300, 240),
-      color: Colors.black.toARGB32(),
+      color: Colors.black,
       strokeStyle: ArrowStrokeStyle.solid,
       strokeWidth: 2,
     ),

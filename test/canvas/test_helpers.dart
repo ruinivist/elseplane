@@ -21,14 +21,14 @@ class TestCanvasDocumentStore extends CanvasDocumentStore {
 
   @override
   Future<CanvasDocument?> load() async {
-    library = CanvasLibrary.initial(initial?.copy());
-    return initial?.copy();
+    library = CanvasLibrary.initial(initial);
+    return initial;
   }
 
   @override
   Future<void> save(CanvasDocument document) async {
-    persisted = document.copy();
-    library = library.replace(library.current.copyWith(document: document.copy()));
+    persisted = document;
+    library = library.replace(library.current.copyWith(document: document));
   }
 
   @override
@@ -113,4 +113,16 @@ Future<void> pumpElseplaneApp(
 Future<void> pumpPastSave(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 320));
   await tester.pump();
+}
+
+// ---------- Document fixtures ----------
+
+/// Builds a new fixture from a private editable list.
+/// Published documents remain immutable throughout test setup.
+extension CanvasDocumentFixture on CanvasDocument {
+  CanvasDocument withElements(void Function(List<CanvasElementData>) update) {
+    final elements = this.elements.toList();
+    update(elements);
+    return copyWith(elements: elements);
+  }
 }

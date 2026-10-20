@@ -1,15 +1,16 @@
-// Defines arrow paths, bounds, hit padding, and default curvature.
+// Defines arrow paths, bounds, hit testing, and endpoint constraints.
 // Used by arrow models, creation previews, rendering, and hit testing.
 
-part of 'arrow_tool.dart';
+import 'dart:ui';
+
+import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/geometry/hit_test.dart';
 
 // ---------- Geometry ----------
 
 const _arrowHeadLength = 12.0;
 const _arrowHeadHalfWidth = 5.0;
 const _arrowHitSlop = 8.0;
-const _arrowDashLength = 8.0;
-const _arrowDashGap = 6.0;
 
 /// Calculates the curve, arrowhead, and interaction bounds of an arrow.
 /// Used by arrow models, painters, and previews.
@@ -67,6 +68,34 @@ class ArrowGeometry {
       .expandToInclude(arrowheadPath.getBounds())
       .inflate(_arrowHitSlop + arrowStrokeWidthMaximum / 2);
 
+  bool hitTest(Offset position, {required double strokeWidth}) {
+    final radius = strokeWidth / 2 + _arrowHitSlop;
+    final radiusSquared = radius * radius;
+    for (final metric in shaftPath.computeMetrics()) {
+      var previous = start;
+      final steps = (metric.length / (radius / 2)).ceil();
+      for (var index = 1; index <= steps; index++) {
+        final current = metric.getTangentForOffset(metric.length * index / steps)!.position;
+        if (distanceToSegmentSquared(position, previous, current) <= radiusSquared) {
+          return true;
+        }
+        previous = current;
+      }
+    }
+    return distanceToSegmentSquared(
+              position,
+              arrowheadLeft,
+              end,
+            ) <=
+            radiusSquared ||
+        distanceToSegmentSquared(
+              position,
+              end,
+              arrowheadRight,
+            ) <=
+            radiusSquared;
+  }
+
   ArrowGeometry shift(Offset offset) => ArrowGeometry(
     start: start + offset,
     controls: [for (final control in controls) control + offset],
@@ -74,65 +103,10 @@ class ArrowGeometry {
   );
 }
 
-void paintArrow(
-  Canvas canvas, {
-  required ArrowGeometry geometry,
-  required Color color,
-  required ArrowStrokeStyle strokeStyle,
-  required double strokeWidth,
-  double dashScale = 1,
-}) {
-  final paint = Paint()
-    ..color = color
-    ..style = PaintingStyle.stroke
-    ..strokeCap = StrokeCap.round
-    ..strokeJoin = StrokeJoin.round
-    ..strokeWidth = strokeWidth;
-  canvas
-    ..drawPath(
-      strokeStyle == ArrowStrokeStyle.dashed
-          ? _dashedPath(
-              geometry.shaftPath,
-              dashLength: _arrowDashLength * dashScale,
-              gapLength: _arrowDashGap * dashScale,
-            )
-          : geometry.shaftPath,
-      paint,
-    )
-    ..drawPath(geometry.arrowheadPath, paint);
-}
-
-Path _dashedPath(
-  Path source, {
-  required double dashLength,
-  required double gapLength,
-}) {
-  final result = Path();
-  for (final metric in source.computeMetrics()) {
-    for (var distance = 0.0; distance < metric.length; distance += dashLength + gapLength) {
-      result.addPath(
-        metric.extractPath(distance, math.min(distance + dashLength, metric.length)),
-        Offset.zero,
-      );
-    }
-  }
-  return result;
-}
-
-// ---------- Control geometry ----------
-
-/// Places the control point that gives a new arrow its default bend.
-/// Used while previewing and committing arrows from pointer drags.
-Offset arrowControlPoint({
-  required Offset start,
-  required Offset end,
-}) {
-  final vector = end - start;
-  final length = vector.distance;
-  if (length == 0) return start;
-
-  final bendLength = (length * 0.09).clamp(6.0, 32.0);
-  final normal = Offset(vector.dy / length, -vector.dx / length);
-
-  return start + vector * 0.5 + normal * bendLength;
+Offset minimumLengthArrowPoint(Offset requested, Offset fixed, Offset current) {
+  final vector = requested - fixed;
+  if (vector.distance >= arrowMinimumLength) return requested;
+  final fallback = current - fixed;
+  final direction = vector == Offset.zero ? fallback / fallback.distance : vector / vector.distance;
+  return fixed + direction * (arrowMinimumLength + 1e-6);
 }

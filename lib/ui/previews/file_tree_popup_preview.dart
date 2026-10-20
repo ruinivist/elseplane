@@ -31,15 +31,15 @@ class _FileTreePopupPreviewState extends State<_FileTreePopupPreview> {
     files: [
       const CanvasFile(id: 'notes', name: 'Notes'),
       const CanvasFile(id: 'projects', name: 'Projects', parentId: 'notes'),
-      const CanvasFile(
+      CanvasFile(
         id: 'brainstorm',
         name: 'Brainstorm',
         parentId: 'projects',
         document: CanvasLibrary.emptyDocument,
       ),
-      const CanvasFile(id: 'design', name: 'Design', parentId: 'projects', document: CanvasLibrary.emptyDocument),
-      const CanvasFile(id: 'research', name: 'Research', parentId: 'projects', document: CanvasLibrary.emptyDocument),
-      const CanvasFile(id: 'ideas', name: 'Ideas', parentId: 'projects', document: CanvasLibrary.emptyDocument),
+      CanvasFile(id: 'design', name: 'Design', parentId: 'projects', document: CanvasLibrary.emptyDocument),
+      CanvasFile(id: 'research', name: 'Research', parentId: 'projects', document: CanvasLibrary.emptyDocument),
+      CanvasFile(id: 'ideas', name: 'Ideas', parentId: 'projects', document: CanvasLibrary.emptyDocument),
       const CanvasFile(id: 'archive', name: 'Archive'),
       const CanvasFile(id: 'personal', name: 'Personal'),
       const CanvasFile(id: 'templates', name: 'Templates'),

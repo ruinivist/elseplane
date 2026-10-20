@@ -1,6 +1,7 @@
-// Defines supported code languages and their editor highlighting modes.
-// Used by code blocks, serialization, and language selection controls.
+// Maps saved code languages to labels and editor highlighting modes.
+// Used by code blocks, Markdown rendering, and language selection controls.
 
+import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:flutter/painting.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/languages/bash.dart';
@@ -26,67 +27,61 @@ import 'package:re_highlight/languages/xml.dart';
 import 'package:re_highlight/languages/yaml.dart';
 import 'package:re_highlight/re_highlight.dart';
 
+export 'package:elseplane/canvas/document/canvas_document.dart' show CodeLanguage;
+
 // ---------- Languages ----------
 
 /// Maps selectable language labels to editor highlighting modes.
-/// Used by code block controls, rendering, and document serialization.
-enum CodeLanguage {
-  // ---------- Values ----------
-
-  python('Python'),
-  typescript('TypeScript'),
-  javascript('JavaScript'),
-  java('Java'),
-  csharp('C#'),
-  cpp('C++'),
-  c('C'),
-  go('Go'),
-  rust('Rust'),
-  sql('SQL'),
-  bash('Bash'),
-  kotlin('Kotlin'),
-  swift('Swift'),
-  php('PHP'),
-  ruby('Ruby'),
-  dart('Dart'),
-  html('HTML'),
-  css('CSS'),
-  json('JSON'),
-  yaml('YAML'),
-  markdown('Markdown'),
-  plainText('Plain text');
-
-  CodeLanguage(this.label);
-
-  // ---------- State ----------
-
-  final String label;
-
-  // ---------- Highlighting ----------
+/// Used by code block controls and rendering.
+extension CodeLanguagePresentation on CodeLanguage {
+  String get label => switch (this) {
+    CodeLanguage.python => 'Python',
+    CodeLanguage.typescript => 'TypeScript',
+    CodeLanguage.javascript => 'JavaScript',
+    CodeLanguage.java => 'Java',
+    CodeLanguage.csharp => 'C#',
+    CodeLanguage.cpp => 'C++',
+    CodeLanguage.c => 'C',
+    CodeLanguage.go => 'Go',
+    CodeLanguage.rust => 'Rust',
+    CodeLanguage.sql => 'SQL',
+    CodeLanguage.bash => 'Bash',
+    CodeLanguage.kotlin => 'Kotlin',
+    CodeLanguage.swift => 'Swift',
+    CodeLanguage.php => 'PHP',
+    CodeLanguage.ruby => 'Ruby',
+    CodeLanguage.dart => 'Dart',
+    CodeLanguage.html => 'HTML',
+    CodeLanguage.css => 'CSS',
+    CodeLanguage.json => 'JSON',
+    CodeLanguage.yaml => 'YAML',
+    CodeLanguage.markdown => 'Markdown',
+    CodeLanguage.plainText => 'Plain text',
+  };
 
   Mode? get mode => switch (this) {
-    python => langPython,
-    typescript => langTypescript,
-    javascript => langJavascript,
-    java => langJava,
-    csharp => langCsharp,
-    cpp => langCpp,
-    c => langC,
-    go => langGo,
-    rust => langRust,
-    sql => langSql,
-    bash => langBash,
-    kotlin => langKotlin,
-    swift => langSwift,
-    php => langPhp,
-    ruby => langRuby,
-    dart => langDart,
-    html => langXml,
-    css => langCss,
-    json => langJson,
-    yaml => langYaml,
-    markdown => langMarkdown,
-    plainText => null,
+    CodeLanguage.python => langPython,
+    CodeLanguage.typescript => langTypescript,
+    CodeLanguage.javascript => langJavascript,
+    CodeLanguage.java => langJava,
+    CodeLanguage.csharp => langCsharp,
+    CodeLanguage.cpp => langCpp,
+    CodeLanguage.c => langC,
+    CodeLanguage.go => langGo,
+    CodeLanguage.rust => langRust,
+    CodeLanguage.sql => langSql,
+    CodeLanguage.bash => langBash,
+    CodeLanguage.kotlin => langKotlin,
+    CodeLanguage.swift => langSwift,
+    CodeLanguage.php => langPhp,
+    CodeLanguage.ruby => langRuby,
+    CodeLanguage.dart => langDart,
+    CodeLanguage.html => langXml,
+    CodeLanguage.css => langCss,
+    CodeLanguage.json => langJson,
+    CodeLanguage.yaml => langYaml,
+    CodeLanguage.markdown => langMarkdown,
+    CodeLanguage.plainText => null,
   };
 
   CodeHighlightTheme? theme(Map<String, TextStyle> styles) => mode == null

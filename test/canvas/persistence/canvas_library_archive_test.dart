@@ -8,7 +8,6 @@ import 'dart:convert';
 
 import 'package:archive/archive.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/persistence/canvas_library.dart';
 import 'package:elseplane/canvas/persistence/canvas_library_archive.dart';
 import 'package:flutter_test/flutter_test.dart';

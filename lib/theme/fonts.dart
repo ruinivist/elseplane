@@ -1,5 +1,5 @@
 // Owns the bundled default and Google Fonts catalog, loading, and style resolution.
-// Used by app typography, text previews, the font picker, and document validation.
+// Used by app typography, text previews, and the font picker.
 
 import 'dart:async';
 

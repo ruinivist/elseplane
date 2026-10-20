@@ -14,37 +14,28 @@ class ShapeModel extends CanvasElementModel<ShapeElementData> {
 
   set kind(ShapeKind value) {
     if (data.kind == value) return;
-    data.kind = value;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(kind: value));
   }
 
-  Color get strokeColor => Color(data.strokeColor);
+  Color get strokeColor => data.strokeColor;
 
   set strokeColor(Color value) {
-    final color = value.toARGB32();
-    if (data.strokeColor == color) return;
-    data.strokeColor = color;
-    notifyDocumentChanged();
+    if (data.strokeColor == value) return;
+    replaceData(data.copyWith(strokeColor: value));
   }
 
-  Color? get fillColor {
-    final color = data.fillColor;
-    return color == null ? null : Color(color);
-  }
+  Color? get fillColor => data.fillColor;
 
   set fillColor(Color? value) {
-    final color = value?.toARGB32();
-    if (data.fillColor == color) return;
-    data.fillColor = color;
-    notifyDocumentChanged();
+    if (data.fillColor == value) return;
+    replaceData(data.copyWith(fillColor: value, clearFillColor: value == null));
   }
 
   double get strokeWidth => data.strokeWidth;
 
   set strokeWidth(double value) {
     if (data.strokeWidth == value) return;
-    data.strokeWidth = value;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(strokeWidth: value));
   }
 
   @override
@@ -56,8 +47,7 @@ class ShapeModel extends CanvasElementModel<ShapeElementData> {
   @override
   void moveBy(Offset delta) {
     if (delta == Offset.zero) return;
-    data.position += delta;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(position: data.position + delta));
   }
 
   void resizeBy(Offset delta) {
@@ -66,7 +56,6 @@ class ShapeModel extends CanvasElementModel<ShapeElementData> {
       math.max(shapeMinimumSize.height, data.size.height + delta.dy),
     );
     if (size == data.size) return;
-    data.size = size;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(size: size));
   }
 }

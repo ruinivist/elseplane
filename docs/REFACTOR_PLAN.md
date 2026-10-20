@@ -27,6 +27,8 @@ Keep current dependencies and browser storage initially. Shared code must isolat
 
 ## 2. Establish document and geometry boundaries
 
+**Status:** complete.
+
 - Introduce immutable document and element values with immutable collections. Keep sealed element variants together and retain strict serialization validation.
 - Move saved background/language enums into the document. Move their rendering/highlighting mappings to presentation. Separate saved font names from font catalog loading.
 - Use native graphics values consistently in memory. Keep wire-format and hex-input conversion at their boundaries.
@@ -34,6 +36,8 @@ Keep current dependencies and browser storage initially. Shared code must isolat
 - Update current models, tools, transfer codecs, clipboard handling, generated serializers, demo data, fixtures, and tests together. Existing model setters can replace immutable values while their mutation ownership migrates in stage 4.
 
 **Exit:** the document imports no presentation or concrete storage. Round trips and invalid-input behavior remain correct. No caller can mutate a published document or its nested collections.
+
+Document values, enums, and private codec helpers now share one immutable document library. Geometry uses ordinary imports under `canvas/geometry/`. Saved font names no longer depend on catalog membership; unavailable fonts retain their saved names and render with the bundled fallback. The source import check runs with `flutter test test/architecture/document_boundaries_test.dart`.
 
 ## 3. Separate library durability from widgets
 

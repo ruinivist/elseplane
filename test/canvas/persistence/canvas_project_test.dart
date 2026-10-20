@@ -5,10 +5,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/persistence/canvas_project.dart';
-import 'package:elseplane/canvas/tools/code/code_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -23,7 +21,7 @@ void main() {
 ![first](attachments/00000000-0000-4000-8000-000000000000.png)
 ![second](attachments/00000001-0000-4000-8000-000000000000.png)
 ''',
-    )..elements.add(_media(_path(2)));
+    ).withElements((elements) => elements.add(_media(_path(2))));
     final first = onePixelPngBytes;
     final second = Uint8List.fromList(onePixelPngBytes);
     final third = Uint8List.fromList(onePixelPngBytes);
@@ -60,7 +58,7 @@ attachments/00000000-0000-4000-8000-000000000000.png
 ![invalid](attachments/not-a-uuid.png)
 ![broken](attachments/00000001-0000-4000-8000-000000000000.png
 ''',
-    )..elements.add(_media(_path(1)));
+    ).withElements((elements) => elements.add(_media(_path(1))));
     final paths = canvasAttachmentPaths(document);
 
     expect(paths, {_path(0), _path(1)});
@@ -78,7 +76,8 @@ attachments/00000000-0000-4000-8000-000000000000.png
   });
 
   test('import remaps attachments shared with other canvases', () {
-    final document = _document(markdown: '![image](${_path(0)})')..elements.add(_media(_path(0)));
+    final document = _document(markdown: '![image](${_path(0)})')
+        .withElements((elements) => elements.add(_media(_path(0))));
     final project = CanvasProject(document: document, attachments: {_path(0): onePixelPngBytes});
     final rebased = rebaseCanvasProjectAttachments(project, {_path(0)});
     final newPath = rebased.attachments.keys.single;
@@ -190,7 +189,7 @@ CanvasDocument _document({required String markdown}) => CanvasDocument(
       markdown: markdown,
       style: const TextNodeStyle(
         fontFamily: 'ABeeZee',
-        color: '#201C1A',
+        color: Color(0xff201C1A),
       ),
     ),
     CodeElementData(
@@ -207,7 +206,7 @@ CanvasDocument _document({required String markdown}) => CanvasDocument(
       position: Offset.zero,
       size: const Size(10, 10),
       hitSlop: 0,
-      color: 0xff000000,
+      color: const Color(0xff000000),
       width: 1,
       points: const [PenPointData(Offset.zero, pressure: 0)],
     ),
@@ -216,7 +215,7 @@ CanvasDocument _document({required String markdown}) => CanvasDocument(
       start: Offset.zero,
       controls: const [Offset(2, 2)],
       end: const Offset(4, 0),
-      color: 0xff000000,
+      color: const Color(0xff000000),
       strokeStyle: ArrowStrokeStyle.solid,
       strokeWidth: 2,
     ),

@@ -70,17 +70,21 @@ CanvasProject rebaseCanvasProjectAttachments(CanvasProject project, Set<String> 
 }
 
 CanvasDocument rebaseCanvasDocumentAttachments(CanvasDocument source, Map<String, String> replacements) {
-  final document = source.copy();
-  for (final element in document.elements) {
-    if (element is MediaElementData) {
-      element.url = replacements[element.url.trim()] ?? element.url;
-    } else if (element is TextElementData) {
-      for (final entry in replacements.entries) {
-        element.markdown = element.markdown.replaceAll(entry.key, entry.value);
-      }
-    }
-  }
-  return document;
+  return source.copyWith(
+    elements: [
+      for (final element in source.elements)
+        switch (element) {
+          MediaElementData() => element.copyWith(url: replacements[element.url.trim()] ?? element.url),
+          TextElementData() => element.copyWith(
+            markdown: replacements.entries.fold<String>(
+              element.markdown,
+              (markdown, entry) => markdown.replaceAll(entry.key, entry.value),
+            ),
+          ),
+          _ => element,
+        },
+    ],
+  );
 }
 
 /// Encodes a document and its referenced attachments as a portable project.

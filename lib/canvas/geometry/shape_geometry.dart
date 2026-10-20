@@ -1,7 +1,10 @@
-// Builds paths and user-facing labels for supported canvas shapes.
-// Used by shape previews, persisted rendering, semantics, and hit testing.
+// Builds paths for the saved canvas shape kinds.
+// Shared by shape previews, persisted rendering, and hit testing.
 
-part of 'shape_tool.dart';
+import 'dart:math' as math;
+import 'dart:ui';
+
+import 'package:elseplane/canvas/document/canvas_document.dart';
 
 // ---------- Geometry ----------
 
@@ -40,37 +43,3 @@ Path shapePath(ShapeKind kind, Rect rect) => switch (kind) {
       ..lineTo(rect.left, rect.center.dy)
       ..close(),
 };
-
-void paintShape(
-  Canvas canvas, {
-  required Path path,
-  required Color color,
-  required Color? fillColor,
-  required double strokeWidth,
-}) {
-  if (fillColor case final fillColor?) {
-    canvas.drawPath(path, Paint()..color = fillColor);
-  }
-  canvas.drawPath(
-    path,
-    Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth,
-  );
-}
-
-// ---------- Labels ----------
-
-/// Maps persisted shape kinds to concise user-facing labels.
-/// Used by shape semantics and tool option controls.
-extension ShapeKindLabel on ShapeKind {
-  String get label => switch (this) {
-    ShapeKind.rectangle => 'Rectangle',
-    ShapeKind.roundedRectangle => 'Rounded rectangle',
-    ShapeKind.ellipse => 'Ellipse',
-    ShapeKind.diamond => 'Diamond',
-    ShapeKind.triangle => 'Triangle',
-    ShapeKind.hexagon => 'Hexagon',
-  };
-}

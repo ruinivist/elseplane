@@ -2,7 +2,6 @@
 // Exercises the shape tool through model and canvas widget flows.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
 import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
@@ -49,8 +48,8 @@ void main() {
     expect(shapes.single.data.kind, ShapeKind.hexagon);
     expect(shapes.single.data.position, const Offset(40, 20));
     expect(shapes.single.data.size, const Size(140, 120));
-    expect(shapes.single.data.strokeColor, 0xffdc3f3f);
-    expect(shapes.single.data.fillColor, 0xff2f6fde);
+    expect(shapes.single.data.strokeColor, const Color(0xffdc3f3f));
+    expect(shapes.single.data.fillColor, const Color(0xff2f6fde));
     expect(shapes.single.data.strokeWidth, 3);
     expect(tool.preview, isNull);
 
@@ -76,7 +75,7 @@ void main() {
         kind: ShapeKind.ellipse,
         position: Offset.zero,
         size: const Size(200, 100),
-        strokeColor: 0xff655a53,
+        strokeColor: const Color(0xff655a53),
         fillColor: null,
         strokeWidth: 2,
       ),
@@ -152,7 +151,7 @@ void main() {
   ) async {
     const style = TextNodeStyle(
       fontFamily: 'Source Serif 4',
-      color: '#201C1A',
+      color: Color(0xff201C1A),
     );
     await pumpCanvas(
       tester,
@@ -302,7 +301,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(model().fillColor, custom);
     await pumpPastSave(tester);
-    expect((store.persisted!.elements.single as ShapeElementData).fillColor, custom.toARGB32());
+    expect((store.persisted!.elements.single as ShapeElementData).fillColor, custom);
   });
 
   testWidgets('toolbar places one shape, then activates, moves, and resizes', (
@@ -347,7 +346,7 @@ void main() {
     );
     expect(
       tester.widget<Shape>(find.byType(Shape)).model.data.strokeColor,
-      blue.toARGB32(),
+      blue,
     );
     final first = tester.widget<Shape>(find.byType(Shape)).model;
     expect(first.active, isTrue);
@@ -457,7 +456,7 @@ void main() {
             kind: ShapeKind.rectangle,
             position: const Offset(140, 180),
             size: const Size(120, 80),
-            strokeColor: 0xff000000,
+            strokeColor: const Color(0xff000000),
             fillColor: null,
             strokeWidth: 2,
           ),

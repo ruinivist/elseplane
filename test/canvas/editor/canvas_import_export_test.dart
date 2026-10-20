@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/persistence/canvas_library.dart';
 import 'package:elseplane/canvas/persistence/canvas_library_archive.dart';
 import 'package:elseplane/canvas/persistence/canvas_project.dart';
@@ -502,7 +501,7 @@ CanvasDocument _document({
       markdown: markdown,
       style: const TextNodeStyle(
         fontFamily: 'ABeeZee',
-        color: '#201C1A',
+        color: Color(0xff201C1A),
       ),
     ),
     CodeElementData(
@@ -519,7 +518,7 @@ CanvasDocument _document({
       position: Offset.zero,
       size: const Size(10, 10),
       hitSlop: 0,
-      color: 0xff000000,
+      color: const Color(0xff000000),
       width: 1,
       points: const [PenPointData(Offset.zero, pressure: 0)],
     ),
@@ -528,7 +527,7 @@ CanvasDocument _document({
       start: Offset.zero,
       controls: const [Offset(10, 4)],
       end: const Offset(20, 0),
-      color: 0xff000000,
+      color: const Color(0xff000000),
       strokeStyle: ArrowStrokeStyle.solid,
       strokeWidth: 2,
     ),

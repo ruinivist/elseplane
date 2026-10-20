@@ -50,7 +50,7 @@ void main() {
           home: Scaffold(
             body: TextMarkdownPreview(
               source: '# Heading\n**bold** *italic* `code`\n\n\$x^2\$',
-              style: const TextNodeStyle(fontFamily: defaultFontFamily, color: '#201C1A'),
+              style: const TextNodeStyle(fontFamily: defaultFontFamily, color: Color(0xff201C1A)),
               scrollController: null,
               onEdit: () {},
               onMove: (_) {},
@@ -67,6 +67,35 @@ void main() {
       expect(styles.strong!.fontWeight, FontWeight.w600);
       expect(styles.em!.fontStyle, FontStyle.italic);
     }
+  });
+
+  testWidgets('unavailable saved fonts keep their name and render the bundled fallback', (tester) async {
+    const family = 'Unavailable saved family';
+    const style = TextNodeStyle(fontFamily: family);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: starlessLightThemeData,
+        home: Scaffold(
+          body: TextMarkdownPreview(
+            source: 'Saved text',
+            style: style,
+            scrollController: null,
+            onEdit: () {},
+            onMove: (_) {},
+            attachmentStore: TestAttachmentStore(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.widget<MarkdownBody>(find.byType(MarkdownBody)).styleSheet!.p!.fontFamily, defaultFontFamily);
+    final model = _model()..style = style;
+    await _pumpSettings(tester, model, loadTextFont);
+    expect(find.text(family), findsOneWidget);
+    expect(model.style.fontFamily, family);
+    expect(TextNodeStyle.fromJson(model.style.toJson()).fontFamily, family);
+    await tester.pumpWidget(const SizedBox());
+    model.dispose();
   });
 
   testWidgets('catalog is searchable and builds only visible options without fetching', (tester) async {
@@ -101,11 +130,11 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
     expect(model.style.fontFamily, defaultFontFamily);
     model.controller.text = 'changed while loading';
-    model.style = model.style.copyWith(color: '#ABCDEF', background: BlockBackgroundKind.glass);
+    model.style = model.style.copyWith(color: const Color(0xffABCDEF), background: BlockBackgroundKind.glass);
     load.complete();
     await tester.pumpAndSettle();
     expect(model.style.fontFamily, 'ABeeZee');
-    expect(model.style.color, '#ABCDEF');
+    expect(model.style.color, const Color(0xffABCDEF));
     expect(model.style.background, BlockBackgroundKind.glass);
     expect(model.controller.text, 'changed while loading');
     expect(boundaries, 2);
@@ -190,11 +219,11 @@ void main() {
 
   test('catalog choices round-trip without changing the schema', () {
     for (final family in ['ABeeZee', 'Inter', defaultFontFamily]) {
-      final style = TextNodeStyle(fontFamily: family, color: '#201C1A');
+      final style = TextNodeStyle(fontFamily: family, color: const Color(0xff201C1A));
       expect(TextNodeStyle.fromJson(style.toJson()).fontFamily, family);
     }
     expect(
-      () => TextNodeStyle.fromJson({'fontFamily': 'not a font', 'color': '#201C1A', 'background': 'card'}),
+      () => TextNodeStyle.fromJson({'fontFamily': '   ', 'color': '#201C1A', 'background': 'card'}),
       throwsFormatException,
     );
   });
@@ -202,7 +231,7 @@ void main() {
   testWidgets('real downloads time out, release the queue, retry and render saved custom fonts', (tester) async {
     // Keep real service operations on one fake clock because the queue retains futures.
     {
-      const saved = TextNodeStyle(fontFamily: 'ABeeZee', color: '#201C1A');
+      const saved = TextNodeStyle(fontFamily: 'ABeeZee', color: Color(0xff201C1A));
       await tester.pumpWidget(
         MaterialApp(
           theme: starlessLightThemeData,
@@ -368,10 +397,13 @@ void main() {
     expect(previewModel.style.fontFamily, defaultFontFamily);
     expect(boundaries, 0);
     _choose(tester, 'Abel');
-    previewModel.style = previewModel.style.copyWith(color: '#ABCDEF', background: BlockBackgroundKind.glass);
+    previewModel.style = previewModel.style.copyWith(
+      color: const Color(0xffABCDEF),
+      background: BlockBackgroundKind.glass,
+    );
     await tester.pumpAndSettle();
     expect(previewModel.style.fontFamily, 'Abel');
-    expect(previewModel.style.color, '#ABCDEF');
+    expect(previewModel.style.color, const Color(0xffABCDEF));
     expect(previewModel.style.background, BlockBackgroundKind.glass);
     expect(boundaries, 2);
     for (final weight in [FontWeight.w400, FontWeight.w600]) {
@@ -399,7 +431,7 @@ TextBlockModel _model() => TextBlockModel(
     width: 420,
     height: 108,
     markdown: 'original',
-    style: const TextNodeStyle(fontFamily: defaultFontFamily, color: '#201C1A'),
+    style: const TextNodeStyle(fontFamily: defaultFontFamily, color: Color(0xff201C1A)),
   ),
 )..active = true;
 

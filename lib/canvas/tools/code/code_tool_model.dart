@@ -58,8 +58,7 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
   set size(Size value) {
     final nextSize = _clampSize(value);
     if (data.size == nextSize) return;
-    data.size = nextSize;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(size: nextSize));
   }
 
   @override
@@ -68,25 +67,26 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
   @override
   void rotate(double angle) {
     if (data.rotation == angle) return;
-    data.rotation = angle;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(rotation: angle));
   }
 
   CodeLanguage get language => data.language;
 
   set language(CodeLanguage value) {
     if (data.language == value) return;
-    data.language = value;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(language: value));
   }
 
   String get title => data.title;
 
   set title(String value) {
     if (data.title == value) return;
-    data.title = value;
-    if (titleController.text != value) titleController.text = value;
-    notifyDocumentChanged();
+    replaceData(
+      data.copyWith(title: value),
+      synchronize: () {
+        if (titleController.text != value) titleController.text = value;
+      },
+    );
     onContentChanged?.call();
   }
 
@@ -94,23 +94,20 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
 
   set background(BlockBackgroundKind value) {
     if (data.background == value) return;
-    data.background = value;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(background: value));
   }
 
   bool get showLineNumbers => data.showLineNumbers;
 
   set showLineNumbers(bool value) {
     if (data.showLineNumbers == value) return;
-    data.showLineNumbers = value;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(showLineNumbers: value));
   }
 
   @override
   void moveBy(Offset delta) {
     if (delta == Offset.zero) return;
-    data.position += delta;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(position: data.position + delta));
   }
 
   // ---------- Synchronization ----------
@@ -128,8 +125,7 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
 
   void _syncSource() {
     if (data.source == controller.text) return;
-    data.source = controller.text;
-    notifyDocumentChanged(rebuild: false);
+    replaceData(data.copyWith(source: controller.text), rebuild: false);
     onContentChanged?.call();
   }
 

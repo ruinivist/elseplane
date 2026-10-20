@@ -28,7 +28,7 @@ class ArrowModel extends CanvasElementModel<ArrowElementData> {
 
   Offset get start => data.start;
 
-  List<Offset> get controls => List.unmodifiable(data.controls);
+  List<Offset> get controls => data.controls;
 
   Offset get end => data.end;
 
@@ -44,62 +44,51 @@ class ArrowModel extends CanvasElementModel<ArrowElementData> {
   bool setPoint(int index, Offset position) {
     final current = point(index);
     final next = index == 0
-        ? _minimumLengthPoint(position, end, start)
+        ? minimumLengthArrowPoint(position, end, start)
         : index == pointCount - 1
-        ? _minimumLengthPoint(position, start, end)
+        ? minimumLengthArrowPoint(position, start, end)
         : position;
     if (next == current) return false;
     if (index == 0) {
-      data.start = next;
+      replaceData(data.copyWith(start: next));
     } else if (index == pointCount - 1) {
-      data.end = next;
+      replaceData(data.copyWith(end: next));
     } else {
-      data.controls = List.of(data.controls)..[index - 1] = next;
+      replaceData(data.copyWith(controls: List.of(data.controls)..[index - 1] = next));
     }
-    notifyDocumentChanged();
     return true;
   }
 
-  Color get color => Color(data.color);
+  Color get color => data.color;
 
   set color(Color value) {
-    final color = value.toARGB32();
-    if (data.color == color) return;
-    data.color = color;
-    notifyDocumentChanged();
+    if (data.color == value) return;
+    replaceData(data.copyWith(color: value));
   }
 
   ArrowStrokeStyle get strokeStyle => data.strokeStyle;
 
   set strokeStyle(ArrowStrokeStyle value) {
     if (data.strokeStyle == value) return;
-    data.strokeStyle = value;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(strokeStyle: value));
   }
 
   double get strokeWidth => data.strokeWidth;
 
   set strokeWidth(double value) {
     if (data.strokeWidth == value) return;
-    data.strokeWidth = value;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(strokeWidth: value));
   }
 
   @override
   void moveBy(Offset delta) {
     if (delta == Offset.zero) return;
-    data
-      ..start += delta
-      ..controls = [for (final control in data.controls) control + delta]
-      ..end += delta;
-    notifyDocumentChanged();
+    replaceData(
+      data.copyWith(
+        start: data.start + delta,
+        controls: [for (final control in data.controls) control + delta],
+        end: data.end + delta,
+      ),
+    );
   }
-}
-
-Offset _minimumLengthPoint(Offset requested, Offset fixed, Offset current) {
-  final vector = requested - fixed;
-  if (vector.distance >= arrowMinimumLength) return requested;
-  final fallback = current - fixed;
-  final direction = vector == Offset.zero ? fallback / fallback.distance : vector / vector.distance;
-  return fixed + direction * (arrowMinimumLength + 1e-6);
 }

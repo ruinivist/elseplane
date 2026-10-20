@@ -4,7 +4,6 @@
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
@@ -410,7 +409,7 @@ void main() {
             kind: ShapeKind.rectangle,
             position: const Offset(300, 250),
             size: const Size(100, 100),
-            strokeColor: 0xff000000,
+            strokeColor: const Color(0xff000000),
             fillColor: null,
             strokeWidth: 2,
           ),
@@ -419,7 +418,7 @@ void main() {
             start: const Offset(450, 300),
             controls: const [Offset(500, 300)],
             end: const Offset(550, 300),
-            color: 0xff000000,
+            color: const Color(0xff000000),
             strokeStyle: ArrowStrokeStyle.solid,
             strokeWidth: 3,
           ),
@@ -457,10 +456,7 @@ void main() {
   });
 
   testWidgets('touch marquee overlaps rotated bounds at non-default zoom', (tester) async {
-    final code = _code()
-      ..position = const Offset(160, 140)
-      ..rotation = math.pi / 2
-      ..title = '';
+    final code = _code().copyWith(position: const Offset(160, 140), rotation: math.pi / 2, title: '');
     await pumpCanvas(tester, TestCanvasDocumentStore(_document([code])), platform: TargetPlatform.android);
     await _chooseTool(tester, 'select');
     final controller = _canvas(tester)..updateScalebyDelta(0.5, focalPoint: Offset.zero);
@@ -700,7 +696,7 @@ void main() {
             start: const Offset(200, 300),
             controls: const [Offset(350, 300)],
             end: const Offset(500, 300),
-            color: 0xff000000,
+            color: const Color(0xff000000),
             strokeStyle: ArrowStrokeStyle.solid,
             strokeWidth: 3,
           ),
@@ -756,7 +752,7 @@ PenElementData _pen(String id, [Offset position = const Offset(100, 250)]) => Pe
   position: position,
   size: const Size(100, 100),
   hitSlop: 6,
-  color: 0xff000000,
+  color: const Color(0xff000000),
   width: 3,
   points: const [PenPointData(Offset(0, 50), pressure: 0.5), PenPointData(Offset(100, 50), pressure: 0.5)],
 );

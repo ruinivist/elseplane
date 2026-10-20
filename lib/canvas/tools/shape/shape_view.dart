@@ -59,8 +59,8 @@ class _ShapeState extends State<Shape> {
                         widget.model.data.kind,
                         Offset.zero & widget.model.canvasSize,
                       ),
-                      color: widget.model.selected ? colors.accent : Color(widget.model.data.strokeColor),
-                      fillColor: widget.model.data.fillColor == null ? null : Color(widget.model.data.fillColor!),
+                      color: widget.model.selected ? colors.accent : widget.model.data.strokeColor,
+                      fillColor: widget.model.data.fillColor,
                       strokeWidth: widget.model.data.strokeWidth,
                     ),
                   ),
@@ -123,4 +123,40 @@ class _ShapePainter extends CustomPainter {
       oldDelegate.color != color ||
       oldDelegate.fillColor != fillColor ||
       oldDelegate.strokeWidth != strokeWidth;
+}
+
+// ---------- Shape painting ----------
+
+void paintShape(
+  Canvas canvas, {
+  required Path path,
+  required Color color,
+  required Color? fillColor,
+  required double strokeWidth,
+}) {
+  if (fillColor case final fillColor?) {
+    canvas.drawPath(path, Paint()..color = fillColor);
+  }
+  canvas.drawPath(
+    path,
+    Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth,
+  );
+}
+
+// ---------- Labels ----------
+
+/// Maps persisted shape kinds to concise user-facing labels.
+/// Used by shape semantics and tool option controls.
+extension ShapeKindLabel on ShapeKind {
+  String get label => switch (this) {
+    ShapeKind.rectangle => 'Rectangle',
+    ShapeKind.roundedRectangle => 'Rounded rectangle',
+    ShapeKind.ellipse => 'Ellipse',
+    ShapeKind.diamond => 'Diamond',
+    ShapeKind.triangle => 'Triangle',
+    ShapeKind.hexagon => 'Hexagon',
+  };
 }

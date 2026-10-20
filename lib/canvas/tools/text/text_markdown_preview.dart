@@ -8,7 +8,6 @@ import 'dart:typed_data';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/tools/code/code_language.dart';
-import 'package:elseplane/canvas/tools/text/text_tool_settings.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/gestures.dart';
@@ -274,11 +273,10 @@ Widget _buildCheckbox(bool checked, MarkdownStyleSheet styleSheet) => Padding(
 );
 
 TextStyle _fontStyle(BuildContext context, TextNodeStyle style) {
-  final color = switch (style.color) {
-    final color? => colorFromHex(color),
-    null => BTheme.of(context).colors.textPrimary,
-  };
-  final base = TextStyle(fontSize: BSizes.markdownBodyFontSize, color: color);
+  final base = TextStyle(
+    fontSize: BSizes.markdownBodyFontSize,
+    color: style.color ?? BTheme.of(context).colors.textPrimary,
+  );
   return textFontStyle(style.fontFamily, base);
 }
 

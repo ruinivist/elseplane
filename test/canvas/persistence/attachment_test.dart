@@ -33,9 +33,9 @@ void main() {
             if (dispose) {
               (text ?? image!).dispose();
             } else if (media) {
-              image!.restoreData(image.data.copy());
+              image!.restoreData(image.data);
             } else {
-              text!.restoreData(text.data.copy());
+              text!.restoreData(text.data);
             }
             if (failure) {
               reader.completeError(StateError('clipboard failed'));
@@ -93,7 +93,7 @@ void main() {
     model.addListener(() => notifications++);
     model.documentChanges.addListener(() => notifications++);
     final generation = model.asyncEditGeneration;
-    expect(() => model.restoreData(model.data.copy(id: 'other')), throwsArgumentError);
+    expect(() => model.restoreData(model.data.copyWith(id: 'other')), throwsArgumentError);
     expect(model.asyncEditGeneration, generation);
     model.invalidatePendingEdits();
     expect(model.asyncEditGeneration, generation + 1);
@@ -226,12 +226,12 @@ TextBlockModel _model(String markdown) => TextBlockModel(
   TextElementData(
     id: 'text',
     position: Offset.zero,
-    width: textNodeDefaultWidth,
+    width: 420,
     height: null,
     markdown: markdown,
     style: const TextNodeStyle(
       fontFamily: 'Inter',
-      color: '#201C1A',
+      color: Color(0xff201C1A),
     ),
   ),
 );

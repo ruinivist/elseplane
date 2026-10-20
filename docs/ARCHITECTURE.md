@@ -1,6 +1,6 @@
 # Architecture
 
-This document is Elseplane's architectural constitution: it defines target ownership and allowed dependencies for the rewrite. The current implementation has not yet adopted these boundaries; follow the [refactor roadmap](REFACTOR_PLAN.md) to get there. The [interaction model](Interaction%20model.md) governs product behavior. Older notes do not override either document. Change the relevant document whenever an intentional design decision changes.
+This document is Elseplane's architectural constitution: it defines target ownership and allowed dependencies for the rewrite. The document and geometry boundaries are implemented; the remaining owners are migration targets. Follow the [refactor roadmap](REFACTOR_PLAN.md) to get there. The [interaction model](Interaction%20model.md) governs product behavior. Older notes do not override either document. Change the relevant document whenever an intentional design decision changes.
 
 **Saved values describe the canvas. The editor owns changes. Views own rendering resources. Storage owns durability.**
 
@@ -64,6 +64,8 @@ test/                               # Mirror the owner of each behavior
 | `attachments` | Byte/image primitives and platform storage | Browser imports stay in the browser implementation. |
 | `ui/common` | Flutter and theme | Never imports a feature. |
 | `theme` | Flutter, font and highlighting dependencies | Never imports features or app composition. |
+
+The document library keeps its sealed element values and private codec helpers in Dart parts alongside generated serialization. Geometry uses ordinary imports and has no widget, theme, storage, or browser dependencies. Published document collections are unmodifiable copies; unchanged immutable elements and stroke samples can be shared between snapshots.
 
 `Offset`, `Size`, `Rect`, and `Color` are suitable value types. Saved enums belong to the document; background builders and syntax highlighting mappings belong to presentation. Font download availability does not determine document validity.
 

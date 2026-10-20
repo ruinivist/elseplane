@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
@@ -31,7 +30,9 @@ void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
   test('clipboard preserves per-object Auto settings', () {
-    final document = _document.copy()..elements.first.autoArrange = false;
+    final document = _document.withElements(
+      (elements) => elements[0] = elements[0].copyWith(autoArrange: false),
+    );
     final restored = decodeCanvasClipboard(encodeCanvasClipboard(document.elements))!;
     expect(restored.map((element) => element.autoArrange), document.elements.map((element) => element.autoArrange));
   });
@@ -63,9 +64,9 @@ void main() {
   );
 
   test('clipboard preserves text backgrounds and rejects the previous version', () {
-    final text = _document.elements.whereType<TextElementData>().first.copy();
+    var text = _document.elements.whereType<TextElementData>().first;
     for (final background in BlockBackgroundKind.values) {
-      text.style = text.style.copyWith(background: background);
+      text = text.copyWith(style: text.style.copyWith(background: background));
       final payload = encodeCanvasClipboard([text]);
       final restored = decodeCanvasClipboard(payload)!.single as TextElementData;
       expect(restored.style.background, background);
@@ -81,8 +82,8 @@ void main() {
       kind: ShapeKind.diamond,
       position: const Offset(30, 40),
       size: const Size(120, 80),
-      strokeColor: 0xffdc3f3f,
-      fillColor: 0xffffc936,
+      strokeColor: const Color(0xffdc3f3f),
+      fillColor: const Color(0xffffc936),
       strokeWidth: 4,
     );
 
@@ -126,7 +127,7 @@ void main() {
       ..._types(_document.elements),
     ]);
     expect(copied.elements.map((element) => element.id).toSet(), hasLength(8));
-    final firstPaste = copied.elements.skip(4).map((element) => element.copy()).toList();
+    final firstPaste = copied.elements.skip(4).toList();
     for (var index = 0; index < 4; index++) {
       _expectShifted(
         _document.elements[index],
@@ -210,7 +211,7 @@ void main() {
 
     clipboard = encodeCanvasClipboard(
       _document.elements.map(
-        (element) => element.copy(id: 'external-${element.id}'),
+        (element) => element.copyWith(id: 'external-${element.id}'),
       ),
     );
     await _shortcut(tester, LogicalKeyboardKey.keyV);
@@ -666,7 +667,7 @@ final _document = CanvasDocument(
       markdown: 'hello',
       style: const TextNodeStyle(
         fontFamily: 'ABeeZee',
-        color: '#201C1A',
+        color: Color(0xff201C1A),
       ),
     ),
     CodeElementData(
@@ -684,7 +685,7 @@ final _document = CanvasDocument(
       position: const Offset(70, 80),
       size: const Size(10, 10),
       hitSlop: 0,
-      color: 0xff000000,
+      color: const Color(0xff000000),
       width: 1,
       points: const [PenPointData(Offset.zero, pressure: 0)],
     ),
@@ -693,14 +694,14 @@ final _document = CanvasDocument(
       start: const Offset(100, 110),
       controls: const [Offset(110, 114), Offset(140, 90), Offset(170, 130)],
       end: const Offset(120, 110),
-      color: 0xff000000,
+      color: const Color(0xff000000),
       strokeStyle: ArrowStrokeStyle.solid,
       strokeWidth: 2,
     ),
   ],
 );
 
-const _emptyDocument = CanvasDocument(
+final _emptyDocument = CanvasDocument(
   background: CanvasBackgroundKind.plain,
   elements: [],
 );
@@ -715,8 +716,8 @@ final _menuDocument = CanvasDocument(
         kind: ShapeKind.rectangle,
         position: Offset(x, 300),
         size: const Size(80, 80),
-        strokeColor: 0xff000000,
-        fillColor: 0xffffffff,
+        strokeColor: const Color(0xff000000),
+        fillColor: const Color(0xffffffff),
         strokeWidth: 2,
       ),
   ],

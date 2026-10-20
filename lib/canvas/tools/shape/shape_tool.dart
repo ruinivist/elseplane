@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
+import 'package:elseplane/canvas/geometry/shape_geometry.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/icon_drag.dart';
@@ -13,7 +14,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
-part 'shape_geometry.dart';
+export 'package:elseplane/canvas/geometry/shape_geometry.dart';
+
 part 'shape_model.dart';
 part 'shape_preview.dart';
 part 'shape_view.dart';
@@ -116,8 +118,8 @@ class ShapeTool extends ChangeNotifier {
           kind: preview.kind,
           position: preview.rect.topLeft,
           size: preview.rect.size,
-          strokeColor: preview.strokeColor.toARGB32(),
-          fillColor: preview.fillColor?.toARGB32(),
+          strokeColor: preview.strokeColor,
+          fillColor: preview.fillColor,
           strokeWidth: preview.strokeWidth,
         ),
       ),

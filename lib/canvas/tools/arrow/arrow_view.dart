@@ -234,31 +234,7 @@ class _ArrowPainter extends CustomPainter {
 
   @override
   bool hitTest(Offset position) {
-    final radius = strokeWidth / 2 + _arrowHitSlop;
-    final radiusSquared = radius * radius;
-    for (final metric in geometry.shaftPath.computeMetrics()) {
-      var previous = geometry.start;
-      final steps = (metric.length / (radius / 2)).ceil();
-      for (var index = 1; index <= steps; index++) {
-        final current = metric.getTangentForOffset(metric.length * index / steps)!.position;
-        if (distanceToSegmentSquared(position, previous, current) <= radiusSquared) {
-          return true;
-        }
-        previous = current;
-      }
-    }
-    return distanceToSegmentSquared(
-              position,
-              geometry.arrowheadLeft,
-              geometry.end,
-            ) <=
-            radiusSquared ||
-        distanceToSegmentSquared(
-              position,
-              geometry.end,
-              geometry.arrowheadRight,
-            ) <=
-            radiusSquared;
+    return geometry.hitTest(position, strokeWidth: strokeWidth);
   }
 
   @override
@@ -270,4 +246,54 @@ class _ArrowPainter extends CustomPainter {
         oldDelegate.strokeStyle != strokeStyle ||
         oldDelegate.strokeWidth != strokeWidth;
   }
+}
+
+// ---------- Arrow painting ----------
+
+const _arrowDashLength = 8.0;
+const _arrowDashGap = 6.0;
+
+void paintArrow(
+  Canvas canvas, {
+  required ArrowGeometry geometry,
+  required Color color,
+  required ArrowStrokeStyle strokeStyle,
+  required double strokeWidth,
+  double dashScale = 1,
+}) {
+  final paint = Paint()
+    ..color = color
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round
+    ..strokeWidth = strokeWidth;
+  canvas
+    ..drawPath(
+      strokeStyle == ArrowStrokeStyle.dashed
+          ? _dashedPath(
+              geometry.shaftPath,
+              dashLength: _arrowDashLength * dashScale,
+              gapLength: _arrowDashGap * dashScale,
+            )
+          : geometry.shaftPath,
+      paint,
+    )
+    ..drawPath(geometry.arrowheadPath, paint);
+}
+
+Path _dashedPath(
+  Path source, {
+  required double dashLength,
+  required double gapLength,
+}) {
+  final result = Path();
+  for (final metric in source.computeMetrics()) {
+    for (var distance = 0.0; distance < metric.length; distance += dashLength + gapLength) {
+      result.addPath(
+        metric.extractPath(distance, math.min(distance + dashLength, metric.length)),
+        Offset.zero,
+      );
+    }
+  }
+  return result;
 }

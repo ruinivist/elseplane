@@ -50,8 +50,7 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
   @override
   void moveBy(Offset delta) {
     if (delta == Offset.zero) return;
-    data.position += delta;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(position: data.position + delta));
   }
 
   bool get editing => _editing;
@@ -66,8 +65,7 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
 
   set style(TextNodeStyle value) {
     if (_sameStyle(node.style, value)) return;
-    node.style = value;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(style: value));
   }
 
   void resize(Size renderedSize, Offset delta) {
@@ -77,17 +75,13 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
       (node.height ?? renderedSize.height) + delta.dy,
     );
     if (node.width == width && node.height == height) return;
-    node
-      ..width = width
-      ..height = height;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(width: width, height: height));
   }
 
   @override
   void rotate(double angle) {
     if (node.rotation == angle) return;
-    node.rotation = angle;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(rotation: angle));
   }
 
   // ---------- Content insertion ----------
@@ -155,8 +149,7 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
 
   void _syncMarkdown() {
     if (node.markdown == controller.text) return;
-    node.markdown = controller.text;
-    notifyDocumentChanged(rebuild: false);
+    replaceData(data.copyWith(markdown: controller.text), rebuild: false);
     onContentChanged?.call();
   }
 

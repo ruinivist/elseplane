@@ -5,8 +5,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/canvas/editor/widgets/canvas_file_picker.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
@@ -94,11 +94,14 @@ void main() {
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(
       tester.widget<ToolbarButton>(find.byKey(const ValueKey('toolbar-draw'))).selected,
       isFalse,
     );
+    expect(find.byType(CanvasFilePicker), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
     await tester.tapAt(const Offset(100, 160));
@@ -112,31 +115,6 @@ void main() {
       isFalse,
     );
     FocusManager.instance.primaryFocus?.unfocus();
-  });
-
-  test('positions a screen stroke in canvas coordinates', () {
-    final stroke = positionStroke(
-      (
-        points: const [
-          PenPointData(Offset(100, 200), pressure: 0.5),
-          PenPointData(Offset(200, 300), pressure: 0.5),
-        ],
-        color: 0xff000000,
-        width: 5.0,
-        streamline: 0.75,
-      ),
-      id: 'pen',
-      canvasOffset: const Offset(50, -20),
-      canvasScale: 2,
-    );
-
-    expect(stroke.position, const Offset(94.5, 74.5));
-    expect(stroke.size, const Size(61, 61));
-    expect(stroke.hitSlop, 3);
-    expect(stroke.width, 2.5);
-    expect(stroke.streamline, 0.75);
-    expect(stroke.points.first.position.dx, 5.5);
-    expect(stroke.points.first.position.dy, 5.5);
   });
 
   test('pen normalizes pressure and filters non-owner or nearby points', () {
@@ -238,7 +216,7 @@ void main() {
       ..onPointerDown(const PointerDownEvent(pointer: 2))
       ..onPointerUp(const PointerUpEvent(pointer: 2));
     expect(strokes, hasLength(1));
-    expect(strokes.single.color, Colors.red.toARGB32());
+    expect(strokes.single.color, Colors.red);
     expect(strokes.single.width, 8);
     expect(strokes.single.streamline, 1);
     tool.dispose();
@@ -251,7 +229,7 @@ void main() {
         position: const Offset(10, 20),
         size: const Size(61, 61),
         hitSlop: 3,
-        color: 0xff000000,
+        color: const Color(0xff000000),
         width: 2.5,
         points: const [
           PenPointData(Offset(5.5, 5.5), pressure: 0.5),
@@ -293,7 +271,7 @@ void main() {
         start: Offset.zero,
         controls: const [Offset(20, -8)],
         end: const Offset(40, 10),
-        color: 0xff000000,
+        color: const Color(0xff000000),
         strokeStyle: ArrowStrokeStyle.solid,
         strokeWidth: 2,
       ),
@@ -502,7 +480,7 @@ void main() {
           position: const Offset(100, 250),
           size: const Size(100, 30),
           hitSlop: 6,
-          color: 0xff000000,
+          color: const Color(0xff000000),
           width: 3,
           points: const [
             PenPointData(Offset(0, 15), pressure: 0.5),
@@ -515,7 +493,7 @@ void main() {
           start: const Offset(300, 250),
           controls: const [Offset(380, 235)],
           end: const Offset(460, 250),
-          color: 0xff000000,
+          color: const Color(0xff000000),
           strokeStyle: ArrowStrokeStyle.solid,
           strokeWidth: 2,
         ),
@@ -649,7 +627,7 @@ void main() {
     expect(strokes.first.streamline, penStreamlineDefault);
     expect(
       strokes.last.color,
-      presetColors.firstWhere((swatch) => swatch.label == 'Red').color.toARGB32(),
+      presetColors.firstWhere((swatch) => swatch.label == 'Red').color,
     );
     expect(strokes.last.width, 2.25);
     expect(strokes.last.streamline, 0.75);
@@ -1715,7 +1693,7 @@ void main() {
       position: position,
       size: const Size(100, 100),
       hitSlop: 6,
-      color: 0xff000000,
+      color: const Color(0xff000000),
       width: 3,
       points: const [
         PenPointData(Offset(0, 50), pressure: 0.5),
@@ -1734,7 +1712,7 @@ void main() {
           markdown: 'overlap',
           style: const TextNodeStyle(
             fontFamily: 'Source Serif 4',
-            color: '#201C1A',
+            color: Color(0xff201C1A),
           ),
         ),
         CodeElementData(
@@ -1752,7 +1730,7 @@ void main() {
           start: const Offset(100, 300),
           controls: const [Offset(150, 300)],
           end: const Offset(200, 300),
-          color: 0xff000000,
+          color: const Color(0xff000000),
           strokeStyle: ArrowStrokeStyle.solid,
           strokeWidth: 2,
         ),
@@ -1764,7 +1742,7 @@ void main() {
           markdown: 'drag',
           style: const TextNodeStyle(
             fontFamily: 'Source Serif 4',
-            color: '#201C1A',
+            color: Color(0xff201C1A),
           ),
         ),
         stroke('pen-safe', const Offset(100, 450)),

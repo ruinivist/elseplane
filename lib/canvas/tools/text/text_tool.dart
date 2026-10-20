@@ -17,6 +17,11 @@ import 'package:flutter/material.dart';
 export 'text_block_model.dart';
 export 'text_tool_settings.dart';
 
+// ---------- Creation defaults ----------
+
+const textNodeDefaultWidth = 420.0;
+const textNodeDefaultHeight = 220.0;
+
 // ---------- Text tool ----------
 
 /// Switches a text element between Markdown editing and preview surfaces.

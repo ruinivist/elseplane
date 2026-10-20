@@ -3,7 +3,7 @@
 
 import 'dart:math' as math;
 
-import 'package:elseplane/canvas/editor/canvas_background.dart';
+import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/feature_flags.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/select.dart';

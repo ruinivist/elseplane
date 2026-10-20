@@ -110,10 +110,6 @@ class _TextToolSettingsState extends State<TextToolSettings> {
       listenable: model,
       builder: (context, _) {
         final style = model.style;
-        final selectedColor = switch (style.color) {
-          final color? => colorFromHex(color),
-          null => theme.colors.textPrimary,
-        };
         return Column(
           key: const ValueKey('text-settings-panel'),
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -124,7 +120,9 @@ class _TextToolSettingsState extends State<TextToolSettings> {
             SearchableSelect<String>(
               key: const ValueKey('text-font-select'),
               value: style.fontFamily,
-              options: textFontOptions,
+              options: textNodeFontFamilies.contains(style.fontFamily)
+                  ? textFontOptions
+                  : [SelectOption(value: style.fontFamily, label: style.fontFamily), ...textFontOptions],
               preferredValues: [style.fontFamily, defaultFontFamily],
               searchHint: 'Search fonts',
               onChanged: _loading ? null : _chooseFont,
@@ -134,13 +132,13 @@ class _TextToolSettingsState extends State<TextToolSettings> {
             Text('Color', style: theme.typo.label),
             const SizedBox(height: 6),
             ColorControl(
-              color: selectedColor,
+              color: style.color ?? theme.colors.textPrimary,
               expanded: widget.colorPickerExpanded,
               enableAlpha: false,
               onExpandedChanged: widget.onColorPickerExpandedChanged,
               onChanged: (color) {
                 onChangeBoundary();
-                model.style = style.copyWith(color: colorToHex(color));
+                model.style = style.copyWith(color: color);
                 onChangeBoundary();
               },
             ),
@@ -166,15 +164,4 @@ class _TextToolSettingsState extends State<TextToolSettings> {
       },
     );
   }
-}
-
-// ---------- Color conversion ----------
-
-String colorToHex(Color color) {
-  final value = color.toARGB32() & 0x00ffffff;
-  return '#${value.toRadixString(16).padLeft(6, '0').toUpperCase()}';
-}
-
-Color colorFromHex(String value) {
-  return Color(int.parse('FF${value.substring(1)}', radix: 16));
 }

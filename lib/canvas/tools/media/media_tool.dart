@@ -27,6 +27,10 @@ part 'media_source.dart';
 part 'media_tool_helpers.dart';
 part 'media_url_panel.dart';
 
+// ---------- Creation defaults ----------
+
+const mediaNodeDefaultWidth = 480.0;
+
 // ---------- Media tool ----------
 
 /// Renders a media element or its URL entry panel.

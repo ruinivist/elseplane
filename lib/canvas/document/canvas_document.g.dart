@@ -67,8 +67,11 @@ ShapeElementData _$ShapeElementDataFromJson(
       'size',
       (v) => const _SizeConverter().fromJson(v as Map<String, dynamic>),
     ),
-    strokeColor: $checkedConvert('strokeColor', (v) => _jsonInt(v)),
-    fillColor: $checkedConvert('fillColor', (v) => _nullableJsonInt(v)),
+    strokeColor: $checkedConvert(
+      'strokeColor',
+      (v) => const _ArgbColorConverter().fromJson(v),
+    ),
+    fillColor: $checkedConvert('fillColor', (v) => _nullableArgbFromJson(v)),
     strokeWidth: $checkedConvert('strokeWidth', (v) => (v as num).toDouble()),
     autoArrange: $checkedConvert('autoArrange', (v) => v as bool? ?? true),
   );
@@ -83,8 +86,8 @@ Map<String, dynamic> _$ShapeElementDataToJson(ShapeElementData instance) =>
       'kind': _$ShapeKindEnumMap[instance.kind]!,
       'position': const _OffsetConverter().toJson(instance.position),
       'size': const _SizeConverter().toJson(instance.size),
-      'strokeColor': instance.strokeColor,
-      'fillColor': ?instance.fillColor,
+      'strokeColor': ?const _ArgbColorConverter().toJson(instance.strokeColor),
+      'fillColor': ?_nullableArgbToJson(instance.fillColor),
       'strokeWidth': instance.strokeWidth,
     };
 
@@ -148,7 +151,13 @@ TextNodeStyle _$TextNodeStyleFromJson(Map<String, dynamic> json) =>
       );
       final val = TextNodeStyle._json(
         fontFamily: $checkedConvert('fontFamily', (v) => v as String),
-        color: $checkedConvert('color', (v) => v as String?),
+        color: $checkedConvert(
+          'color',
+          (v) => _$JsonConverterFromJson<String, Color>(
+            v,
+            const _TextColorConverter().fromJson,
+          ),
+        ),
         background: $checkedConvert(
           'background',
           (v) => $enumDecode(_$BlockBackgroundKindEnumMap, v),
@@ -160,15 +169,28 @@ TextNodeStyle _$TextNodeStyleFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$TextNodeStyleToJson(TextNodeStyle instance) =>
     <String, dynamic>{
       'fontFamily': instance.fontFamily,
-      'color': ?instance.color,
+      'color': ?_$JsonConverterToJson<String, Color>(
+        instance.color,
+        const _TextColorConverter().toJson,
+      ),
       'background': _$BlockBackgroundKindEnumMap[instance.background]!,
     };
+
+Value? _$JsonConverterFromJson<Json, Value>(
+  Object? json,
+  Value? Function(Json json) fromJson,
+) => json == null ? null : fromJson(json as Json);
 
 const _$BlockBackgroundKindEnumMap = {
   BlockBackgroundKind.transparent: 'transparent',
   BlockBackgroundKind.card: 'card',
   BlockBackgroundKind.glass: 'glass',
 };
+
+Json? _$JsonConverterToJson<Json, Value>(
+  Value? value,
+  Json? Function(Value value) toJson,
+) => value == null ? null : toJson(value);
 
 TextElementData _$TextElementDataFromJson(Map<String, dynamic> json) =>
     $checkedCreate('TextElementData', json, ($checkedConvert) {
@@ -358,7 +380,10 @@ PenElementData _$PenElementDataFromJson(Map<String, dynamic> json) =>
           'points',
           (v) => (v as List<dynamic>).map(PenPointData.fromJson).toList(),
         ),
-        color: $checkedConvert('color', (v) => _jsonInt(v)),
+        color: $checkedConvert(
+          'color',
+          (v) => const _ArgbColorConverter().fromJson(v),
+        ),
         width: $checkedConvert('width', (v) => (v as num).toDouble()),
         streamline: $checkedConvert('streamline', (v) => (v as num).toDouble()),
         autoArrange: $checkedConvert('autoArrange', (v) => v as bool? ?? true),
@@ -375,7 +400,7 @@ Map<String, dynamic> _$PenElementDataToJson(PenElementData instance) =>
       'size': const _SizeConverter().toJson(instance.size),
       'hitSlop': instance.hitSlop,
       'points': instance.points.map((e) => e.toJson()).toList(),
-      'color': instance.color,
+      'color': ?const _ArgbColorConverter().toJson(instance.color),
       'width': instance.width,
       'streamline': instance.streamline,
     };
@@ -416,7 +441,10 @@ ArrowElementData _$ArrowElementDataFromJson(
       'end',
       (v) => const _OffsetConverter().fromJson(v as Map<String, dynamic>),
     ),
-    color: $checkedConvert('color', (v) => _jsonInt(v)),
+    color: $checkedConvert(
+      'color',
+      (v) => const _ArgbColorConverter().fromJson(v),
+    ),
     strokeStyle: $checkedConvert(
       'strokeStyle',
       (v) => $enumDecode(_$ArrowStrokeStyleEnumMap, v),
@@ -436,7 +464,7 @@ Map<String, dynamic> _$ArrowElementDataToJson(
   'start': const _OffsetConverter().toJson(instance.start),
   'controls': instance.controls.map(const _OffsetConverter().toJson).toList(),
   'end': const _OffsetConverter().toJson(instance.end),
-  'color': instance.color,
+  'color': ?const _ArgbColorConverter().toJson(instance.color),
   'strokeStyle': _$ArrowStrokeStyleEnumMap[instance.strokeStyle]!,
   'strokeWidth': instance.strokeWidth,
 };

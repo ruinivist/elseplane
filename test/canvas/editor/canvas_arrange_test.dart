@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_file_picker.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
@@ -38,7 +37,9 @@ void main() {
   for (final kind in ['text', 'code', 'title']) {
     for (final device in [PointerDeviceKind.mouse, if (kind != 'title') PointerDeviceKind.touch]) {
       testWidgets('Auto active $kind $device tap promotes without restarting editing', (tester) async {
-        final document = _autoDocument(kind)..elements.last.autoArrange = true;
+        final document = _autoDocument(kind).withElements(
+          (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
+        );
         final store = TestCanvasDocumentStore(document);
         await pumpCanvas(tester, store);
         await tester.tapAt(_autoHitPoint(tester, kind));
@@ -80,7 +81,9 @@ void main() {
     }
 
     testWidgets('Auto $kind content edit promotes with content in one undo step', (tester) async {
-      final document = _autoDocument(kind)..elements.last.autoArrange = true;
+      final document = _autoDocument(kind).withElements(
+        (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
+      );
       await pumpCanvas(tester, TestCanvasDocumentStore(document));
       await tester.tapAt(_autoHitPoint(tester, kind));
       await tester.pumpAndSettle();
@@ -123,7 +126,9 @@ void main() {
 
   for (final kind in ['text', 'code']) {
     testWidgets('Auto active $kind canceled taps and touch navigation preserve saved order', (tester) async {
-      final document = _autoDocument(kind)..elements.last.autoArrange = true;
+      final document = _autoDocument(kind).withElements(
+        (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
+      );
       await pumpCanvas(tester, TestCanvasDocumentStore(document));
       await tester.tapAt(_autoHitPoint(tester, kind));
       await tester.pumpAndSettle();
@@ -143,7 +148,9 @@ void main() {
   }
 
   testWidgets('Auto completed image paste promotes after leaving editing and shares its undo step', (tester) async {
-    final document = _autoDocument('text')..elements.last.autoArrange = true;
+    final document = _autoDocument('text').withElements(
+      (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
+    );
     final attachments = _DelayedAttachmentStore();
     await pumpCanvas(tester, TestCanvasDocumentStore(document), attachmentStore: attachments);
     await tester.tapAt(_autoHitPoint(tester, 'text'));
@@ -176,12 +183,15 @@ void main() {
         (
           tester,
         ) async {
-          final document = _autoDocument('text');
-          (document.elements.first as TextElementData)
-            ..autoArrange = auto
-            ..markdown = image
-                ? '[![linked](http://example.com/image.png)](javascript:alert(1))'
-                : '[link](javascript:alert(1))';
+          var document = _autoDocument('text');
+          document = document.withElements(
+            (elements) => elements[0] = (elements.first as TextElementData).copyWith(
+              autoArrange: auto,
+              markdown: image
+                  ? '[![linked](http://example.com/image.png)](javascript:alert(1))'
+                  : '[link](javascript:alert(1))',
+            ),
+          );
           await pumpCanvas(tester, TestCanvasDocumentStore(document));
           await tester.pumpAndSettle();
           final Offset point;
@@ -261,9 +271,9 @@ void main() {
   }
 
   testWidgets('Auto mixed group drag promotes only enabled members in relative order', (tester) async {
-    final document = _document();
-    document.elements[0].autoArrange = true;
-    document.elements[2].autoArrange = true;
+    var document = _document();
+    document = document.withElements((elements) => elements[0] = elements[0].copyWith(autoArrange: true));
+    document = document.withElements((elements) => elements[2] = elements[2].copyWith(autoArrange: true));
     await pumpCanvas(tester, TestCanvasDocumentStore(document));
     final models = _models(tester);
     for (final id in ['a', 'b', 'c']) {
@@ -337,7 +347,7 @@ void main() {
   });
 
   testWidgets('Auto switch applies to a mixed group and promotes immediately in one step', (tester) async {
-    final document = _document()..elements[2].autoArrange = true;
+    final document = _document().withElements((elements) => elements[2] = elements[2].copyWith(autoArrange: true));
     await pumpCanvas(tester, TestCanvasDocumentStore(document));
     _models(tester)['a']!.selected = true;
     _models(tester)['c']!.selected = true;
@@ -428,7 +438,7 @@ void main() {
   });
 
   testWidgets('direct menu with no available commands can dismiss without saving', (tester) async {
-    final document = _document()..elements.removeRange(1, 4);
+    final document = _document().withElements((elements) => elements.removeRange(1, 4));
     final store = TestCanvasDocumentStore(document);
     await pumpCanvas(tester, store);
     await tester.tapAt(const Offset(305, 305));
@@ -560,11 +570,14 @@ void main() {
       (const Offset(240, 130), math.pi / 4, 1.5),
     ]) {
       testWidgets('direct $style popover stays upright and bounded at $position, $rotation, $scale', (tester) async {
-        final document = _editorDocument('code')..elements.removeLast();
-        (document.elements.first as CodeElementData)
-          ..position = position
-          ..rotation = rotation
-          ..size = codeBlockMinimumSize;
+        var document = _editorDocument('code').withElements((elements) => elements.removeLast());
+        document = document.withElements(
+          (elements) => elements[0] = (elements.first as CodeElementData).copyWith(
+            position: position,
+            rotation: rotation,
+            size: codeBlockMinimumSize,
+          ),
+        );
         await pumpCanvas(tester, TestCanvasDocumentStore(document));
         final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
         await tester.pumpWidget(
@@ -748,11 +761,14 @@ void main() {
   }
 
   testWidgets('code title and body share temporary foreground and saved arrangement', (tester) async {
-    final document = _editorDocument('code');
-    (document.elements.last as ShapeElementData)
-      ..position = const Offset(150, 195)
-      ..size = const Size(100, 110)
-      ..fillColor = Colors.red.toARGB32();
+    var document = _editorDocument('code');
+    document = document.withElements(
+      (elements) => elements[elements.length - 1] = (elements.last as ShapeElementData).copyWith(
+        position: const Offset(150, 195),
+        size: const Size(100, 110),
+        fillColor: Colors.red,
+      ),
+    );
     final store = TestCanvasDocumentStore(document);
     await pumpCanvas(tester, store);
     await tester.pumpAndSettle();
@@ -832,8 +848,10 @@ void main() {
 
   for (final scale in [1.0, 1.5]) {
     testWidgets('code title preserves body geometry and transforms at zoom $scale', (tester) async {
-      final document = _editorDocument('code')..elements.removeLast();
-      (document.elements.first as CodeElementData).position = const Offset(100, 100);
+      var document = _editorDocument('code').withElements((elements) => elements.removeLast());
+      document = document.withElements(
+        (elements) => elements[0] = (elements.first as CodeElementData).copyWith(position: const Offset(100, 100)),
+      );
       await pumpCanvas(tester, TestCanvasDocumentStore(document));
       final canvas = _canvas(tester)..updateScalebyDelta(scale - 1, focalPoint: Offset.zero);
       await tester.pumpAndSettle();
@@ -1380,8 +1398,8 @@ void main() {
   });
 
   testWidgets('unknown layout sizes disable overlap commands but allow ends', (tester) async {
-    final document = _document();
-    document.elements.add(_text('unknown', const Offset(100000, 100000)));
+    var document = _document();
+    document = document.withElements((elements) => elements.add(_text('unknown', const Offset(100000, 100000))));
     await pumpCanvas(tester, TestCanvasDocumentStore(document));
     final canvas = _canvas(tester);
     final info = canvas.getInfo('unknown');
@@ -1399,8 +1417,8 @@ void main() {
   });
 
   testWidgets('unknown size disables Backward shortcut without affecting Send to Back', (tester) async {
-    final document = _document();
-    document.elements.add(_text('unknown', const Offset(100000, 100000)));
+    var document = _document();
+    document = document.withElements((elements) => elements.add(_text('unknown', const Offset(100000, 100000))));
     final store = TestCanvasDocumentStore(document);
     await pumpCanvas(tester, store);
     final canvas = _canvas(tester);
@@ -1423,8 +1441,10 @@ void main() {
   });
 
   testWidgets('overlap steps skip distant objects; no-op does not save or consume redo', (tester) async {
-    final document = _document();
-    (document.elements[1] as ShapeElementData).position = const Offset(650, 450);
+    var document = _document();
+    document = document.withElements(
+      (elements) => elements[1] = (elements[1] as ShapeElementData).copyWith(position: const Offset(650, 450)),
+    );
     final store = TestCanvasDocumentStore(document);
     await pumpCanvas(tester, store);
     _models(tester)['a']!.selected = true;
@@ -1441,10 +1461,13 @@ void main() {
   });
 
   testWidgets('rotated object menu stays in screen coordinates under zoom near edges', (tester) async {
-    final document = _editorDocument('code');
-    (document.elements.first as CodeElementData)
-      ..position = const Offset(200, 140)
-      ..rotation = math.pi / 4;
+    var document = _editorDocument('code');
+    document = document.withElements(
+      (elements) => elements[0] = (elements.first as CodeElementData).copyWith(
+        position: const Offset(200, 140),
+        rotation: math.pi / 4,
+      ),
+    );
     await pumpCanvas(tester, TestCanvasDocumentStore(document));
     _canvas(tester).updateScalebyDelta(0.5);
     await tester.pump();
@@ -1544,31 +1567,34 @@ Offset _activeEditorHitPoint(WidgetTester tester, String kind) => switch (kind) 
 };
 
 CanvasDocument _autoDocument(String kind) {
-  final document = kind == 'shape' ? (_document()..elements.removeRange(2, 4)) : _editorDocument(kind);
+  final document = kind == 'shape'
+      ? (_document().withElements((elements) => elements.removeRange(2, 4)))
+      : _editorDocument(kind);
+  final elements = document.elements.toList();
   if (kind == 'pen') {
-    document.elements[0] = PenElementData(
+    elements[0] = PenElementData(
       id: 'editor',
       position: const Offset(150, 250),
       size: const Size(160, 30),
       hitSlop: 6,
       points: const [PenPointData(Offset(0, 15), pressure: 0.5), PenPointData(Offset(160, 15), pressure: 0.5)],
-      color: 0xff000000,
+      color: const Color(0xff000000),
       width: 3,
     );
   } else if (kind == 'arrow') {
-    document.elements[0] = ArrowElementData(
+    elements[0] = ArrowElementData(
       id: 'editor',
       start: const Offset(150, 250),
       controls: const [Offset(230, 235)],
       end: const Offset(310, 250),
-      color: 0xff000000,
+      color: const Color(0xff000000),
       strokeStyle: ArrowStrokeStyle.solid,
       strokeWidth: 2,
     );
   }
-  final target = document.elements.first..autoArrange = true;
-  if (target is CodeElementData) target.size = const Size(300, 240);
-  return document;
+  final target = elements.first.copyWith(autoArrange: true);
+  elements[0] = target is CodeElementData ? target.copyWith(size: const Size(300, 240)) : target;
+  return document.copyWith(elements: elements);
 }
 
 Offset _autoHitPoint(WidgetTester tester, String kind) => switch (kind) {
@@ -1646,8 +1672,8 @@ CanvasDocument _document({bool auto = false}) => CanvasDocument(
         kind: ShapeKind.rectangle,
         position: Offset(300 + index * 25, 300 + index * 25),
         size: const Size(140, 120),
-        strokeColor: 0xff000000,
-        fillColor: 0xffffffff,
+        strokeColor: const Color(0xff000000),
+        fillColor: const Color(0xffffffff),
         strokeWidth: 2,
       ),
   ],
@@ -1660,7 +1686,7 @@ TextElementData _text(String id, Offset position) => TextElementData(
   width: 280,
   height: null,
   markdown: 'contents',
-  style: const TextNodeStyle(fontFamily: 'Inter', color: '#201C1A'),
+  style: const TextNodeStyle(fontFamily: 'Inter', color: Color(0xff201C1A)),
 );
 
 CanvasDocument _editorDocument(String editor) => CanvasDocument(
@@ -1687,8 +1713,8 @@ CanvasDocument _editorDocument(String editor) => CanvasDocument(
       kind: ShapeKind.rectangle,
       position: const Offset(550, 400),
       size: const Size(80, 80),
-      strokeColor: 0xff000000,
-      fillColor: 0xffffffff,
+      strokeColor: const Color(0xff000000),
+      fillColor: const Color(0xffffffff),
       strokeWidth: 2,
     ),
   ],

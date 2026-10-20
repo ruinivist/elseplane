@@ -2,7 +2,6 @@
 // Used by canvas persistence and the file picker.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:uuid/uuid.dart';
 
 // ---------- Entries ----------
@@ -77,7 +76,7 @@ class CanvasLibrary {
     return library;
   }
 
-  static const emptyDocument = CanvasDocument(background: CanvasBackgroundKind.dotGrid, elements: []);
+  static final emptyDocument = CanvasDocument(background: CanvasBackgroundKind.dotGrid, elements: []);
 
   final List<CanvasFile> files;
   final String currentId;

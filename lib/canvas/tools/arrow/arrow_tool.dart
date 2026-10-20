@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/foundation.dart';
@@ -12,7 +13,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
-part 'arrow_geometry.dart';
+export 'package:elseplane/canvas/geometry/arrow_geometry.dart';
+
 part 'arrow_model.dart';
 part 'arrow_preview.dart';
 part 'arrow_view.dart';
@@ -145,7 +147,7 @@ class ArrowTool extends ChangeNotifier {
         start: start,
         controls: _curveControls(start, end),
         end: end,
-        color: _color.toARGB32(),
+        color: _color,
         strokeStyle: _strokeStyle,
         strokeWidth: _strokeWidth,
       ),
@@ -164,4 +166,22 @@ class ArrowTool extends ChangeNotifier {
     _buttons = 0;
     notifyListeners();
   }
+}
+
+// ---------- Control geometry ----------
+
+/// Places the control point that gives a new arrow its default bend.
+/// Used while previewing and committing arrows from pointer drags.
+Offset arrowControlPoint({
+  required Offset start,
+  required Offset end,
+}) {
+  final vector = end - start;
+  final length = vector.distance;
+  if (length == 0) return start;
+
+  final bendLength = (length * 0.09).clamp(6.0, 32.0);
+  final normal = Offset(vector.dy / length, -vector.dx / length);
+
+  return start + vector * 0.5 + normal * bendLength;
 }

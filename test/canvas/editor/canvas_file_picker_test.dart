@@ -5,7 +5,6 @@ import 'dart:async';
 
 import 'package:elseplane/canvas/debug/demo_canvas.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_file_picker.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
 import 'package:elseplane/canvas/editor/widgets/file_tree_popup.dart';
@@ -87,7 +86,7 @@ void main() {
       store.library = CanvasLibrary(
         files: [
           ...store.library.files,
-          const CanvasFile(id: 'next', name: 'Next', document: CanvasLibrary.emptyDocument),
+          CanvasFile(id: 'next', name: 'Next', document: CanvasLibrary.emptyDocument),
         ],
         currentId: originalId,
       );
@@ -128,7 +127,7 @@ void main() {
     store.library = CanvasLibrary(
       files: [
         ...store.library.files,
-        const CanvasFile(id: 'next', name: 'Next', document: CanvasLibrary.emptyDocument),
+        CanvasFile(id: 'next', name: 'Next', document: CanvasLibrary.emptyDocument),
       ],
       currentId: originalId,
     );
@@ -212,7 +211,7 @@ void main() {
           width: 280,
           height: null,
           markdown: 'Original ![image]($imagePath)',
-          style: const TextNodeStyle(fontFamily: defaultFontFamily, color: '#201C1A'),
+          style: const TextNodeStyle(fontFamily: defaultFontFamily, color: Color(0xff201C1A)),
         ),
       ],
     );
@@ -224,7 +223,7 @@ void main() {
         const CanvasFile(id: 'work', name: 'Work'),
         CanvasFile(id: current.id, name: 'Original', parentId: 'work', document: current.document),
         const CanvasFile(id: 'demo-folder', name: 'dEmO'),
-        const CanvasFile(id: 'other', name: 'demo 2', document: CanvasLibrary.emptyDocument),
+        CanvasFile(id: 'other', name: 'demo 2', document: CanvasLibrary.emptyDocument),
       ],
       currentId: current.id,
     );
@@ -335,7 +334,7 @@ void main() {
             width: 280,
             height: null,
             markdown: 'Original contents',
-            style: const TextNodeStyle(fontFamily: 'Inter', color: '#201C1A'),
+            style: const TextNodeStyle(fontFamily: 'Inter', color: Color(0xff201C1A)),
           ),
         ],
       ),
@@ -493,8 +492,8 @@ void main() {
       ..library = CanvasLibrary(
         currentId: 'a',
         files: [
-          const CanvasFile(id: 'a', name: 'A', document: CanvasLibrary.emptyDocument),
-          const CanvasFile(id: 'b', name: 'B', document: CanvasLibrary.emptyDocument),
+          CanvasFile(id: 'a', name: 'A', document: CanvasLibrary.emptyDocument),
+          CanvasFile(id: 'b', name: 'B', document: CanvasLibrary.emptyDocument),
           const CanvasFile(id: 'folder', name: 'Folder'),
         ],
       );

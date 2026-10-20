@@ -7,7 +7,6 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/tools/media/media_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
@@ -27,26 +26,46 @@ import '../../test_helpers.dart';
 void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
+  testWidgets('URL changes publish the value after clearing the previous image', (tester) async {
+    const url = 'https://example.com/image.png';
+    await _cacheImage(url);
+    final model = MediaModel(
+      MediaElementData(id: 'media', position: Offset.zero, width: 280, url: url),
+      TestAttachmentStore(),
+    );
+    addTearDown(model.dispose);
+    expect(model.hasImage, isTrue);
+    final changes = <(String, bool)>[];
+    model.documentChanges.addListener(() => changes.add((model.data.url, model.hasImage)));
+    model.controller.text = 'not an image';
+    model.commitUrl();
+    expect(changes, [('not an image', false)]);
+  });
+
   for (final media in [false, true]) {
     for (final stale in [false, true]) {
       testWidgets(
         '${media ? 'media' : 'text'} image paste ${stale ? 'cancels stale' : 'reports current'} write failure',
         (tester) async {
           final attachments = (await tester.runAsync(() async => _FailedWrite()))!;
-          final document = _document();
+          var document = _document();
           if (media) {
-            document.elements.add(
-              MediaElementData(id: 'media', position: const Offset(120, 150), width: 280, url: 'original'),
+            document = document.withElements(
+              (elements) => elements.add(
+                MediaElementData(id: 'media', position: const Offset(120, 150), width: 280, url: 'original'),
+              ),
             );
           } else {
-            document.elements.add(
-              TextElementData(
-                id: 'text',
-                position: const Offset(120, 150),
-                width: 280,
-                height: null,
-                markdown: 'original',
-                style: const TextNodeStyle(fontFamily: 'Inter', color: '#201C1A'),
+            document = document.withElements(
+              (elements) => elements.add(
+                TextElementData(
+                  id: 'text',
+                  position: const Offset(120, 150),
+                  width: 280,
+                  height: null,
+                  markdown: 'original',
+                  style: const TextNodeStyle(fontFamily: 'Inter', color: Color(0xff201C1A)),
+                ),
               ),
             );
           }
@@ -61,9 +80,9 @@ void main() {
           });
           if (stale) {
             if (media) {
-              image!.restoreData(image.data.copy());
+              image!.restoreData(image.data);
             } else {
-              text!.restoreData(text.data.copy());
+              text!.restoreData(text.data);
             }
           }
           await tester.runAsync(() async {
@@ -94,7 +113,7 @@ void main() {
     ]) {
       await tester.runAsync(() async {
         final pending = model.setDeviceImage(bytes, 'png');
-        model.restoreData(model.data.copy());
+        model.restoreData(model.data);
         await pending;
       });
       expect(attachments.files, isEmpty);
@@ -363,7 +382,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('media-url-field')), 'unfinished');
     model.focusNode.unfocus();
-    model.restoreData(model.data.copy());
+    model.restoreData(model.data);
     await tester.pumpAndSettle();
     expect(model.controller.text, url);
     expect(model.data.url, url);

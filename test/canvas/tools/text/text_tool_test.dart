@@ -4,7 +4,6 @@
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
@@ -678,7 +677,7 @@ Inline $x^2$''';
   testWidgets('Markdown uses theme heading and body roles while preserving custom colors', (tester) async {
     for (final theme in [starlessLightThemeData, starlessDarkThemeData]) {
       final colors = theme.extension<BTheme>()!.colors;
-      for (final color in [null, '#ABCDEF']) {
+      for (final color in [null, const Color(0xffABCDEF)]) {
         final style = TextNodeStyle(fontFamily: defaultFontFamily, color: color);
         final saved = style.toJson();
         await tester.pumpWidget(
@@ -698,7 +697,7 @@ Inline $x^2$''';
         );
         await tester.pumpAndSettle();
         final styles = tester.widget<MarkdownBody>(find.byType(MarkdownBody)).styleSheet!;
-        final bodyColor = color == null ? colors.textPrimary : colorFromHex(color);
+        final bodyColor = color ?? colors.textPrimary;
         final headingColor = color == null ? colors.textHeading : bodyColor;
         for (final heading in [styles.h1, styles.h2, styles.h3, styles.h4, styles.h5, styles.h6, styles.tableHead]) {
           expect(heading!.color, headingColor);
@@ -827,7 +826,7 @@ Inline $x^2$''';
               width: 220,
               child: TextMarkdownPreview(
                 source: '- [x] ${tasks[0]}\n- [ ] ${tasks[1]}',
-                style: const TextNodeStyle(fontFamily: defaultFontFamily, color: '#201C1A'),
+                style: const TextNodeStyle(fontFamily: defaultFontFamily, color: Color(0xff201C1A)),
                 scrollController: null,
                 onEdit: () {},
                 onMove: (_) {},
@@ -1159,7 +1158,7 @@ Inline $x^2$''';
       final orange = presetColors.singleWhere(
         (swatch) => swatch.label == 'Orange',
       );
-      expect(model.style.color, colorToHex(orange.color));
+      expect(model.style.color, orange.color);
       expect(model.node.markdown, source);
       expect(model.editing, isFalse);
 
@@ -1174,7 +1173,7 @@ Inline $x^2$''';
         await _chooseBackground(tester, background);
         expect(model.style.background, background);
         expect(model.style.fontFamily, defaultFontFamily);
-        expect(model.style.color, colorToHex(orange.color));
+        expect(model.style.color, orange.color);
         expect(model.node.markdown, source);
         expect(model.active, isTrue);
         expect(model.editing, isFalse);
@@ -1223,11 +1222,11 @@ Inline $x^2$''';
 
     control.onChanged(const Color(0xff123456));
     await tester.pump();
-    expect(first.style.color, '#123456');
+    expect(first.style.color, const Color(0xff123456));
 
     final second = await _placeTextBlock(tester, const Offset(480, 360));
     await tester.pumpAndSettle();
-    expect(second.style.color, colorToHex(presetColors.first.color));
+    expect(second.style.color, presetColors.first.color);
     expect(pickerFinder, findsOneWidget);
     expect(
       tester.widget<ColorControl>(controlFinder).color,
@@ -1646,7 +1645,7 @@ CanvasDocument _rendererDocument({double rotation = 0, bool autoHeight = false})
       height: autoHeight ? null : 80,
       rotation: rotation,
       markdown: autoHeight ? List.filled(8, 'Measured paragraph.').join('\n\n') : 'rotated text',
-      style: const TextNodeStyle(fontFamily: defaultFontFamily, color: '#201C1A'),
+      style: const TextNodeStyle(fontFamily: defaultFontFamily, color: Color(0xff201C1A)),
     ),
   ],
 );

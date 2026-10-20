@@ -49,8 +49,7 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
   @override
   void moveBy(Offset delta) {
     if (delta == Offset.zero) return;
-    data.position += delta;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(position: data.position + delta));
   }
 
   void resizeBy(Offset delta) {
@@ -60,24 +59,20 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
     final widthDelta = (delta.dx + delta.dy * inverseRatio) / (1 + inverseRatio * inverseRatio);
     final width = math.max(mediaNodeMinimumWidth, data.width + widthDelta);
     if (width == data.width) return;
-    data.width = width;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(width: width));
   }
 
   @override
   void rotate(double angle) {
     if (data.rotation == angle) return;
-    data.rotation = angle;
-    notifyDocumentChanged();
+    replaceData(data.copyWith(rotation: angle));
   }
 
   // ---------- Image updates ----------
 
   void commitUrl() {
     if (data.url == controller.text) return;
-    data.url = controller.text;
-    _loadImage();
-    notifyDocumentChanged();
+    replaceData(data.copyWith(url: controller.text), synchronize: _loadImage);
   }
 
   Future<void> paste(Future<ClipboardReader> readerFuture) async {
@@ -117,12 +112,15 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
         return;
       }
 
-      data.url = path;
-      controller.text = path;
-      _detachImage();
-      _image = MemoryImage(bytes);
-      _aspectRatio = ratio;
-      notifyDocumentChanged();
+      replaceData(
+        data.copyWith(url: path),
+        synchronize: () {
+          controller.text = path;
+          _detachImage();
+          _image = MemoryImage(bytes);
+          _aspectRatio = ratio;
+        },
+      );
     } on Object {
       if (generation != asyncEditGeneration) return;
       rethrow;

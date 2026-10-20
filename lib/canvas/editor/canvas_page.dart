@@ -19,6 +19,7 @@ import 'package:elseplane/canvas/editor/widgets/canvas_toolbar.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/canvas/editor/widgets/zoom_control.dart';
+import 'package:elseplane/canvas/geometry/transforms.dart';
 import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
 import 'package:elseplane/canvas/persistence/canvas_library.dart';
@@ -742,7 +743,9 @@ class _CanvasPageState extends State<CanvasPage> {
   }
 
   bool _selectionRectOverlaps(Rect selection, ChildInfo info, Size size) {
-    final elementPath = (Path()..addRect(Offset.zero & size)).transform(
+    return transformedRectOverlaps(
+      selection,
+      size,
       childTransform(
         info.ssPosition,
         size,
@@ -750,12 +753,6 @@ class _CanvasPageState extends State<CanvasPage> {
         scale: _canvasController.scale,
       ).storage,
     );
-    final overlap = Path.combine(
-      PathOperation.intersect,
-      Path()..addRect(selection),
-      elementPath,
-    ).getBounds();
-    return !overlap.isEmpty;
   }
 
   void _finishDragSelection({bool canceled = false}) {
@@ -1282,14 +1279,7 @@ class _CanvasPageState extends State<CanvasPage> {
   }
 
   Offset _localTransformDelta(double rotation, Offset screenDelta) {
-    final delta = screenDelta / _canvasController.scale;
-    final angle = -rotation;
-    final cosine = math.cos(angle);
-    final sine = math.sin(angle);
-    return Offset(
-      delta.dx * cosine - delta.dy * sine,
-      delta.dx * sine + delta.dy * cosine,
-    );
+    return screenDeltaToLocal(screenDelta, scale: _canvasController.scale, rotation: rotation);
   }
 
   void _rotateElement(RotatableCanvasElementModel model, double angle) {
@@ -1328,7 +1318,7 @@ class _CanvasPageState extends State<CanvasPage> {
       markdown: '',
       style: TextNodeStyle(
         fontFamily: defaultFontFamily,
-        color: colorToHex(defaultCanvasColor),
+        color: defaultCanvasColor,
         background: _newBlockBackground,
       ),
     );
@@ -1341,7 +1331,7 @@ class _CanvasPageState extends State<CanvasPage> {
 
   void _addMedia(Offset position) {
     if (!_documentLoaded) return;
-    final model = _newMediaModel('')..data.position = position;
+    final model = _newMediaModel('')..moveBy(position);
     _mountElement(model, requestFocus: true);
     _setActiveElement(model);
     _scheduleDocumentSave();
@@ -1723,7 +1713,7 @@ class _CanvasPageState extends State<CanvasPage> {
     final generation = _documentGeneration;
     if (selected.isEmpty) return;
     final payload = encodeCanvasClipboard(
-      selected.map((model) => model.data.copy()),
+      selected.map((model) => model.data),
     );
     try {
       final write = widget.writeClipboardText;
@@ -1783,7 +1773,7 @@ class _CanvasPageState extends State<CanvasPage> {
 
       final placeAtPointer = position != null || (pointer != null && (payload, pointer) != _pointerReference);
       final pasted = [
-        for (final element in elements) _createElementModel(element.copy(id: const Uuid().v4())),
+        for (final element in elements) _createElementModel(element.copyWith(id: const Uuid().v4())),
       ];
       _finishHistoryOperation();
       if (placeAtPointer) {
@@ -1852,7 +1842,7 @@ class _CanvasPageState extends State<CanvasPage> {
 
   void _placePastedMedia(MediaModel model, Offset position) {
     _finishHistoryOperation();
-    model.data.position = position - model.canvasSize.center(Offset.zero);
+    model.moveBy(position - model.canvasSize.center(Offset.zero) - model.canvasPosition);
     _clearTextEditing();
     _setActiveElement(null);
     _clearSelection();
@@ -1950,7 +1940,7 @@ class _CanvasPageState extends State<CanvasPage> {
       if (!mounted) return;
       if (id != null && id != previousId) {
         final next = _documentStore.library;
-        _replaceLiveModels(next.current.document!.copy());
+        _replaceLiveModels(next.current.document!);
         _resetHistory();
       }
     } on Object {
@@ -2454,7 +2444,7 @@ class _CanvasPageState extends State<CanvasPage> {
   CanvasDocument _currentDocument() {
     return CanvasDocument(
       background: _canvasBackgroundKind,
-      elements: _elements.map((model) => model.data.copy()).toList(),
+      elements: _elements.map((model) => model.data).toList(),
     );
   }
 

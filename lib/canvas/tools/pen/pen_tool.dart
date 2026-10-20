@@ -3,16 +3,21 @@
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/canvas/geometry/pen_geometry.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:perfect_freehand/perfect_freehand.dart' as pf;
 
-part 'pen_geometry.dart';
+export 'package:elseplane/canvas/geometry/pen_geometry.dart';
+
 part 'pen_preview.dart';
 part 'pen_stroke.dart';
 part 'pen_stroke_model.dart';
+
+// ---------- Sampling ----------
+
+const _minimumPointDistanceSquared = 4.0;
 
 // ---------- Tool state ----------
 
@@ -142,7 +147,7 @@ class PenTool extends ChangeNotifier {
     _append(event);
     final stroke = (
       points: List<PenPointData>.of(_points),
-      color: _color.toARGB32(),
+      color: _color,
       width: _strokeWidth,
       streamline: _streamline,
     );

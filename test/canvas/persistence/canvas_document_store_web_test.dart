@@ -7,7 +7,6 @@ library;
 import 'dart:convert';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
 import 'package:elseplane/canvas/persistence/canvas_library.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,7 +30,7 @@ void main() {
   });
 
   test('persists the current canvas document in browser storage', () async {
-    const document = CanvasDocument(
+    final document = CanvasDocument(
       background: CanvasBackgroundKind.plain,
       elements: [],
     );
@@ -43,7 +42,7 @@ void main() {
   });
 
   test('retains existing canvas and restores folders and the selected file', () async {
-    const original = CanvasDocument(background: CanvasBackgroundKind.plain, elements: []);
+    final original = CanvasDocument(background: CanvasBackgroundKind.plain, elements: []);
     await SharedPreferencesAsync().setString(
       CanvasDocumentStore.libraryKey,
       jsonEncode(CanvasLibrary.initial(original).toJson()),
@@ -56,7 +55,7 @@ void main() {
       files: [
         store.library.current,
         const CanvasFile(id: 'folder', name: 'Notes'),
-        const CanvasFile(id: 'second', name: 'Ideas', parentId: 'folder', document: CanvasLibrary.emptyDocument),
+        CanvasFile(id: 'second', name: 'Ideas', parentId: 'folder', document: CanvasLibrary.emptyDocument),
       ],
     );
     await store.saveLibrary(next);
@@ -78,12 +77,12 @@ void main() {
     final library = CanvasLibrary(
       currentId: 'a',
       files: [
-        const CanvasFile(id: 'a', name: 'A', document: CanvasLibrary.emptyDocument),
-        const CanvasFile(id: 'b', name: 'B', document: CanvasLibrary.emptyDocument),
+        CanvasFile(id: 'a', name: 'A', document: CanvasLibrary.emptyDocument),
+        CanvasFile(id: 'b', name: 'B', document: CanvasLibrary.emptyDocument),
         const CanvasFile(id: 'folder', name: 'Folder'),
         const CanvasFile(id: 'nested', name: 'Nested', parentId: 'folder'),
-        const CanvasFile(id: 'child', name: 'Child', parentId: 'nested', document: CanvasLibrary.emptyDocument),
-        const CanvasFile(id: 'duplicate', name: 'A', parentId: 'folder', document: CanvasLibrary.emptyDocument),
+        CanvasFile(id: 'child', name: 'Child', parentId: 'nested', document: CanvasLibrary.emptyDocument),
+        CanvasFile(id: 'duplicate', name: 'A', parentId: 'folder', document: CanvasLibrary.emptyDocument),
       ],
     );
 

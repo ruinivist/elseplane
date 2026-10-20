@@ -3,6 +3,8 @@
 
 part of 'canvas_document.dart';
 
+// ---------- Strict decoding ----------
+
 const _strictJson = JsonSerializable(
   checked: true,
   disallowUnrecognizedKeys: true,
@@ -35,8 +37,6 @@ int _jsonInt(Object? value) {
   if (value is! int) throw const FormatException('value must be an integer');
   return value;
 }
-
-int? _nullableJsonInt(Object? value) => value == null ? null : _jsonInt(value);
 
 ({double width, double? height}) _textSizeFromJson(
   Map<String, dynamic> json,
@@ -107,4 +107,62 @@ final class _SizeConverter extends JsonConverter<Size, Map<String, dynamic>> {
     'width': value.width,
     'height': value.height,
   };
+}
+
+// ---------- Domain validation ----------
+
+final _canonicalColor = RegExp(r'^#[0-9A-F]{6}$');
+
+void _validateFinite(double value, String field) {
+  if (!value.isFinite) throw FormatException('$field must be finite');
+}
+
+void _validatePositive(double value, String field) {
+  _validateFinite(value, field);
+  if (value <= 0) throw FormatException('$field must be positive');
+}
+
+void _validateArgb(int value, String field) {
+  if (value < 0 || value > 0xffffffff) {
+    throw FormatException('$field must be an ARGB integer');
+  }
+}
+
+// ---------- Color conversion ----------
+
+final class _ArgbColorConverter extends JsonConverter<Color, Object?> {
+  const _ArgbColorConverter();
+
+  @override
+  Color fromJson(Object? value) {
+    final argb = _jsonInt(value);
+    _validateArgb(argb, 'color');
+    return Color(argb);
+  }
+
+  @override
+  int toJson(Color value) => value.toARGB32();
+}
+
+Color? _nullableArgbFromJson(Object? value) => value == null ? null : const _ArgbColorConverter().fromJson(value);
+
+int? _nullableArgbToJson(Color? value) => value?.toARGB32();
+
+final class _TextColorConverter extends JsonConverter<Color, String> {
+  const _TextColorConverter();
+
+  @override
+  Color fromJson(String value) {
+    if (!_canonicalColor.hasMatch(value)) {
+      throw const FormatException('style.color must be uppercase #RRGGBB');
+    }
+    return Color(0xff000000 | int.parse(value.substring(1), radix: 16));
+  }
+
+  @override
+  String toJson(Color value) {
+    if (value.a != 1) throw const FormatException('style.color must be opaque');
+    final rgb = value.toARGB32() & 0x00ffffff;
+    return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+  }
 }

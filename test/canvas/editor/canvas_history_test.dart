@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
@@ -45,13 +44,15 @@ void main() {
         testWidgets(
           '${media ? 'media' : 'text'} pending image ${failure ? 'failure' : 'write'} cannot change ${unchanged ? 'unchanged' : 'moved'} undo target or redo',
           (tester) async {
-            final document = _textDocument()..elements.add(_penDocument(1).elements.single);
+            var document = _textDocument().withElements((elements) => elements.add(_penDocument(1).elements.single));
             if (media) {
-              document.elements[0] = MediaElementData(
-                id: 'media',
-                position: const Offset(200, 240),
-                width: 280,
-                url: 'original',
+              document = document.withElements(
+                (elements) => elements[0] = MediaElementData(
+                  id: 'media',
+                  position: const Offset(200, 240),
+                  width: 280,
+                  url: 'original',
+                ),
               );
             }
             final store = TestCanvasDocumentStore(document);
@@ -113,13 +114,15 @@ void main() {
         '${media ? 'media' : 'text'} disposed upload ${failDelete ? 'stays canceled if deletion fails' : 'deletes its completed write'}',
         (tester) async {
           final attachments = (await tester.runAsync(() async => _PausedWrite(failDeletes: failDelete)))!;
-          final document = _textDocument();
+          var document = _textDocument();
           if (media) {
-            document.elements[0] = MediaElementData(
-              id: 'media',
-              position: const Offset(200, 240),
-              width: 280,
-              url: 'original',
+            document = document.withElements(
+              (elements) => elements[0] = MediaElementData(
+                id: 'media',
+                position: const Offset(200, 240),
+                width: 280,
+                url: 'original',
+              ),
             );
           }
           await pumpCanvas(tester, TestCanvasDocumentStore(document), attachmentStore: attachments);
@@ -162,7 +165,7 @@ void main() {
         store.library = CanvasLibrary(
           files: [
             ...store.library.files,
-            const CanvasFile(id: 'next', name: 'Next', document: CanvasLibrary.emptyDocument),
+            CanvasFile(id: 'next', name: 'Next', document: CanvasLibrary.emptyDocument),
           ],
           currentId: store.library.currentId,
         );
@@ -187,13 +190,15 @@ void main() {
     testWidgets('pending ${media ? 'media' : 'text'} paste survives leaving editing and tool-only undo', (
       tester,
     ) async {
-      final document = _textDocument();
+      var document = _textDocument();
       if (media) {
-        document.elements[0] = MediaElementData(
-          id: 'media',
-          position: const Offset(200, 240),
-          width: 280,
-          url: 'original',
+        document = document.withElements(
+          (elements) => elements[0] = MediaElementData(
+            id: 'media',
+            position: const Offset(200, 240),
+            width: 280,
+            url: 'original',
+          ),
         );
       }
       await pumpCanvas(tester, TestCanvasDocumentStore(document));
@@ -221,8 +226,9 @@ void main() {
   testWidgets('unchanged-source attachment read finishes through undo', (tester) async {
     const path = 'attachments/11111111-1111-4111-8111-111111111111.png';
     final attachments = _PausedRead();
-    final document = _textDocument()
-      ..elements.add(MediaElementData(id: 'media', position: const Offset(80, 100), width: 120, url: path));
+    final document = _textDocument().withElements(
+      (elements) => elements.add(MediaElementData(id: 'media', position: const Offset(80, 100), width: 120, url: path)),
+    );
     await _cacheAttachmentImage();
     await pumpCanvas(tester, TestCanvasDocumentStore(document), attachmentStore: attachments);
     final media = tester.widget<MediaTool>(find.byType(MediaTool)).model;
@@ -236,21 +242,32 @@ void main() {
   });
 
   testWidgets('unrelated undo retains mixed canvas resources and widget states', (tester) async {
-    final document = _textDocument();
-    document.elements.addAll([
-      (_codeDocument().elements.first as CodeElementData)..position = const Offset(500, 240),
-      MediaElementData(
-        id: 'media',
-        position: const Offset(80, 100),
-        width: 120,
-        url: 'attachments/11111111-1111-4111-8111-111111111111.png',
-      ),
-      _penDocument(1).elements.single,
-    ]);
-    document.elements.add(
-      (_penDocument(1).elements.single as PenElementData).copy(id: 'offscreen')..position = const Offset(10000, 10000),
+    var document = _textDocument();
+    document = document.withElements(
+      (elements) => elements.addAll([
+        (_codeDocument().elements.first as CodeElementData).copyWith(position: const Offset(500, 240)),
+        MediaElementData(
+          id: 'media',
+          position: const Offset(80, 100),
+          width: 120,
+          url: 'attachments/11111111-1111-4111-8111-111111111111.png',
+        ),
+        _penDocument(1).elements.single,
+      ]),
     );
-    (document.elements[1] as CodeElementData).source = List.generate(80, (i) => '$i ${'long source ' * 30}').join('\n');
+    document = document.withElements(
+      (elements) => elements.add(
+        (_penDocument(1).elements.single as PenElementData).copyWith(
+          id: 'offscreen',
+          position: const Offset(10000, 10000),
+        ),
+      ),
+    );
+    document = document.withElements(
+      (elements) => elements[1] = (elements[1] as CodeElementData).copyWith(
+        source: List.generate(80, (i) => '$i ${'long source ' * 30}').join('\n'),
+      ),
+    );
     final attachments = _CountingAttachments({
       'attachments/11111111-1111-4111-8111-111111111111.png': onePixelPngBytes,
     });
@@ -298,7 +315,7 @@ void main() {
   });
 
   testWidgets('code restore synchronizes source and visible title without extra history', (tester) async {
-    final store = TestCanvasDocumentStore(_codeDocument()..elements.removeLast());
+    final store = TestCanvasDocumentStore(_codeDocument().withElements((elements) => elements.removeLast()));
     await pumpCanvas(tester, store);
     final code = tester.widget<CodeTool>(find.byType(CodeTool)).model;
     final controller = code.controller;
@@ -386,17 +403,45 @@ void main() {
     expect(attachments.reads, 4);
   });
 
+  test('ordinary edits preserve published values and pending edit generations', () {
+    final model = TextBlockModel(_textDocument().elements.single as TextElementData);
+    final original = model.data;
+    final document = CanvasDocument(background: CanvasBackgroundKind.plain, elements: [original]);
+    final generation = model.asyncEditGeneration;
+    var edits = 0;
+    model.documentChanges.addListener(() => edits++);
+    model
+      ..moveBy(Offset.zero)
+      ..autoArrange = original.autoArrange;
+    expect(edits, 0);
+    model.moveBy(const Offset(20, 10));
+    model.controller.text = 'changed';
+    model.autoArrange = !original.autoArrange;
+    expect(edits, 3);
+    expect(model.asyncEditGeneration, generation);
+    expect(document.elements.single, same(original));
+    expect(model.data.position, original.position + const Offset(20, 10));
+    expect(original.markdown, isNot('changed'));
+    expect(original.autoArrange, isNot(model.autoArrange));
+    model.restoreData(original);
+    expect(model.asyncEditGeneration, generation + 1);
+    expect(model.data, same(original));
+    expect(model.controller.text, original.markdown);
+    expect(edits, 3);
+    model.dispose();
+  });
+
   test('restore rejects identity changes and refreshes pen geometry without edits', () {
     final pen = PenStrokeModel(_penDocument(1).elements.single as PenElementData);
     var edits = 0;
     pen.documentChanges.addListener(() => edits++);
     final path = pen.path;
-    final snapshot = pen.data.copy()..width = 20;
+    final snapshot = pen.data.copyWith(width: 20);
     pen.restoreData(snapshot);
     expect(pen.path, isNot(same(path)));
     expect(pen.path.getBounds(), isNot(path.getBounds()));
     expect(edits, 0);
-    expect(() => pen.restoreData(snapshot.copy(id: 'other')), throwsArgumentError);
+    expect(() => pen.restoreData(snapshot.copyWith(id: 'other')), throwsArgumentError);
     expect(pen.data, same(snapshot));
     pen.dispose();
   });
@@ -597,7 +642,7 @@ void main() {
             start: const Offset(150, 250),
             controls: const [Offset(200, 250)],
             end: const Offset(250, 250),
-            color: 0xff000000,
+            color: const Color(0xff000000),
             strokeStyle: ArrowStrokeStyle.solid,
             strokeWidth: 3,
           ),
@@ -791,7 +836,9 @@ void main() {
   });
 
   testWidgets('code background choices persist as individual undo steps', (tester) async {
-    final store = TestCanvasDocumentStore(_codeDocument()..elements.first.autoArrange = false);
+    final store = TestCanvasDocumentStore(
+      _codeDocument().withElements((elements) => elements[0] = elements[0].copyWith(autoArrange: false)),
+    );
     await pumpCanvas(tester, store);
     CodeBlockModel model() => tester
         .widgetList<CodeTool>(find.byType(CodeTool))
@@ -910,7 +957,7 @@ CanvasDocument _penDocument(int count) => CanvasDocument(
         ),
         size: const Size(40, 40),
         hitSlop: 6,
-        color: 0xff000000,
+        color: const Color(0xff000000),
         width: 4,
         points: const [
           PenPointData(Offset(4, 4), pressure: 1),
@@ -931,7 +978,7 @@ CanvasDocument _textDocument() => CanvasDocument(
       markdown: 'original',
       style: const TextNodeStyle(
         fontFamily: 'Inter',
-        color: '#201C1A',
+        color: Color(0xff201C1A),
       ),
     ),
   ],

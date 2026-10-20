@@ -2,7 +2,6 @@
 // Exercises settings through the root app without changing canvas content.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
 import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
@@ -127,7 +126,7 @@ void main() {
             width: 420,
             height: 108,
             markdown: 'Fixed content color',
-            style: const TextNodeStyle(fontFamily: 'Source Serif 4', color: '#201C1A'),
+            style: const TextNodeStyle(fontFamily: 'Source Serif 4', color: Color(0xff201C1A)),
           ),
           TextElementData(
             id: 'theme-color',
@@ -204,7 +203,7 @@ void main() {
             width: 420,
             height: 108,
             markdown: 'Content',
-            style: const TextNodeStyle(fontFamily: 'Source Serif 4', color: '#201C1A'),
+            style: const TextNodeStyle(fontFamily: 'Source Serif 4', color: Color(0xff201C1A)),
           ),
         ],
       ),

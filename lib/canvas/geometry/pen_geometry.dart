@@ -1,21 +1,24 @@
 // Defines raw pen strokes, smoothed paths, hit padding, and canvas positioning.
 // Used by pen sampling, persisted stroke models, rendering, and hit testing.
 
-part of 'pen_tool.dart';
+import 'dart:ui';
+
+import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/geometry/hit_test.dart';
+import 'package:perfect_freehand/perfect_freehand.dart' as pf;
 
 // ---------- Types and geometry ----------
 
 /// Carries sampled screen-space points with their committed pen options.
-/// Produced by [PenTool] and positioned by the canvas editor.
+/// Produced by the pen tool and positioned by the canvas editor.
 typedef RawPenStroke = ({
   List<PenPointData> points,
-  int color,
+  Color color,
   double width,
   double streamline,
 });
 
 const _strokeHitSlop = 6.0;
-const _minimumPointDistanceSquared = 4.0;
 
 /// Builds the filled freehand outline for sampled pen points.
 /// Used by live previews and persisted stroke rendering.
@@ -88,4 +91,29 @@ PenElementData positionStroke(
     width: stroke.width / canvasScale,
     streamline: stroke.streamline,
   );
+}
+
+// ---------- Hit testing ----------
+
+bool hitTestPenStroke(
+  Offset position, {
+  required List<PenPointData> points,
+  required double width,
+  required double hitSlop,
+}) {
+  final radiusSquared = (width + hitSlop) * (width + hitSlop);
+  if (points.length == 1) {
+    return (position - points.single.position).distanceSquared <= radiusSquared;
+  }
+  for (var index = 1; index < points.length; index++) {
+    if (distanceToSegmentSquared(
+          position,
+          points[index - 1].position,
+          points[index].position,
+        ) <=
+        radiusSquared) {
+      return true;
+    }
+  }
+  return false;
 }

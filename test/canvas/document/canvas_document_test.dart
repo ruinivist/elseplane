@@ -5,8 +5,6 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_background.dart';
-import 'package:elseplane/canvas/tools/code/code_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -25,16 +23,16 @@ void main() {
         kind: ShapeKind.rectangle,
         position: Offset.zero,
         size: const Size.square(80),
-        strokeColor: 0xff000000,
+        strokeColor: const Color(0xff000000),
         fillColor: null,
         strokeWidth: 2,
       ).toJson(),
     ];
     for (final fixture in fixtures) {
-      final element = CanvasElementData.fromJson(fixture);
+      var element = CanvasElementData.fromJson(fixture);
       expect(element.autoArrange, isTrue);
-      element.autoArrange = false;
-      expect(element.copy(id: 'copy').autoArrange, isFalse);
+      element = element.copyWith(autoArrange: false);
+      expect(element.copyWith(id: 'copy').autoArrange, isFalse);
       expect(CanvasElementData.fromJson(element.toJson()).autoArrange, isFalse);
       expect(
         () => CanvasElementData.fromJson({...fixture, 'autoArrange': 'yes'}),
@@ -53,7 +51,7 @@ void main() {
           start: const Offset(10, 20),
           controls: const [Offset(40, 5), Offset(60, 40)],
           end: const Offset(80, 60),
-          color: 0xffdc3f3f,
+          color: const Color(0xffdc3f3f),
           strokeStyle: ArrowStrokeStyle.dashed,
           strokeWidth: 3,
         ),
@@ -66,7 +64,7 @@ void main() {
           rotation: math.pi * 3,
           style: const TextNodeStyle(
             fontFamily: 'Inter',
-            color: '#201C1A',
+            color: Color(0xff201C1A),
             background: BlockBackgroundKind.transparent,
           ),
         ),
@@ -75,7 +73,7 @@ void main() {
           position: const Offset(-40, 30),
           size: const Size(180, 90),
           hitSlop: 6,
-          color: 0xff000000,
+          color: const Color(0xff000000),
           width: 3,
           streamline: 0.75,
           points: const [
@@ -104,8 +102,8 @@ void main() {
           kind: ShapeKind.ellipse,
           position: const Offset(300, 120),
           size: const Size(180, 100),
-          strokeColor: 0xff2f6fde,
-          fillColor: 0xffffc936,
+          strokeColor: const Color(0xff2f6fde),
+          fillColor: const Color(0xffffc936),
           strokeWidth: 3,
         ),
       ],
@@ -139,7 +137,7 @@ void main() {
     expect(node.rotation, math.pi * 3);
     expect(node.markdown, source);
     expect(node.style.fontFamily, 'Inter');
-    expect(node.style.color, '#201C1A');
+    expect(node.style.color, const Color(0xff201C1A));
     expect(node.style.background, BlockBackgroundKind.transparent);
 
     final pen = elements[2] as PenElementData;
@@ -167,28 +165,99 @@ void main() {
     expect(shape.kind, ShapeKind.ellipse);
     expect(shape.position, const Offset(300, 120));
     expect(shape.size, const Size(180, 100));
-    expect(shape.strokeColor, 0xff2f6fde);
-    expect(shape.fillColor, 0xffffc936);
+    expect(shape.strokeColor, const Color(0xff2f6fde));
+    expect(shape.fillColor, const Color(0xffffc936));
     expect(shape.strokeWidth, 3);
 
     final arrow = elements[0] as ArrowElementData;
     expect(arrow.start, const Offset(10, 20));
     expect(arrow.controls, const [Offset(40, 5), Offset(60, 40)]);
     expect(arrow.end, const Offset(80, 60));
-    expect(arrow.color, 0xffdc3f3f);
+    expect(arrow.color, const Color(0xffdc3f3f));
     expect(arrow.strokeStyle, ArrowStrokeStyle.dashed);
     expect(arrow.strokeWidth, 3);
 
-    final snapshot = document.copy();
+    final snapshot = document.copyWith();
     final copiedArrow = snapshot.elements.first as ArrowElementData;
-    expect(copiedArrow.controls, isNot(same(arrow.controls)));
-    copiedArrow.controls[0] = Offset.zero;
-    expect(arrow.controls.first, const Offset(40, 5));
-    expect(snapshot.elements, isNot(same(document.elements)));
+    expect(copiedArrow, same(document.elements.first));
+    expect(() => copiedArrow.controls[0] = Offset.zero, throwsUnsupportedError);
+    expect(snapshot.elements.clear, throwsUnsupportedError);
     expect(
       (snapshot.elements[2] as PenElementData).points,
-      isNot(same((document.elements[2] as PenElementData).points)),
+      same((document.elements[2] as PenElementData).points),
     );
+  });
+
+  test('snapshots freeze incoming collections and share unchanged immutable values', () {
+    final controls = [const Offset(40, 5)];
+    final arrow = ArrowElementData(
+      id: 'arrow',
+      start: Offset.zero,
+      controls: controls,
+      end: const Offset(80, 60),
+      color: const Color(0xff123456),
+      strokeStyle: ArrowStrokeStyle.solid,
+      strokeWidth: 2,
+    );
+    final points = [const PenPointData(Offset.zero, pressure: 0.5)];
+    final pen = PenElementData(
+      id: 'pen',
+      position: Offset.zero,
+      size: const Size(20, 20),
+      hitSlop: 6,
+      points: points,
+      color: const Color(0xff123456),
+      width: 2,
+    );
+    final elements = <CanvasElementData>[arrow, pen];
+    final document = CanvasDocument(background: CanvasBackgroundKind.plain, elements: elements);
+    controls.clear();
+    points.clear();
+    elements.clear();
+    expect(document.elements, [arrow, pen]);
+    expect(arrow.controls, [const Offset(40, 5)]);
+    expect(pen.points, hasLength(1));
+    expect(pen.points.clear, throwsUnsupportedError);
+    expect(arrow.copyWith(color: const Color(0xffabcdef)).controls, same(arrow.controls));
+    expect(pen.copyWith(position: const Offset(10, 10)).points, same(pen.points));
+    final replacement = [const Offset(20, 20)];
+    final changed = arrow.copyWith(controls: replacement);
+    replacement.clear();
+    expect(changed.controls, [const Offset(20, 20)]);
+    expect(arrow.controls, [const Offset(40, 5)]);
+    final next = <CanvasElementData>[changed];
+    final snapshot = document.copyWith(elements: next);
+    next.clear();
+    expect(snapshot.elements, [changed]);
+    expect(document.elements, [arrow, pen]);
+  });
+
+  test('nullable replacements can clear text color, height, and shape fill', () {
+    const style = TextNodeStyle(fontFamily: 'Inter', color: Color(0xff123456));
+    final text = TextElementData.fromJson(_encodedText());
+    final shape = ShapeElementData(
+      id: 'shape',
+      kind: ShapeKind.rectangle,
+      position: Offset.zero,
+      size: const Size(80, 80),
+      strokeColor: const Color(0xff000000),
+      fillColor: const Color(0xff123456),
+      strokeWidth: 2,
+    );
+    expect(style.copyWith(clearColor: true).color, isNull);
+    expect(style.copyWith().color, style.color);
+    expect(text.copyWith(clearHeight: true).height, isNull);
+    expect(text.copyWith().height, text.height);
+    expect(shape.copyWith(clearFillColor: true).fillColor, isNull);
+    expect(shape.copyWith().fillColor, shape.fillColor);
+  });
+
+  test('saved font names round-trip independently of the available catalog', () {
+    const style = TextNodeStyle(fontFamily: 'Unavailable saved family');
+    expect(TextNodeStyle.fromJson(style.toJson()).fontFamily, style.fontFamily);
+    for (final family in ['', '   ']) {
+      expect(() => TextNodeStyle.fromJson({'fontFamily': family, 'background': 'card'}), throwsFormatException);
+    }
   });
 
   test('unknown document versions are rejected', () {
@@ -213,14 +282,14 @@ void main() {
       expect(restored.copyWith().toJson(), style.toJson());
       expect(restored.copyWith(background: BlockBackgroundKind.transparent).color, isNull);
     }
-    final custom = style.copyWith(color: '#ABCDEF');
+    final custom = style.copyWith(color: const Color(0xffABCDEF));
     expect(TextNodeStyle.fromJson(custom.toJson()).color, custom.color);
     expect(custom.copyWith(background: BlockBackgroundKind.card).color, custom.color);
     expect(() => TextNodeStyle.fromJson(style.toJson()..['color'] = 123), throwsFormatException);
   });
 
   test('text backgrounds round-trip and reject invalid or legacy styles', () {
-    const defaultStyle = TextNodeStyle(fontFamily: 'Inter', color: '#201C1A');
+    const defaultStyle = TextNodeStyle(fontFamily: 'Inter', color: Color(0xff201C1A));
     expect(defaultStyle.background, BlockBackgroundKind.card);
     for (final background in BlockBackgroundKind.values) {
       final style = defaultStyle.copyWith(background: background);
@@ -258,13 +327,13 @@ void main() {
   });
 
   test('code backgrounds default to card and survive serialization and copying', () {
-    final code = CodeElementData.fromJson(_encodedCode());
+    var code = CodeElementData.fromJson(_encodedCode());
     expect(code.background, BlockBackgroundKind.card);
     for (final background in BlockBackgroundKind.values) {
-      code.background = background;
+      code = code.copyWith(background: background);
       final restored = CodeElementData.fromJson(jsonDecode(jsonEncode(code.toJson())));
       expect(restored.background, background);
-      expect(code.copy(id: 'copy').background, background);
+      expect(code.copyWith(id: 'copy').background, background);
     }
     for (final invalid in ['unsupported', true, 1]) {
       expect(
@@ -459,7 +528,7 @@ void main() {
     );
     expect(
       () => CanvasDocument.fromJson(
-        _document(elements: [_encodedText(fontFamily: 'Arial')]),
+        _document(elements: [_encodedText(fontFamily: '   ')]),
       ),
       throwsA(isA<FormatException>()),
     );
@@ -572,7 +641,7 @@ Map<String, Object?> _document({
 Map<String, Object?> _encodedText({
   String id = 'text-1',
   Map<String, Object?> position = const {'x': 0.0, 'y': 0.0},
-  Object width = textNodeDefaultWidth,
+  Object width = 420.0,
   Object? height,
   Object rotation = 0.0,
   String fontFamily = 'Source Serif 4',
@@ -608,7 +677,7 @@ Map<String, Object?> _encodedCode({String id = 'code-1', Object rotation = 0.0})
   'rotation': rotation,
 };
 
-Map<String, Object?> _encodedMedia({Object width = mediaNodeDefaultWidth, Object rotation = 0.0}) => {
+Map<String, Object?> _encodedMedia({Object width = 480.0, Object rotation = 0.0}) => {
   'id': 'media',
   'type': 'media',
   'position': {'x': 0.0, 'y': 0.0},
