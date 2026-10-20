@@ -1,6 +1,7 @@
 # Project Guidance
 
 - This is an infinite canvas project under active development.
+- Read [the target architecture](docs/ARCHITECTURE.md) before structural changes; follow [the refactor roadmap](docs/REFACTOR_PLAN.md) when migrating existing code. The architecture describes the intended rewrite, not the current implementation.
 - Backward compatibility is not required yet.
 - Prefer globally coherent, root-cause changes over local patches, even when they require breaking changes.
 - We own `infinite_lazy_grid`. When a change is better suited to that library, suggest making it there.
