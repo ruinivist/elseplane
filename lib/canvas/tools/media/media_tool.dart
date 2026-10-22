@@ -6,11 +6,11 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/icon_drag.dart';
 import 'package:elseplane/ui/common/surface.dart';
@@ -96,7 +96,13 @@ class _MediaToolState extends State<MediaTool> {
     }
   }
 
+  void _pasteFromClipboard() {
+    final clipboard = SystemClipboard.instance;
+    if (clipboard != null) unawaited(_paste(clipboard.read()));
+  }
+
   Future<void> _pickImage() async {
+    widget.onActivate();
     final model = widget.model;
     final generation = model.asyncEditGeneration;
     try {
@@ -168,6 +174,7 @@ class _MediaToolState extends State<MediaTool> {
                                       model: model,
                                       onActivate: widget.onActivate,
                                       onPickImage: _pickImage,
+                                      onPaste: _pasteFromClipboard,
                                     ),
                                   ),
                                 )
@@ -197,6 +204,7 @@ class _MediaToolState extends State<MediaTool> {
                     onActivate: widget.onActivate,
                     onMove: widget.onMove,
                     onPickImage: _pickImage,
+                    onPaste: _pasteFromClipboard,
                   ),
           ),
         );

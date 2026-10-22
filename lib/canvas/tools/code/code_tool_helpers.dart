@@ -41,11 +41,13 @@ class _CodeTitleTab extends StatelessWidget {
   const _CodeTitleTab({
     required this.model,
     required this.editing,
+    required this.onPaste,
     this.onInteract,
   });
 
   final CodeBlockModel model;
   final bool editing;
+  final VoidCallback onPaste;
   final VoidCallback? onInteract;
 
   @override
@@ -100,23 +102,34 @@ class _CodeTitleTab extends StatelessWidget {
                 excluding: !editing,
                 child: IgnorePointer(
                   ignoring: !editing,
-                  child: TextFormField(
-                    key: ValueKey(editing ? 'code-title-input' : 'code-title-text'),
-                    contextMenuBuilder: null,
-                    onTap: onInteract,
-                    onTapAlwaysCalled: true,
-                    controller: model.titleController,
-                    style: style,
-                    cursorColor: colors.accent,
-                    readOnly: !editing,
-                    canRequestFocus: editing,
-                    showCursor: editing,
-                    enableInteractiveSelection: editing,
-                    decoration: InputDecoration(
-                      hintText: 'Untitled',
-                      hintStyle: style.copyWith(color: colors.textMuted),
-                      border: InputBorder.none,
-                      isCollapsed: true,
+                  child: Actions(
+                    actions: {
+                      PasteTextIntent: CallbackAction<PasteTextIntent>(
+                        onInvoke: (_) {
+                          if (editing) onPaste();
+                          return null;
+                        },
+                      ),
+                    },
+                    child: TextFormField(
+                      key: ValueKey(editing ? 'code-title-input' : 'code-title-text'),
+                      contextMenuBuilder: null,
+                      onTap: onInteract,
+                      onTapAlwaysCalled: true,
+                      controller: model.titleController,
+                      focusNode: model.titleFocusNode,
+                      style: style,
+                      cursorColor: colors.accent,
+                      readOnly: !editing,
+                      canRequestFocus: editing,
+                      showCursor: editing,
+                      enableInteractiveSelection: editing,
+                      decoration: InputDecoration(
+                        hintText: 'Untitled',
+                        hintStyle: style.copyWith(color: colors.textMuted),
+                        border: InputBorder.none,
+                        isCollapsed: true,
+                      ),
                     ),
                   ),
                 ),

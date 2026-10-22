@@ -3,7 +3,7 @@
 
 import 'dart:convert';
 
-import 'package:elseplane/canvas/persistence/canvas_project.dart';
+import 'package:elseplane/library/transfer/canvas_project.dart';
 import 'package:flutter/foundation.dart';
 import 'package:json_annotation/json_annotation.dart';
 

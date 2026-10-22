@@ -4,10 +4,10 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:flutter/material.dart';
 import 'package:scroll_animator/scroll_animator.dart';
 import 'package:super_clipboard/super_clipboard.dart';
@@ -57,6 +57,7 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
 
   set editing(bool value) {
     if (_editing == value) return;
+    if (!value) invalidatePendingEdits();
     _editing = value;
     notifyListeners();
   }
@@ -114,11 +115,20 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
       validateAttachmentSize(bytes.length, 'Image exceeds 10 MiB');
       final path = 'attachments/${const Uuid().v4()}.$extension';
       if (generation != asyncEditGeneration) return;
-      await store.write(path, bytes);
-      if (generation != asyncEditGeneration) {
-        await store.delete(path);
-        return;
+      var written = false;
+      try {
+        await store.write(path, bytes);
+        written = true;
+      } finally {
+        if (!written || generation != asyncEditGeneration) {
+          try {
+            await store.delete(path);
+          } on Object {
+            // Cleanup cannot revive a canceled edit or hide the write failure.
+          }
+        }
       }
+      if (generation != asyncEditGeneration) return;
       _insertText('![pasted image]($path)');
     } on Object {
       if (generation != asyncEditGeneration) return;

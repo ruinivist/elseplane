@@ -63,7 +63,7 @@ void main() {
       ElseplaneApp(
         initialThemeMode: ThemeMode.light,
         initialSurfaceStyle: SurfaceStyle.solid,
-        documentStore: TestCanvasDocumentStore(),
+        libraryStore: TestLibraryStore(),
       ),
     );
     await tester.pumpAndSettle();
@@ -103,7 +103,7 @@ void main() {
     final unavailable = _FailingPreferences(() => true);
     expect(await loadThemeMode(unavailable), ThemeMode.dark);
     expect(await loadSurfaceStyle(unavailable), SurfaceStyle.glass);
-    await tester.pumpWidget(ElseplaneApp(documentStore: TestCanvasDocumentStore()));
+    await tester.pumpWidget(ElseplaneApp(libraryStore: TestLibraryStore()));
     await tester.pumpAndSettle();
     final context = tester.element(find.byType(CanvasPage));
     expect(Theme.of(context).brightness, Brightness.dark);
@@ -116,7 +116,7 @@ void main() {
     await preferences.setString(themePreferenceKey, 'unknown');
     expect(await loadThemeMode(preferences), ThemeMode.dark);
 
-    final store = TestCanvasDocumentStore(
+    final store = TestLibraryStore(
       CanvasDocument(
         background: CanvasBackgroundKind.dotGrid,
         elements: [
@@ -144,7 +144,7 @@ void main() {
         initialThemeMode: ThemeMode.light,
         initialSurfaceStyle: SurfaceStyle.solid,
         preferences: preferences,
-        documentStore: store,
+        libraryStore: store,
       ),
     );
     await tester.pumpAndSettle();
@@ -178,7 +178,7 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(
-      ElseplaneApp(initialThemeMode: await loadThemeMode(preferences), preferences: preferences, documentStore: store),
+      ElseplaneApp(initialThemeMode: await loadThemeMode(preferences), preferences: preferences, libraryStore: store),
     );
     await tester.pumpAndSettle();
     expect(Theme.of(tester.element(find.byType(CanvasPage))).brightness, Brightness.dark);
@@ -193,7 +193,7 @@ void main() {
     expect(await loadSurfaceStyle(preferences), SurfaceStyle.glass);
     await preferences.setString(surfaceStylePreferenceKey, 'unknown');
     expect(await loadSurfaceStyle(preferences), SurfaceStyle.glass);
-    final store = TestCanvasDocumentStore(
+    final store = TestLibraryStore(
       CanvasDocument(
         background: CanvasBackgroundKind.dotGrid,
         elements: [
@@ -213,7 +213,7 @@ void main() {
         initialThemeMode: ThemeMode.light,
         initialSurfaceStyle: SurfaceStyle.solid,
         preferences: preferences,
-        documentStore: store,
+        libraryStore: store,
       ),
     );
     await tester.pumpAndSettle();
@@ -241,7 +241,7 @@ void main() {
       ElseplaneApp(
         initialSurfaceStyle: await loadSurfaceStyle(preferences),
         preferences: preferences,
-        documentStore: store,
+        libraryStore: store,
       ),
     );
     await tester.pumpAndSettle();
@@ -258,8 +258,8 @@ void main() {
       tester.view.physicalSize = const Size(1600, 1200);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      final store = TestCanvasDocumentStore();
-      await tester.pumpWidget(ElseplaneApp(documentStore: store));
+      final store = TestLibraryStore();
+      await tester.pumpWidget(ElseplaneApp(libraryStore: store));
       await tester.pumpAndSettle();
 
       Future<void> place(Offset position) async {
@@ -321,7 +321,7 @@ void main() {
         initialThemeMode: ThemeMode.light,
         initialSurfaceStyle: SurfaceStyle.solid,
         preferences: preferences,
-        documentStore: TestCanvasDocumentStore(),
+        libraryStore: TestLibraryStore(),
       ),
     );
     await tester.pumpAndSettle();
@@ -343,7 +343,7 @@ void main() {
         initialThemeMode: ThemeMode.light,
         initialSurfaceStyle: SurfaceStyle.solid,
         preferences: preferences,
-        documentStore: TestCanvasDocumentStore(),
+        libraryStore: TestLibraryStore(),
       ),
     );
     await tester.pumpAndSettle();

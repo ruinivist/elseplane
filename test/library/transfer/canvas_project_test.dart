@@ -4,13 +4,13 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
-import 'package:elseplane/canvas/persistence/canvas_project.dart';
+import 'package:elseplane/library/transfer/canvas_project.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../test_helpers.dart';
+import '../../canvas/test_helpers.dart';
 
 // ---------- Tests ----------
 
@@ -75,17 +75,14 @@ attachments/00000000-0000-4000-8000-000000000000.png
     expect(store.reads, 1);
   });
 
-  test('import remaps attachments shared with other canvases', () {
+  test('rebasing replaces matching markdown and media references without mutating the source', () {
     final document = _document(markdown: '![image](${_path(0)})')
         .withElements((elements) => elements.add(_media(_path(0))));
-    final project = CanvasProject(document: document, attachments: {_path(0): onePixelPngBytes});
-    final rebased = rebaseCanvasProjectAttachments(project, {_path(0)});
-    final newPath = rebased.attachments.keys.single;
-    expect(newPath, isNot(_path(0)));
-    expect(attachmentPathPattern.hasMatch(newPath), isTrue);
-    expect(canvasAttachmentPaths(rebased.document), {newPath});
-    expect(rebased.attachments[newPath], onePixelPngBytes);
+    final rebased = rebaseCanvasDocumentAttachments(document, {_path(0): _path(1)});
+    expect(canvasAttachmentPaths(rebased), {_path(1)});
     expect(canvasAttachmentPaths(document), {_path(0)});
+    expect(rebased.background, document.background);
+    expect(rebased.elements.map((element) => element.id), document.elements.map((element) => element.id));
   });
 
   test('missing stored attachments fail export', () async {

@@ -1,6 +1,7 @@
 // Provides minimal, syntax-highlighted code blocks with inline editing controls.
 // Used by the canvas code tool and element renderer.
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
@@ -14,6 +15,7 @@ import 'package:elseplane/ui/common/pointer_scroll_boundary.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:scroll_animator/scroll_animator.dart';
 
@@ -59,6 +61,15 @@ class _CodeToolState extends State<CodeTool> {
   double _previewDragSlop = 0;
   bool _previewDragging = false;
   bool _previewEditing = false;
+
+  Future<void> _paste({bool intoTitle = false}) async {
+    try {
+      await widget.model.paste(intoTitle: intoTitle);
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not paste code')));
+    }
+  }
 
   void _handlePreviewPointerDown(PointerDownEvent event) {
     if (widget.canHandlePointer?.call(event) == false) return;
@@ -166,7 +177,12 @@ class _CodeToolState extends State<CodeTool> {
         final card = model.background == BlockBackgroundKind.card;
         final editing = model.active;
         final showTitle = editing || model.title.trim().isNotEmpty;
-        final titleTab = _CodeTitleTab(model: model, editing: editing, onInteract: widget.onInteract);
+        final titleTab = _CodeTitleTab(
+          model: model,
+          editing: editing,
+          onInteract: widget.onInteract,
+          onPaste: () => unawaited(_paste(intoTitle: true)),
+        );
         final codeBody = Stack(
           children: [
             Positioned.fill(
@@ -178,6 +194,16 @@ class _CodeToolState extends State<CodeTool> {
                     focusNode: model.focusNode,
                     autofocus: false,
                     readOnly: !editing,
+                    shortcutOverrideActions: editing
+                        ? {
+                            CodeShortcutPasteIntent: CallbackAction<CodeShortcutPasteIntent>(
+                              onInvoke: (_) {
+                                if (!model.controller.isComposing) unawaited(_paste());
+                                return null;
+                              },
+                            ),
+                          }
+                        : null,
                     showCursorWhenReadOnly: false,
                     padding: const EdgeInsets.fromLTRB(
                       _codeEditorPadding,

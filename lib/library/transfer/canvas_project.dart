@@ -3,12 +3,11 @@
 
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:ui';
 
+import 'package:elseplane/attachments/attachment_store.dart';
+import 'package:elseplane/attachments/image_import.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:markdown/markdown.dart' as md;
-import 'package:uuid/uuid.dart';
 
 // ---------- Limits ----------
 
@@ -52,22 +51,6 @@ Set<String> canvasAttachmentPaths(CanvasDocument document) {
 }
 
 // ---------- Encoding and decoding ----------
-
-/// Gives imported images fresh paths when another canvas already uses them.
-/// Prevents project imports from replacing another saved canvas's image bytes.
-CanvasProject rebaseCanvasProjectAttachments(CanvasProject project, Set<String> reservedPaths) {
-  final replacements = <String, String>{
-    for (final path in project.attachments.keys)
-      if (reservedPaths.contains(path)) path: 'attachments/${const Uuid().v4()}.${path.split('.').last}',
-  };
-  if (replacements.isEmpty) return project;
-  return CanvasProject(
-    document: rebaseCanvasDocumentAttachments(project.document, replacements),
-    attachments: {
-      for (final entry in project.attachments.entries) replacements[entry.key] ?? entry.key: entry.value,
-    },
-  );
-}
 
 CanvasDocument rebaseCanvasDocumentAttachments(CanvasDocument source, Map<String, String> replacements) {
   return source.copyWith(
@@ -220,20 +203,4 @@ Map<String, Object?> _jsonMap(Object? value, String field) {
     result[key] = entry.value;
   }
   return result;
-}
-
-Future<void> validateCanvasAttachment(String path, Uint8List bytes) async {
-  if (!attachmentPathPattern.hasMatch(path)) throw FormatException('Invalid attachment path: $path');
-  validateAttachmentSize(bytes.length, 'Attachment exceeds 10 MiB: $path');
-  ImmutableBuffer? buffer;
-  ImageDescriptor? descriptor;
-  try {
-    buffer = await ImmutableBuffer.fromUint8List(bytes);
-    descriptor = await ImageDescriptor.encoded(buffer);
-  } catch (error) {
-    throw FormatException('Invalid encoded image: $path ($error)');
-  } finally {
-    descriptor?.dispose();
-    buffer?.dispose();
-  }
 }

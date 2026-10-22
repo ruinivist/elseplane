@@ -3,8 +3,9 @@
 
 import 'dart:async';
 
+import 'package:elseplane/attachments/attachment_store.dart';
+import 'package:elseplane/attachments/attachment_store_web.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/tools/media/media_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_block_model.dart';
 import 'package:flutter/foundation.dart';
@@ -12,7 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 
-import '../test_helpers.dart';
+import '../canvas/test_helpers.dart';
 
 // ---------- Tests ----------
 
@@ -177,15 +178,15 @@ void main() {
     const path = 'attachments/00000000-0000-4000-8000-000000000000.webp';
     final bytes = Uint8List.fromList(<int>[4, 5, 6]);
 
-    await createAttachmentStore().write(path, bytes);
+    await PlatformAttachmentStore().write(path, bytes);
 
-    expect(await createAttachmentStore().read(path), bytes);
+    expect(await PlatformAttachmentStore().read(path), bytes);
   });
 
   test('web deletion removes only its attachment and tolerates missing files', () async {
     const path = 'attachments/22222222-2222-4222-8222-222222222222.png';
     const otherPath = 'attachments/33333333-3333-4333-8333-333333333333.png';
-    final store = createAttachmentStore();
+    final store = PlatformAttachmentStore();
     await store.write(path, onePixelPngBytes);
     await store.write(otherPath, onePixelPngBytes);
 
@@ -197,7 +198,7 @@ void main() {
   });
 
   test('attachment deletion rejects invalid paths', () async {
-    await expectLater(createAttachmentStore().delete('../attachments/image.png'), throwsFormatException);
+    await expectLater(PlatformAttachmentStore().delete('../attachments/image.png'), throwsFormatException);
   });
 
   test('optional attachment reads return present bytes or null', () async {
@@ -216,7 +217,7 @@ void main() {
 
   test('optional attachment reads still validate paths', () async {
     await expectLater(
-      createAttachmentStore().readIfExists('not-an-attachment'),
+      PlatformAttachmentStore().readIfExists('not-an-attachment'),
       throwsFormatException,
     );
   });

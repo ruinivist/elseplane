@@ -5,14 +5,14 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/persistence/canvas_library.dart';
-import 'package:elseplane/canvas/persistence/canvas_library_archive.dart';
-import 'package:elseplane/canvas/persistence/canvas_project.dart';
-import 'package:elseplane/canvas/persistence/canvas_project_files.dart';
 import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/library/canvas_library.dart';
+import 'package:elseplane/library/transfer/canvas_library_archive.dart';
+import 'package:elseplane/library/transfer/canvas_project.dart';
+import 'package:elseplane/library/transfer/canvas_project_files.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,7 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
-import '../test_helpers.dart';
+import '../canvas/test_helpers.dart';
 
 // ---------- Tests ----------
 
@@ -29,13 +29,13 @@ void main() {
 
   testWidgets('exports the current durable project', (tester) async {
     final document = _document(markdown: '![image]($_path0)');
-    final documentStore = _FakeDocumentStore(document);
+    final libraryStore = _FakeLibraryStore(document);
     final attachments = _FakeAttachmentStore({_path0: onePixelPngBytes});
     final files = _FakeProjectFiles();
 
     await pumpElseplaneApp(
       tester,
-      documentStore: documentStore,
+      libraryStore: libraryStore,
       attachmentStore: attachments,
       projectFiles: files,
     );
@@ -52,9 +52,8 @@ void main() {
   });
 
   testWidgets('backs up the full library including live edits', (tester) async {
-    final store = _FakeDocumentStore(_document(markdown: 'before'));
+    final store = _FakeLibraryStore(_document(markdown: 'before'));
     final files = _FakeProjectFiles();
-    await pumpElseplaneApp(tester, documentStore: store, attachmentStore: _FakeAttachmentStore(), projectFiles: files);
     final current = store.library.current;
     store.library = CanvasLibrary(
       currentId: current.id,
@@ -69,6 +68,7 @@ void main() {
         ),
       ],
     );
+    await pumpElseplaneApp(tester, libraryStore: store, attachmentStore: _FakeAttachmentStore(), projectFiles: files);
     tester.widget<TextTool>(find.byType(TextTool)).model.insertPastedText(' changed');
     await tester.pump();
     await _openCanvasSettings(tester);
@@ -85,7 +85,7 @@ void main() {
   testWidgets('library restore asks before replacing and keeps old data on save failure', (tester) async {
     final oldDocument = _document(markdown: '![old]($_path0)');
     final attachments = _FakeAttachmentStore({_path0: onePixelPngBytes});
-    final store = _FakeDocumentStore(oldDocument);
+    final store = _FakeLibraryStore(oldDocument);
     final imported = CanvasLibrary(
       currentId: 'new',
       files: [
@@ -100,7 +100,7 @@ void main() {
     );
     final files = _FakeProjectFiles()
       ..opened = await encodeCanvasLibraryArchive(imported, _FakeAttachmentStore({_path0: _newBytes}));
-    await pumpElseplaneApp(tester, documentStore: store, attachmentStore: attachments, projectFiles: files);
+    await pumpElseplaneApp(tester, libraryStore: store, attachmentStore: attachments, projectFiles: files);
     final oldId = store.library.currentId;
     await _openCanvasSettings(tester);
 
@@ -138,7 +138,7 @@ void main() {
     final files = _FakeProjectFiles()..cancelOpen = true;
     await pumpElseplaneApp(
       tester,
-      documentStore: _FakeDocumentStore(_document(markdown: '')),
+      libraryStore: _FakeLibraryStore(_document(markdown: '')),
       attachmentStore: _FakeAttachmentStore(),
       projectFiles: files,
     );
@@ -159,10 +159,10 @@ void main() {
   });
 
   testWidgets('canceling canvas replacement keeps the active canvas', (tester) async {
-    final store = _FakeDocumentStore(_document(markdown: 'original'));
+    final store = _FakeLibraryStore(_document(markdown: 'original'));
     final files = _FakeProjectFiles()
       ..opened = await encodeCanvasProject(_document(markdown: 'replacement'), _FakeAttachmentStore());
-    await pumpElseplaneApp(tester, documentStore: store, attachmentStore: _FakeAttachmentStore(), projectFiles: files);
+    await pumpElseplaneApp(tester, libraryStore: store, attachmentStore: _FakeAttachmentStore(), projectFiles: files);
     await _openCanvasSettings(tester);
     await tester.tap(find.byKey(const ValueKey('canvas-import-button')));
     await tester.pumpAndSettle();
@@ -183,7 +183,7 @@ void main() {
       idSuffix: '-new',
     );
     final attachments = _FakeAttachmentStore({_path0: onePixelPngBytes});
-    final documentStore = _FakeDocumentStore(oldDocument);
+    final libraryStore = _FakeLibraryStore(oldDocument);
     final files = _FakeProjectFiles()
       ..opened = await encodeCanvasProject(
         newDocument,
@@ -192,7 +192,7 @@ void main() {
 
     await pumpElseplaneApp(
       tester,
-      documentStore: documentStore,
+      libraryStore: libraryStore,
       attachmentStore: attachments,
       projectFiles: files,
     );
@@ -215,8 +215,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Canvas imported'), findsOneWidget);
-    expect(documentStore.persisted?.toJson(), newDocument.toJson());
-    expect(attachments.files[_path0], _newBytes);
+    final newPath = canvasAttachmentPaths(libraryStore.persisted!).single;
+    expect(newPath, isNot(_path0));
+    expect(rebaseCanvasDocumentAttachments(libraryStore.persisted!, {newPath: _path0}).toJson(), newDocument.toJson());
+    expect(attachments.files[_path0], onePixelPngBytes);
+    expect(attachments.files[newPath], _newBytes);
     expect(_canvasController(tester).offset, offset);
     expect(_canvasController(tester).scale, scale);
     expect(find.byType(TextTool), findsOneWidget);
@@ -235,20 +238,20 @@ void main() {
     await _historyShortcut(tester, redo: true);
     expect(
       tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown,
-      '![new]($_path0)',
+      '![new]($newPath)',
     );
 
-    documentStore.initial = documentStore.persisted;
+    libraryStore.initial = libraryStore.persisted;
     await pumpElseplaneApp(
       tester,
-      documentStore: documentStore,
+      libraryStore: libraryStore,
       attachmentStore: attachments,
       projectFiles: files,
     );
     expect(find.byType(TextTool), findsOneWidget);
     expect(
       tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown,
-      '![new]($_path0)',
+      '![new]($newPath)',
     );
   });
 
@@ -266,7 +269,7 @@ void main() {
         idSuffix: '-new',
       );
       final attachments = _FakeAttachmentStore({_path0: onePixelPngBytes});
-      final documentStore = _FakeDocumentStore(oldDocument);
+      final libraryStore = _FakeLibraryStore(oldDocument);
       final files = _FakeProjectFiles()
         ..opened = await encodeCanvasProject(
           newDocument,
@@ -275,7 +278,7 @@ void main() {
 
       await pumpElseplaneApp(
         tester,
-        documentStore: documentStore,
+        libraryStore: libraryStore,
         attachmentStore: attachments,
         projectFiles: files,
       );
@@ -331,7 +334,7 @@ void main() {
       final oldDocument = _document(markdown: 'old');
       final newDocument = _document(markdown: 'imported', idSuffix: '-new');
       final attachments = _FakeAttachmentStore();
-      final documentStore = _FakeDocumentStore(oldDocument)..failSaves = true;
+      final libraryStore = _FakeLibraryStore(oldDocument)..failSaves = true;
       final files = _FakeProjectFiles()
         ..opened = await encodeCanvasProject(
           newDocument,
@@ -340,7 +343,7 @@ void main() {
 
       await pumpElseplaneApp(
         tester,
-        documentStore: documentStore,
+        libraryStore: libraryStore,
         attachmentStore: attachments,
         projectFiles: files,
       );
@@ -352,23 +355,23 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(files.writeCalls, 0);
-      expect(documentStore.saveCalls, greaterThan(0));
-      expect(documentStore.persisted, isNull);
+      expect(libraryStore.saveCalls, greaterThan(0));
+      expect(libraryStore.persisted, isNull);
       expect(
         tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown,
         'old dirty',
       );
 
-      documentStore.failSaves = false;
+      libraryStore.failSaves = false;
       await tester.tap(find.byTooltip('Close'));
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
-      expect(documentStore.persisted, isNotNull);
+      expect(libraryStore.persisted, isNotNull);
 
-      documentStore.initial = documentStore.persisted;
+      libraryStore.initial = libraryStore.persisted;
       await pumpElseplaneApp(
         tester,
-        documentStore: documentStore,
+        libraryStore: libraryStore,
         attachmentStore: attachments,
         projectFiles: files,
       );
@@ -379,7 +382,7 @@ void main() {
     },
   );
 
-  testWidgets('failed attachment and document commits roll back safely', (
+  testWidgets('failed attachment and metadata staging preserves existing data', (
     tester,
   ) async {
     final oldDocument = _document(markdown: '![old]($_path0)');
@@ -388,7 +391,7 @@ void main() {
       idSuffix: '-new',
     );
     final attachments = _FakeAttachmentStore({_path0: onePixelPngBytes});
-    final documentStore = _FakeDocumentStore(oldDocument)..failSaves = true;
+    final libraryStore = _FakeLibraryStore(oldDocument)..failSaves = true;
     final files = _FakeProjectFiles()
       ..opened = await encodeCanvasProject(
         newDocument,
@@ -397,7 +400,7 @@ void main() {
 
     await pumpElseplaneApp(
       tester,
-      documentStore: documentStore,
+      libraryStore: libraryStore,
       attachmentStore: attachments,
       projectFiles: files,
     );
@@ -408,7 +411,7 @@ void main() {
 
     expect(find.text('Could not import canvas'), findsOneWidget);
     expect(attachments.files[_path0], onePixelPngBytes);
-    expect(documentStore.persisted, isNull);
+    expect(libraryStore.persisted, isNull);
     expect(
       tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown,
       oldDocument.elements.whereType<TextElementData>().single.markdown,
@@ -420,14 +423,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Could not import canvas'), findsOneWidget);
     expect(attachments.files[_path0], onePixelPngBytes);
-    expect(documentStore.persisted, isNull);
+    expect(libraryStore.persisted, isNull);
 
-    documentStore.failSaves = false;
+    libraryStore.failSaves = false;
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
     tester.widget<TextTool>(find.byType(TextTool)).model.insertPastedText(' changed');
     await pumpPastSave(tester);
-    expect(documentStore.saveCalls, greaterThan(1));
+    expect(libraryStore.saveCalls, greaterThan(1));
   });
 
   testWidgets('malformed import and repeated transfer are ignored safely', (
@@ -436,7 +439,7 @@ void main() {
     final files = _FakeProjectFiles()..opened = Uint8List.fromList(utf8.encode('{"format":"wrong"}'));
     await pumpElseplaneApp(
       tester,
-      documentStore: _FakeDocumentStore(_document(markdown: 'unchanged')),
+      libraryStore: _FakeLibraryStore(_document(markdown: 'unchanged')),
       attachmentStore: _FakeAttachmentStore(),
       projectFiles: files,
     );
@@ -541,24 +544,18 @@ final _newBytes = Uint8List.fromList(
 
 // ---------- Test doubles ----------
 
-class _FakeDocumentStore extends TestCanvasDocumentStore {
-  _FakeDocumentStore(super.initial);
+class _FakeLibraryStore extends TestLibraryStore {
+  _FakeLibraryStore(super.initial);
 
   bool failSaves = false;
   bool failLibrarySaves = false;
   int saveCalls = 0;
 
   @override
-  Future<void> save(CanvasDocument document) async {
+  Future<void> save(CanvasLibrary snapshot) async {
     saveCalls++;
-    if (failSaves) throw StateError('save failed');
-    await super.save(document);
-  }
-
-  @override
-  Future<void> saveLibrary(CanvasLibrary next) async {
-    if (failLibrarySaves) throw StateError('library save failed');
-    await super.saveLibrary(next);
+    if (failSaves || failLibrarySaves) throw StateError('save failed');
+    await super.save(snapshot);
   }
 }
 

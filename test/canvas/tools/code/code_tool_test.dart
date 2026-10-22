@@ -1,6 +1,8 @@
 // Verifies code block backgrounds and distinguishes clicks from movement drags.
 // Exercises CodeTool rendering and editing without the persistence boundary.
 
+import 'dart:async';
+
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/theme/starless.dart';
@@ -8,10 +10,84 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:re_editor/re_editor.dart';
 
 void main() {
+  for (final intoTitle in [false, true]) {
+    for (final cancel in ['none', 'deactivate', 'restore', 'dispose']) {
+      testWidgets('${intoTitle ? 'title' : 'source'} paste respects $cancel', (tester) async {
+        final read = Completer<Map<String, Object>>();
+        _mockClipboardRead(() => read.future);
+        final model = _codeModel(source: 'old tail')
+          ..active = true
+          ..title = 'old tail';
+        model.controller.selection = _replacementSelection;
+        model.titleController.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
+        final paste = model.paste(intoTitle: intoTitle);
+        switch (cancel) {
+          case 'deactivate':
+            model
+              ..active = false
+              ..active = true;
+          case 'restore':
+            model.restoreData(model.data);
+          case 'dispose':
+            model.dispose();
+        }
+        read.complete({'text': 'NEW'});
+        await tester.pump();
+        await paste;
+        expect(intoTitle ? model.title : model.data.source, cancel == 'none' ? 'NEW tail' : 'old tail');
+        if (cancel != 'dispose') model.dispose();
+      });
+    }
+  }
+
+  testWidgets('pending code paste uses live content and selection after ordinary edits', (tester) async {
+    final read = Completer<Map<String, Object>>();
+    _mockClipboardRead(() => read.future);
+    final model = _codeModel(source: 'a long original line\nand another line');
+    addTearDown(model.dispose);
+    final controller = model.controller;
+    final paste = model.paste();
+    controller
+      ..text = 'short'
+      ..selection = const CodeLineSelection(baseIndex: 0, baseOffset: 1, extentIndex: 0, extentOffset: 3);
+    read.complete({'text': 'NEW'});
+    await tester.pump();
+    await paste;
+    expect(model.data.source, 'sNEWrt');
+    expect(model.controller, same(controller));
+  });
+
+  for (final canceled in [false, true]) {
+    testWidgets(
+      'code paste ${canceled ? 'ignores a canceled failure' : 'reports a current failure and permits retry'}',
+      (tester) async {
+        final read = Completer<Map<String, Object>>();
+        _mockClipboardRead(() => read.future);
+        final model = _codeModel(source: 'old tail')..active = true;
+        addTearDown(model.dispose);
+        final paste = model.paste();
+        final checked = canceled ? paste : expectLater(paste, throwsA(isA<PlatformException>()));
+        if (canceled) model.active = false;
+        read.completeError(PlatformException(code: 'clipboard-denied'));
+        await tester.pump();
+        await checked;
+        expect(model.data.source, 'old tail');
+        model.active = true;
+        _mockClipboardRead(() async => {'text': 'NEW'});
+        model.controller.selection = _replacementSelection;
+        final retry = model.paste();
+        await tester.pump();
+        await retry;
+        expect(model.data.source, 'NEW tail');
+      },
+    );
+  }
+
   test('title changes publish the synchronized controller and value once', () {
     final model = _codeModel();
     addTearDown(model.dispose);
@@ -297,6 +373,23 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
     });
   }
+}
+
+// ---------- Fixtures ----------
+
+const _replacementSelection = CodeLineSelection(baseIndex: 0, baseOffset: 0, extentIndex: 0, extentOffset: 3);
+
+void _mockClipboardRead(Future<Map<String, Object>> Function() read) {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+    SystemChannels.platform,
+    (call) async => call.method == 'Clipboard.getData' ? await read() : null,
+  );
+  addTearDown(
+    () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      null,
+    ),
+  );
 }
 
 CodeBlockModel _codeModel({String source = ''}) => CodeBlockModel(

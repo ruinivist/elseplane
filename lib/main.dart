@@ -1,11 +1,12 @@
 // Boots the elseplane application and owns its root theme state.
 // Used as the Flutter entry point for the canvas editor.
 
-import 'package:elseplane/canvas/editor/canvas_page.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
-import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
-import 'package:elseplane/canvas/persistence/canvas_project_files.dart';
+import 'package:elseplane/app/workspace.dart';
+import 'package:elseplane/attachments/attachment_store.dart';
+import 'package:elseplane/attachments/attachment_store_web.dart';
 import 'package:elseplane/feature_flags.dart';
+import 'package:elseplane/library/library_store.dart';
+import 'package:elseplane/library/transfer/canvas_project_files.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/foundation.dart';
@@ -63,7 +64,7 @@ class ElseplaneApp extends StatefulWidget {
     this.initialSurfaceStyle = SurfaceStyle.glass,
     this.preferences,
     this.attachmentStore,
-    this.documentStore,
+    this.libraryStore,
     this.projectFiles,
     super.key,
   });
@@ -72,7 +73,7 @@ class ElseplaneApp extends StatefulWidget {
   final SurfaceStyle initialSurfaceStyle;
   final SharedPreferencesAsync? preferences;
   final AttachmentStore? attachmentStore;
-  final CanvasDocumentStore? documentStore;
+  final LibraryStore? libraryStore;
   final CanvasProjectFiles? projectFiles;
 
   @override
@@ -88,6 +89,9 @@ class _ElseplaneAppState extends State<ElseplaneApp> {
       : SurfaceStyle.glass;
   late final SharedPreferencesAsync _preferences = widget.preferences ?? SharedPreferencesAsync();
   Future<void> _saveQueue = Future<void>.value();
+  late final LibraryStore _libraryStore = widget.libraryStore ?? PreferencesLibraryStore();
+  late final AttachmentStore _attachmentStore = widget.attachmentStore ?? PlatformAttachmentStore();
+  late final CanvasProjectFiles _projectFiles = widget.projectFiles ?? createCanvasProjectFiles();
 
   Future<void> _setThemeMode(ThemeMode mode) {
     setState(() => _themeMode = mode);
@@ -121,10 +125,10 @@ class _ElseplaneAppState extends State<ElseplaneApp> {
         data: _styledTheme(Theme.of(context)),
         child: child!,
       ),
-      home: CanvasPage(
-        attachmentStore: widget.attachmentStore,
-        documentStore: widget.documentStore,
-        projectFiles: widget.projectFiles,
+      home: Workspace(
+        attachmentStore: _attachmentStore,
+        libraryStore: _libraryStore,
+        projectFiles: _projectFiles,
         themeMode: _themeMode,
         onThemeModeChanged: FeatureFlags.themeSelection ? _setThemeMode : null,
         onSurfaceStyleChanged: FeatureFlags.surfaceStyleSelection ? _setSurfaceStyle : null,

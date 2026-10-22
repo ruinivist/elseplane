@@ -6,15 +6,15 @@ import 'dart:ui' as ui;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
-import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
+import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
-import 'package:elseplane/canvas/persistence/canvas_library.dart';
 import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/canvas/tools/media/media_tool.dart';
 import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
 import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/foundation.dart';
@@ -55,7 +55,7 @@ void main() {
                 ),
               );
             }
-            final store = TestCanvasDocumentStore(document);
+            final store = TestLibraryStore(document);
             final attachments = (await tester.runAsync(() async => _PausedWrite()))!;
             const existingPath = 'attachments/11111111-1111-4111-8111-111111111111.png';
             attachments.files[existingPath] = onePixelPngBytes;
@@ -125,7 +125,7 @@ void main() {
               ),
             );
           }
-          await pumpCanvas(tester, TestCanvasDocumentStore(document), attachmentStore: attachments);
+          await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
           final text = media ? null : tester.widget<TextTool>(find.byType(TextTool)).model;
           final image = media ? tester.widget<MediaTool>(find.byType(MediaTool)).model : null;
           late Future<void> pending;
@@ -150,7 +150,7 @@ void main() {
   for (final removal in [false, true]) {
     testWidgets('pending write cancels immediately on ${removal ? 'removal' : 'document replacement'}', (tester) async {
       final attachments = (await tester.runAsync(() async => _PausedWrite()))!;
-      final store = TestCanvasDocumentStore(_textDocument());
+      final store = TestLibraryStore(_textDocument());
       await pumpCanvas(tester, store, attachmentStore: attachments);
       final text = tester.widget<TextTool>(find.byType(TextTool)).model;
       late Future<void> pending;
@@ -162,17 +162,10 @@ void main() {
         text.selected = true;
         await tester.sendKeyEvent(LogicalKeyboardKey.delete);
       } else {
-        store.library = CanvasLibrary(
-          files: [
-            ...store.library.files,
-            CanvasFile(id: 'next', name: 'Next', document: CanvasLibrary.emptyDocument),
-          ],
-          currentId: store.library.currentId,
+        (tester.widget<CanvasPage>(find.byType(CanvasPage)).replacement as ValueNotifier<CanvasReplacement>).value = (
+          document: CanvasLibrary.emptyDocument,
+          token: Object(),
         );
-        await tester.tap(find.byType(CanvasTitle));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Next'));
-        await tester.idle();
       }
       expect(text.disposed, isFalse);
       expect(text.asyncEditGeneration, greaterThan(0));
@@ -187,7 +180,7 @@ void main() {
   }
 
   for (final media in [false, true]) {
-    testWidgets('pending ${media ? 'media' : 'text'} paste survives leaving editing and tool-only undo', (
+    testWidgets('pending ${media ? 'media' : 'text'} paste stays canceled after leaving editing and tool-only undo', (
       tester,
     ) async {
       var document = _textDocument();
@@ -201,10 +194,9 @@ void main() {
           ),
         );
       }
-      await pumpCanvas(tester, TestCanvasDocumentStore(document));
+      await pumpCanvas(tester, TestLibraryStore(document));
       final text = media ? null : tester.widget<TextTool>(find.byType(TextTool)).model;
       final image = media ? tester.widget<MediaTool>(find.byType(MediaTool)).model : null;
-      final target = (media ? image! : text!) as CanvasElementModel;
       await tester.tap(find.byKey(ValueKey(media ? 'media-url-field' : 'text-markdown-preview')));
       await tester.pump();
       (media ? image!.controller : text!.controller).selection = const TextSelection.collapsed(offset: 8);
@@ -213,12 +205,10 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
       await tester.pump();
-      final generation = target.asyncEditGeneration;
       await _shortcut(tester);
-      expect(target.asyncEditGeneration, generation);
       reader.complete(_HistoryTextReader());
       await pending;
-      expect(media ? image!.data.url : text!.data.markdown, 'originallate');
+      expect(media ? image!.data.url : text!.data.markdown, 'original');
       await pumpPastSave(tester);
     });
   }
@@ -230,7 +220,7 @@ void main() {
       (elements) => elements.add(MediaElementData(id: 'media', position: const Offset(80, 100), width: 120, url: path)),
     );
     await _cacheAttachmentImage();
-    await pumpCanvas(tester, TestCanvasDocumentStore(document), attachmentStore: attachments);
+    await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
     final media = tester.widget<MediaTool>(find.byType(MediaTool)).model;
     tester.widget<TextTool>(find.byType(TextTool)).model.moveBy(const Offset(20, 10));
     await pumpPastSave(tester);
@@ -271,7 +261,7 @@ void main() {
     final attachments = _CountingAttachments({
       'attachments/11111111-1111-4111-8111-111111111111.png': onePixelPngBytes,
     });
-    final store = TestCanvasDocumentStore(document);
+    final store = TestLibraryStore(document);
     await _cacheAttachmentImage();
     await pumpCanvas(tester, store, attachmentStore: attachments);
     await tester.pumpAndSettle();
@@ -315,7 +305,7 @@ void main() {
   });
 
   testWidgets('code restore synchronizes source and visible title without extra history', (tester) async {
-    final store = TestCanvasDocumentStore(_codeDocument().withElements((elements) => elements.removeLast()));
+    final store = TestLibraryStore(_codeDocument().withElements((elements) => elements.removeLast()));
     await pumpCanvas(tester, store);
     final code = tester.widget<CodeTool>(find.byType(CodeTool)).model;
     final controller = code.controller;
@@ -355,7 +345,7 @@ void main() {
       'attachments/11111111-1111-4111-8111-111111111111.png': onePixelPngBytes,
       'attachments/22222222-2222-4222-8222-222222222222.png': onePixelPngBytes,
     });
-    final store = TestCanvasDocumentStore(
+    final store = TestLibraryStore(
       CanvasDocument(
         background: CanvasBackgroundKind.plain,
         elements: [
@@ -447,7 +437,7 @@ void main() {
   });
 
   testWidgets('background undo retains objects and saves one reversible step', (tester) async {
-    final store = TestCanvasDocumentStore(_document());
+    final store = TestLibraryStore(_document());
     await pumpCanvas(tester, store);
     final pen = _stroke(tester);
     final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
@@ -478,7 +468,7 @@ void main() {
   });
 
   testWidgets('stroke undo keeps Pen ready and tool selection is a separate step', (tester) async {
-    final store = TestCanvasDocumentStore(_penDocument(0));
+    final store = TestLibraryStore(_penDocument(0));
     await pumpCanvas(tester, store);
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
     await tester.pump();
@@ -516,7 +506,7 @@ void main() {
     ('arrow', LogicalKeyboardKey.keyA),
   ]) {
     testWidgets('$tool choice, toggle, and Escape undo without saving or replacing objects', (tester) async {
-      final store = TestCanvasDocumentStore(_document());
+      final store = TestLibraryStore(_document());
       await pumpCanvas(tester, store);
       final original = _stroke(tester)..selected = true;
       await tester.tap(find.byKey(ValueKey('toolbar-$tool')));
@@ -565,7 +555,7 @@ void main() {
     ('arrow', Arrow),
   ]) {
     testWidgets('$tool placement undo restores its tool and redo returns to Select', (tester) async {
-      final store = TestCanvasDocumentStore(_penDocument(0));
+      final store = TestLibraryStore(_penDocument(0));
       await pumpCanvas(tester, store);
       await tester.tap(find.byKey(ValueKey('toolbar-$tool')));
       await tester.pump();
@@ -597,7 +587,7 @@ void main() {
   }
 
   testWidgets('choosing touch Select from Pen is one reversible tool action', (tester) async {
-    final store = TestCanvasDocumentStore(_document());
+    final store = TestLibraryStore(_document());
     await pumpCanvas(tester, store, platform: TargetPlatform.android);
     final original = _stroke(tester)..selected = true;
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
@@ -619,7 +609,7 @@ void main() {
   });
 
   testWidgets('transient model state does not persist', (tester) async {
-    final store = TestCanvasDocumentStore(_document());
+    final store = TestLibraryStore(_document());
     await pumpCanvas(tester, store);
     final model = _stroke(tester)
       ..selected = true
@@ -633,7 +623,7 @@ void main() {
   });
 
   testWidgets('tool-only Undo interrupts held object drags and preserves Redo', (tester) async {
-    final store = TestCanvasDocumentStore(
+    final store = TestLibraryStore(
       CanvasDocument(
         background: CanvasBackgroundKind.plain,
         elements: [
@@ -678,7 +668,7 @@ void main() {
   testWidgets('undo and redo restore and persist canvas operations', (
     tester,
   ) async {
-    final store = TestCanvasDocumentStore(_document());
+    final store = TestLibraryStore(_document());
     await pumpCanvas(tester, store);
 
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
@@ -712,7 +702,7 @@ void main() {
   testWidgets('a drag is one step and a new operation clears redo', (
     tester,
   ) async {
-    final store = TestCanvasDocumentStore(_document());
+    final store = TestLibraryStore(_document());
     await pumpCanvas(tester, store);
     final start = _stroke(tester).data.position;
 
@@ -742,7 +732,7 @@ void main() {
   testWidgets('focused editors keep ownership of undo shortcuts', (
     tester,
   ) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_textDocument()));
+    await pumpCanvas(tester, TestLibraryStore(_textDocument()));
     final original = tester.widget<TextTool>(find.byType(TextTool)).model;
 
     await tester.tap(find.byKey(const ValueKey('text-markdown-preview')));
@@ -758,7 +748,7 @@ void main() {
   });
 
   testWidgets('font choice is one undo step and restores the saved family', (tester) async {
-    final store = TestCanvasDocumentStore(_textDocument());
+    final store = TestLibraryStore(_textDocument());
     await pumpCanvas(tester, store);
     TextBlockModel model() => tester.widget<TextTool>(find.byType(TextTool)).model;
     final savedFamily = model().style.fontFamily;
@@ -783,7 +773,7 @@ void main() {
   });
 
   testWidgets('text background choices persist as individual undo steps', (tester) async {
-    final store = TestCanvasDocumentStore(_textDocument());
+    final store = TestLibraryStore(_textDocument());
     await pumpCanvas(tester, store);
     TextBlockModel model() => tester.widget<TextTool>(find.byType(TextTool)).model;
     Future<void> choose(String label) async {
@@ -836,7 +826,7 @@ void main() {
   });
 
   testWidgets('code background choices persist as individual undo steps', (tester) async {
-    final store = TestCanvasDocumentStore(
+    final store = TestLibraryStore(
       _codeDocument().withElements((elements) => elements[0] = elements[0].copyWith(autoArrange: false)),
     );
     await pumpCanvas(tester, store);
@@ -888,13 +878,13 @@ void main() {
 
     final saved = CanvasDocument.fromJson(store.persisted!.toJson());
     await tester.pumpWidget(const SizedBox());
-    await pumpCanvas(tester, TestCanvasDocumentStore(saved));
+    await pumpCanvas(tester, TestLibraryStore(saved));
     expect(model().background, BlockBackgroundKind.glass);
     expect(model().active, isFalse);
   });
 
   testWidgets('history retains only the latest 50 operations', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_penDocument(51)));
+    await pumpCanvas(tester, TestLibraryStore(_penDocument(51)));
 
     for (var index = 0; index < 51; index++) {
       tester

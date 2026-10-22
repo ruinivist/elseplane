@@ -3,14 +3,16 @@
 
 import 'dart:async';
 
-import 'package:elseplane/canvas/debug/demo_canvas.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/widgets/canvas_file_picker.dart';
-import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
-import 'package:elseplane/canvas/editor/widgets/file_tree_popup.dart';
-import 'package:elseplane/canvas/persistence/canvas_library.dart';
-import 'package:elseplane/canvas/persistence/canvas_project.dart';
+import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/library/canvas_library.dart';
+import 'package:elseplane/library/debug/demo_canvas.dart';
+import 'package:elseplane/library/library_controller.dart';
+import 'package:elseplane/library/transfer/canvas_project.dart';
+import 'package:elseplane/library/widgets/canvas_file_picker.dart';
+import 'package:elseplane/library/widgets/canvas_title.dart';
+import 'package:elseplane/library/widgets/file_tree_popup.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:flutter/gestures.dart';
@@ -19,7 +21,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
-import '../test_helpers.dart';
+import '../../canvas/test_helpers.dart';
 
 // ---------- Tests ----------
 
@@ -29,7 +31,7 @@ void main() {
   for (final platform in [TargetPlatform.linux, TargetPlatform.macOS]) {
     for (final releaseModifier in [true, false]) {
       testWidgets('$platform picker dismissal tracks modifier release: $releaseModifier', (tester) async {
-        final store = TestCanvasDocumentStore(
+        final store = TestLibraryStore(
           CanvasDocument(
             background: CanvasBackgroundKind.plain,
             elements: [
@@ -66,7 +68,7 @@ void main() {
     }
 
     testWidgets('$platform shortcut opens while editing and Enter switches canvases', (tester) async {
-      final store = TestCanvasDocumentStore(
+      final store = TestLibraryStore(
         CanvasDocument(
           background: CanvasBackgroundKind.plain,
           elements: [
@@ -81,7 +83,6 @@ void main() {
           ],
         ),
       );
-      await pumpCanvas(tester, store, platform: platform);
       final originalId = store.library.currentId;
       store.library = CanvasLibrary(
         files: [
@@ -90,6 +91,7 @@ void main() {
         ],
         currentId: originalId,
       );
+      await pumpCanvas(tester, store, platform: platform);
       final text = tester.widget<TextTool>(find.byType(TextTool));
       text.onEdit();
       await tester.pumpAndSettle();
@@ -122,7 +124,6 @@ void main() {
 
   testWidgets('keyboard open failure retains current file and picker for retry', (tester) async {
     final store = _FailingLibraryStore();
-    await pumpCanvas(tester, store);
     final originalId = store.library.currentId;
     store.library = CanvasLibrary(
       files: [
@@ -131,6 +132,7 @@ void main() {
       ],
       currentId: originalId,
     );
+    await pumpCanvas(tester, store);
     await _open(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
@@ -147,8 +149,51 @@ void main() {
     expect(find.byType(CanvasFilePicker), findsNothing);
   });
 
+  testWidgets('failed outgoing flush keeps the editor open and retries its latest content', (tester) async {
+    final store = _FailingLibraryStore();
+    await pumpCanvas(tester, store);
+    await tester.tap(find.byKey(const ValueKey('toolbar-text')));
+    await tester.tapAt(const Offset(100, 180));
+    await tester.pumpAndSettle();
+    tester.widget<TextTool>(find.byType(TextTool)).model.insertPastedText('Unsaved');
+    store.fail = true;
+    await _open(tester);
+    expect(find.byType(CanvasFilePicker), findsNothing);
+    expect(find.text('Could not open canvas. Your current canvas is still open.'), findsOneWidget);
+    expect(tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown, 'Unsaved');
+    store.fail = false;
+    await _open(tester);
+    expect(find.byType(CanvasFilePicker), findsOneWidget);
+    expect(store.library.current.document!.elements.whereType<TextElementData>().single.markdown, 'Unsaved');
+  });
+
+  testWidgets('switching identical documents still resets tool choice and undo', (tester) async {
+    final store = TestLibraryStore();
+    store.library = CanvasLibrary(
+      currentId: store.library.currentId,
+      files: [
+        ...store.library.files,
+        CanvasFile(id: 'other', name: 'Other', document: CanvasLibrary.emptyDocument),
+      ],
+    );
+    await pumpCanvas(tester, store);
+    await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
+    await tester.pump();
+    expect(tester.widget<ToolbarButton>(find.byKey(const ValueKey('toolbar-draw'))).selected, isTrue);
+    await _open(tester);
+    await tester.tap(find.byKey(const ValueKey('file-tree-node-other')));
+    await tester.pumpAndSettle();
+    expect(store.library.currentId, 'other');
+    expect(tester.widget<ToolbarButton>(find.byKey(const ValueKey('toolbar-draw'))).selected, isFalse);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(tester.widget<ToolbarButton>(find.byKey(const ValueKey('toolbar-draw'))).selected, isFalse);
+  });
+
   testWidgets('name editing keeps arrows and returns tree focus after Escape', (tester) async {
-    final store = TestCanvasDocumentStore();
+    final store = TestLibraryStore();
     await pumpCanvas(tester, store);
     await _open(tester);
     await tester.tap(find.byTooltip('New folder'));
@@ -215,8 +260,7 @@ void main() {
         ),
       ],
     );
-    final store = TestCanvasDocumentStore(original);
-    await pumpCanvas(tester, store, attachmentStore: attachments);
+    final store = TestLibraryStore(original);
     final current = store.library.current;
     store.library = CanvasLibrary(
       files: [
@@ -227,6 +271,7 @@ void main() {
       ],
       currentId: current.id,
     );
+    await pumpCanvas(tester, store, attachmentStore: attachments);
     tester.widget<TextTool>(find.byType(TextTool)).model.insertPastedText(' edited');
     await _open(tester);
     final originalSaved = store.library.current.document!.toJson();
@@ -296,7 +341,7 @@ void main() {
   }
 
   testWidgets('demo saves pending folder names and blocks dismissal until its image is saved', (tester) async {
-    final store = TestCanvasDocumentStore();
+    final store = TestLibraryStore();
     final attachments = _FailingAttachmentStore();
     await pumpCanvas(tester, store, attachmentStore: attachments);
     await _open(tester);
@@ -324,7 +369,7 @@ void main() {
   });
 
   testWidgets('creates nested canvases, renames, switches, and isolates undo', (tester) async {
-    final store = TestCanvasDocumentStore(
+    final store = TestLibraryStore(
       CanvasDocument(
         background: CanvasBackgroundKind.plain,
         elements: [
@@ -453,7 +498,7 @@ void main() {
   });
 
   testWidgets('click-away creates a canvas and preserves a clicked file selection', (tester) async {
-    final store = TestCanvasDocumentStore();
+    final store = TestLibraryStore();
     await pumpCanvas(tester, store);
     final originalId = store.library.currentId;
 
@@ -497,15 +542,16 @@ void main() {
           const CanvasFile(id: 'folder', name: 'Folder'),
         ],
       );
+    final controller = LibraryController(store: store, attachments: TestAttachmentStore(), files: TestProjectFiles());
+    await controller.load();
+    addTearDown(controller.dispose);
     await tester.pumpWidget(
       MaterialApp(
         theme: starlessLightThemeData,
         home: Scaffold(
           body: Center(
             child: CanvasFilePicker(
-              library: store.library,
-              onSave: store.saveLibrary,
-              attachmentStore: TestAttachmentStore(),
+              controller: controller,
             ),
           ),
         ),
@@ -558,13 +604,13 @@ Future<void> _name(WidgetTester tester, String value) async {
   await tester.pumpAndSettle();
 }
 
-class _FailingLibraryStore extends TestCanvasDocumentStore {
+class _FailingLibraryStore extends TestLibraryStore {
   bool fail = false;
 
   @override
-  Future<void> saveLibrary(CanvasLibrary next) async {
+  Future<void> save(CanvasLibrary next) async {
     if (fail) throw StateError('Storage full');
-    await super.saveLibrary(next);
+    await super.save(next);
   }
 }
 

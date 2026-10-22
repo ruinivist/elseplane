@@ -155,7 +155,7 @@ void main() {
     );
     await pumpCanvas(
       tester,
-      TestCanvasDocumentStore(
+      TestLibraryStore(
         CanvasDocument(
           background: CanvasBackgroundKind.plain,
           elements: [
@@ -206,7 +206,7 @@ void main() {
 
     for (final width in [1200.0, 500.0]) {
       tester.view.physicalSize = Size(width, 800);
-      await pumpCanvas(tester, TestCanvasDocumentStore());
+      await pumpCanvas(tester, TestLibraryStore());
       await tester.tap(find.byKey(const ValueKey('toolbar-shape')));
       await tester.pumpAndSettle();
 
@@ -248,7 +248,7 @@ void main() {
     tester.view.physicalSize = const Size(1200, 1000);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
-    final store = TestCanvasDocumentStore();
+    final store = TestLibraryStore();
     await pumpCanvas(tester, store);
     await tester.tap(find.byKey(const ValueKey('toolbar-shape')));
     await tester.pumpAndSettle();
@@ -307,7 +307,7 @@ void main() {
   testWidgets('toolbar places one shape, then activates, moves, and resizes', (
     tester,
   ) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore());
+    await pumpCanvas(tester, TestLibraryStore());
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
     await tester.pump();
@@ -447,7 +447,7 @@ void main() {
   });
 
   testWidgets('active shape options edit, persist, undo, and follow selection rules', (tester) async {
-    final store = TestCanvasDocumentStore(
+    final store = TestLibraryStore(
       CanvasDocument(
         background: CanvasBackgroundKind.plain,
         elements: [

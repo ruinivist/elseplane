@@ -1,5 +1,5 @@
-// Verifies browser persistence for the current canvas document.
-// Exercises the document store with web shared preferences.
+// Verifies atomic library snapshot persistence without controller-owned state.
+// Exercises the preferences adapter in the browser.
 
 @TestOn('browser')
 library;
@@ -7,8 +7,8 @@ library;
 import 'dart:convert';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
-import 'package:elseplane/canvas/persistence/canvas_library.dart';
+import 'package:elseplane/library/canvas_library.dart';
+import 'package:elseplane/library/library_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
@@ -18,15 +18,13 @@ import 'package:shared_preferences_web/shared_preferences_web.dart';
 void main() {
   setUp(() async {
     SharedPreferencesAsyncWeb.registerWith(null);
-    await SharedPreferencesAsync().remove(CanvasDocumentStore.libraryKey);
+    await SharedPreferencesAsync().remove(PreferencesLibraryStore.libraryKey);
   });
 
   test('starts an empty library when browser storage has no saved library', () async {
-    final store = CanvasDocumentStore();
+    final store = PreferencesLibraryStore();
 
     expect(await store.load(), isNull);
-    expect(store.library.files, hasLength(1));
-    expect(store.library.current.document!.toJson(), CanvasLibrary.emptyDocument.toJson());
   });
 
   test('persists the current canvas document in browser storage', () async {
@@ -34,36 +32,37 @@ void main() {
       background: CanvasBackgroundKind.plain,
       elements: [],
     );
-    final store = CanvasDocumentStore();
+    final store = PreferencesLibraryStore();
 
-    await store.save(document);
+    await store.save(CanvasLibrary.initial(document));
 
-    expect((await store.load())?.toJson(), document.toJson());
+    expect((await store.load())?.current.document?.toJson(), document.toJson());
   });
 
   test('retains existing canvas and restores folders and the selected file', () async {
     final original = CanvasDocument(background: CanvasBackgroundKind.plain, elements: []);
     await SharedPreferencesAsync().setString(
-      CanvasDocumentStore.libraryKey,
+      PreferencesLibraryStore.libraryKey,
       jsonEncode(CanvasLibrary.initial(original).toJson()),
     );
-    final store = CanvasDocumentStore();
-    await store.load();
-    final originalId = store.library.currentId;
+    final store = PreferencesLibraryStore();
+    final loaded = (await store.load())!;
+    final originalId = loaded.currentId;
     final next = CanvasLibrary(
       currentId: 'second',
       files: [
-        store.library.current,
+        loaded.current,
         const CanvasFile(id: 'folder', name: 'Notes'),
         CanvasFile(id: 'second', name: 'Ideas', parentId: 'folder', document: CanvasLibrary.emptyDocument),
       ],
     );
-    await store.saveLibrary(next);
-    final restored = CanvasDocumentStore();
-    expect((await restored.load())!.background, CanvasBackgroundKind.dotGrid);
-    expect(restored.library.path('second').map((file) => file.name), ['Notes', 'Ideas']);
-    expect(restored.library.file(originalId).document!.toJson(), original.toJson());
-    expect(restored.library.currentId, 'second');
+    await store.save(next);
+    final restored = PreferencesLibraryStore();
+    final restoredLibrary = (await restored.load())!;
+    expect(restoredLibrary.current.document!.background, CanvasBackgroundKind.dotGrid);
+    expect(restoredLibrary.path('second').map((file) => file.name), ['Notes', 'Ideas']);
+    expect(restoredLibrary.file(originalId).document!.toJson(), original.toJson());
+    expect(restoredLibrary.currentId, 'second');
     expect(
       () => CanvasLibrary.fromJson({
         ...next.toJson(),
@@ -100,12 +99,12 @@ void main() {
     expect(() => outdented.move('a', parentId: 'folder'), throwsFormatException);
     expect(identical(outdented.move('b', parentId: null), outdented), isTrue);
 
-    final store = CanvasDocumentStore();
-    await store.saveLibrary(outdented);
-    final restored = CanvasDocumentStore();
-    await restored.load();
-    expect(restored.library.files.map((file) => file.id), outdented.files.map((file) => file.id));
-    expect(restored.library.file('b').parentId, isNull);
-    expect(restored.library.current.document!.toJson(), library.current.document!.toJson());
+    final store = PreferencesLibraryStore();
+    await store.save(outdented);
+    final restored = PreferencesLibraryStore();
+    final restoredLibrary = (await restored.load())!;
+    expect(restoredLibrary.files.map((file) => file.id), outdented.files.map((file) => file.id));
+    expect(restoredLibrary.file('b').parentId, isNull);
+    expect(restoredLibrary.current.document!.toJson(), library.current.document!.toJson());
   });
 }

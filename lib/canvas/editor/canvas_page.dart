@@ -1,10 +1,11 @@
-// Provides the infinite canvas editor and coordinates tools and persistence.
+// Provides the infinite canvas editor and reports immutable document snapshots.
 // Used as the application's primary workspace screen.
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/browser_touch_observer.dart'
     if (dart.library.js_interop) 'package:elseplane/canvas/editor/browser_touch_observer_web.dart';
@@ -13,25 +14,18 @@ import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
 import 'package:elseplane/canvas/editor/widgets/arrow_stroke_style_icon.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_chrome.dart';
-import 'package:elseplane/canvas/editor/widgets/canvas_file_picker.dart';
-import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_toolbar.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/canvas/editor/widgets/zoom_control.dart';
 import 'package:elseplane/canvas/geometry/transforms.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
-import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
-import 'package:elseplane/canvas/persistence/canvas_library.dart';
-import 'package:elseplane/canvas/persistence/canvas_library_archive.dart';
-import 'package:elseplane/canvas/persistence/canvas_project.dart';
-import 'package:elseplane/canvas/persistence/canvas_project_files.dart';
 import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/canvas/tools/media/media_tool.dart';
 import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
 import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/settings/settings_dialog.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/preset_colors.dart';
@@ -40,7 +34,6 @@ import 'package:elseplane/ui/common/color_picker.dart';
 import 'package:elseplane/ui/common/context_menu.dart';
 import 'package:elseplane/ui/common/discrete_slider.dart';
 import 'package:elseplane/ui/common/surface.dart';
-import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -58,17 +51,28 @@ enum _CanvasTool { select, text, code, media, shape, pen, arrow, eraser }
 
 typedef _CanvasHistoryEntry = ({String document, _CanvasTool tool, bool touchSelectionEnabled});
 
+// ---------- Document replacement ----------
+
+typedef CanvasReplacement = ({CanvasDocument? document, Object token});
+
 // ---------- Canvas workspace ----------
 
-/// Coordinates the infinite canvas, element tools, persistence, and transfer.
+/// Coordinates the infinite canvas and element tools with workspace callbacks.
 /// Used as the application's primary interactive workspace.
 class CanvasPage extends StatefulWidget {
   // ---------- Construction ----------
 
   const CanvasPage({
-    this.attachmentStore,
-    this.documentStore,
-    this.projectFiles,
+    required this.replacement,
+    required this.attachmentStore,
+    required this.onDocumentChanged,
+    required this.libraryPath,
+    required this.onOpenLibrary,
+    required this.onImportCanvas,
+    required this.onExportCanvas,
+    required this.onBackupLibrary,
+    required this.onRestoreLibrary,
+    this.blocked = false,
     this.readClipboard,
     this.writeClipboardText,
     this.themeMode = ThemeMode.light,
@@ -77,9 +81,16 @@ class CanvasPage extends StatefulWidget {
     super.key,
   });
 
-  final AttachmentStore? attachmentStore;
-  final CanvasDocumentStore? documentStore;
-  final CanvasProjectFiles? projectFiles;
+  final ValueListenable<CanvasReplacement> replacement;
+  final AttachmentStore attachmentStore;
+  final ValueChanged<CanvasDocument> onDocumentChanged;
+  final List<String> libraryPath;
+  final Future<void> Function() onOpenLibrary;
+  final Future<bool> Function() onImportCanvas;
+  final Future<void> Function() onExportCanvas;
+  final Future<void> Function() onBackupLibrary;
+  final Future<bool> Function() onRestoreLibrary;
+  final bool blocked;
   final Future<CanvasClipboardSnapshot> Function()? readClipboard;
   final Future<void> Function(String text)? writeClipboardText;
   final ThemeMode themeMode;
@@ -105,9 +116,7 @@ class _CanvasPageState extends State<CanvasPage> {
     useIdsFromArgs: true,
   );
   CanvasBackgroundKind _canvasBackgroundKind = CanvasBackgroundKind.dotGrid;
-  late final CanvasDocumentStore _documentStore = widget.documentStore ?? CanvasDocumentStore();
-  late final AttachmentStore _attachmentStore = widget.attachmentStore ?? createAttachmentStore();
-  late final CanvasProjectFiles _projectFiles = widget.projectFiles ?? createCanvasProjectFiles();
+  AttachmentStore get _attachmentStore => widget.attachmentStore;
   final _elements = <CanvasElementModel>[];
   final MenuController _contextMenuController = MenuController();
   final GlobalKey _contextMenuKey = GlobalKey();
@@ -118,7 +127,10 @@ class _CanvasPageState extends State<CanvasPage> {
   (Offset, double)? _contextMenuView;
   Offset? _contextMenuPosition;
   bool _arrangeMenuOpen = false;
-  int _documentGeneration = 0;
+  int _clipboardGeneration = 0;
+  FocusNode? _pasteField;
+  var _documentBatchDepth = 0;
+  var _documentBatchChanged = false;
   final _geometryListeners = <CanvasElementModel, VoidCallback>{};
   CanvasElementModel? _activeElement;
   TextBlockModel? _editingTextBlock;
@@ -141,11 +153,8 @@ class _CanvasPageState extends State<CanvasPage> {
   double _dragArrowSlop = kPrecisePointerPanSlop;
   bool _dragArrowMoving = false;
   var _toggleDragSelection = false;
-  Timer? _saveTimer;
-  Future<void> _saveQueue = Future<void>.value();
-  bool _documentDirty = false;
-  bool _documentLoaded = false;
-  var _projectTransferActive = false;
+  bool _hasDocument = false;
+  bool get _documentLoaded => _hasDocument && !widget.blocked;
   var _filePickerOpen = false;
   late final PenTool _penTool;
   late final ArrowTool _arrowTool;
@@ -229,6 +238,7 @@ class _CanvasPageState extends State<CanvasPage> {
   @override
   void initState() {
     super.initState();
+    widget.replacement.addListener(_documentReplaced);
     _controlsOverlayController.show();
     _canvasController
       ..rawPointerDownListener = _handleCanvasPointerDown
@@ -240,6 +250,7 @@ class _CanvasPageState extends State<CanvasPage> {
     _arrowTool = ArrowTool(onArrow: _addArrow)..addListener(_handleDrawingToolChanged);
     _shapeTool = ShapeTool(onShape: _addShape)..addListener(_handleDrawingToolChanged);
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+    FocusManager.instance.addListener(_handleEditorFocusChanged);
     GestureBinding.instance.pointerRouter.addGlobalRoute(_observePageTouch);
     _stopObservingBrowserTouch = observeBrowserTouch(
       onStart: () => _browserTouchObserved = true,
@@ -252,12 +263,12 @@ class _CanvasPageState extends State<CanvasPage> {
       ?..registerCopyEventListener(_handleWebCopy)
       ..registerCutEventListener(_handleWebCut)
       ..registerPasteEventListener(_handleWebPaste);
-    unawaited(_restoreDocument());
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (!_hasDocument) _documentReplaced();
     final platform = Theme.of(context).platform;
     if (platform == TargetPlatform.android || platform == TargetPlatform.iOS) _touchControlsVisible = true;
     final colors = BTheme.of(context).colors;
@@ -271,21 +282,43 @@ class _CanvasPageState extends State<CanvasPage> {
     _ => null,
   };
 
+  void _handleEditorFocusChanged() {
+    final node = FocusManager.instance.primaryFocus;
+    if (node == null || identical(node, _pasteField)) return;
+    final context = node.context;
+    final isField =
+        _elements.any(
+          (model) =>
+              identical(node, _editorFocusNode(model)) ||
+              (model is CodeBlockModel && identical(node, model.titleFocusNode)),
+        ) ||
+        context?.widget is EditableText ||
+        context?.findAncestorWidgetOfExactType<EditableText>() != null;
+    // Browser blur and non-field controls do not select a different input.
+    if (!isField) return;
+    _invalidatePendingEdits();
+    _pasteField = node;
+  }
+
+  void _invalidatePendingEdits() {
+    _clipboardGeneration++;
+    _pasteField = null;
+    for (final model in _elements) {
+      model.invalidatePendingEdits();
+    }
+  }
+
   @override
   void dispose() {
+    widget.replacement.removeListener(_documentReplaced);
+    FocusManager.instance.removeListener(_handleEditorFocusChanged);
     _closeContextMenu();
     _contextMenuFocusNode.dispose();
     _canvasController.removeListener(_closeContextMenuOnNavigation);
-    _saveTimer?.cancel();
-    _saveTimer = null;
-    if (_documentLoaded && _documentDirty) {
-      unawaited(_enqueueDocumentSave() ?? Future<void>.value());
-    }
-    unawaited(_saveQueue);
     for (final model in _elements) {
       _editorFocusNode(model)?.removeListener(_finishHistoryOperation);
       model.removeListener(_geometryListeners.remove(model)!);
-      model.documentChanges.removeListener(_scheduleDocumentSave);
+      model.documentChanges.removeListener(_documentChanged);
       model.dispose();
     }
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
@@ -310,6 +343,23 @@ class _CanvasPageState extends State<CanvasPage> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(CanvasPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.replacement != widget.replacement) {
+      oldWidget.replacement.removeListener(_documentReplaced);
+      widget.replacement.addListener(_documentReplaced);
+      _documentReplaced();
+    }
+  }
+
+  void _documentReplaced() {
+    final document = widget.replacement.value.document;
+    if (document == null) return;
+    _replaceLiveModels(document);
+    _resetHistory();
+  }
+
   // ---------- Tool selection ----------
 
   void _handleDrawingToolChanged() {
@@ -324,6 +374,14 @@ class _CanvasPageState extends State<CanvasPage> {
   }
 
   void _applyTool(_CanvasTool tool, {bool touchSelectionEnabled = false}) {
+    _endCanvasInteraction();
+    setState(() {
+      _activeTool.value = tool;
+      _touchSelectionEnabled = touchSelectionEnabled;
+    });
+  }
+
+  void _endCanvasInteraction() {
     _closeContextMenu();
     _blockedCanvasPointers.addAll(_canvasPointers.keys);
     _cancelDrawingTools();
@@ -337,12 +395,8 @@ class _CanvasPageState extends State<CanvasPage> {
     _finishDragSelection(canceled: true);
     _finishHistoryOperation();
     _clearElementEditing();
-    setState(() {
-      _activeTool.value = tool;
-      _touchSelectionEnabled = touchSelectionEnabled;
-      _eraserPointer = null;
-      _spaceHeld = false;
-    });
+    _eraserPointer = null;
+    _spaceHeld = false;
   }
 
   void _toggleTouchSelection() {
@@ -401,7 +455,9 @@ class _CanvasPageState extends State<CanvasPage> {
     if (mounted && !_touchControlsVisible) setState(() => _touchControlsVisible = true);
   }
 
-  bool get _canvasInputBlocked => _touchNavigationActive || _blockedCanvasPointers.isNotEmpty;
+  bool get _canvasPointersBlocked => _touchNavigationActive || _blockedCanvasPointers.isNotEmpty;
+
+  bool get _canvasInputBlocked => _filePickerOpen || _canvasPointersBlocked;
 
   bool _canHandleCanvasPointer(PointerEvent event) {
     if (_canvasInputBlocked) return false;
@@ -779,6 +835,7 @@ class _CanvasPageState extends State<CanvasPage> {
 
   bool _toggleSelectionIfModifierPressed(CanvasElementModel model) {
     if (!_selectionModifierPressed.value) return false;
+    _invalidatePendingEdits();
     _finishHistoryOperation();
     model.selected = !model.selected;
     _promoteAuto([model]);
@@ -896,6 +953,7 @@ class _CanvasPageState extends State<CanvasPage> {
   }
 
   void _clearElementEditing() {
+    _invalidatePendingEdits();
     for (final model in _elements.whereType<MediaModel>()) {
       if (model.focusNode.hasFocus) model.commitUrl();
     }
@@ -907,6 +965,7 @@ class _CanvasPageState extends State<CanvasPage> {
   void _setActiveElement(CanvasElementModel? model) {
     if (model != null) _promoteAuto([model]);
     if (identical(_activeElement, model)) return;
+    _invalidatePendingEdits();
     setState(() {
       _activeElement?.active = false;
       _activeElement = model;
@@ -1039,17 +1098,19 @@ class _CanvasPageState extends State<CanvasPage> {
   void _arrange(CanvasArrange action, List<CanvasElementModel> targets) {
     if (!_canArrange(action, targets)) return;
     _finishHistoryOperation();
-    for (final model in targets) {
-      model.autoArrange = false;
-    }
-    final ids = targets.map((model) => model.data.id);
-    final changed = switch (action) {
-      CanvasArrange.forward => _canvasController.bringForward(ids),
-      CanvasArrange.backward => _canvasController.sendBackward(ids),
-      CanvasArrange.front => _canvasController.bringToFront(ids),
-      CanvasArrange.back => _canvasController.sendToBack(ids),
-    };
-    if (changed) _syncElementOrder();
+    _batchDocumentChanges(() {
+      for (final model in targets) {
+        model.autoArrange = false;
+      }
+      final ids = targets.map((model) => model.data.id);
+      final changed = switch (action) {
+        CanvasArrange.forward => _canvasController.bringForward(ids),
+        CanvasArrange.backward => _canvasController.sendBackward(ids),
+        CanvasArrange.front => _canvasController.bringToFront(ids),
+        CanvasArrange.back => _canvasController.sendToBack(ids),
+      };
+      if (changed) _syncElementOrder();
+    });
     _finishHistoryOperation();
     setState(() {});
   }
@@ -1057,16 +1118,19 @@ class _CanvasPageState extends State<CanvasPage> {
   void _setAutoArrange(List<CanvasElementModel> targets, bool value) {
     if (targets.isEmpty || targets.any((model) => !_elements.contains(model))) return;
     _finishHistoryOperation();
-    for (final model in targets) {
-      model.autoArrange = value;
-    }
-    if (value) _promoteAuto(targets);
+    _batchDocumentChanges(() {
+      for (final model in targets) {
+        model.autoArrange = value;
+      }
+      if (value) _promoteAuto(targets);
+    });
     _finishHistoryOperation();
     setState(() {});
   }
 
-  void _promoteAuto(Iterable<CanvasElementModel> targets) {
-    if (!_documentLoaded || _canvasInputBlocked) return;
+  void _promoteAuto(Iterable<CanvasElementModel> targets, {bool contentChanged = false}) {
+    // Accepted content edits promote even while navigation blocks new input.
+    if (!_documentLoaded || (!contentChanged && _canvasInputBlocked)) return;
     final liveModels = _elements.toSet();
     final ids = targets.where((model) => model.autoArrange && liveModels.contains(model)).map((model) => model.data.id);
     if (_canvasController.bringToFront(ids)) _syncElementOrder();
@@ -1077,7 +1141,7 @@ class _CanvasPageState extends State<CanvasPage> {
     _elements
       ..clear()
       ..addAll(_canvasController.childOrder.map((id) => models[id]!));
-    _scheduleDocumentSave();
+    _documentChanged();
     setState(() {});
   }
 
@@ -1220,14 +1284,16 @@ class _CanvasPageState extends State<CanvasPage> {
         .toList();
 
     if (affected.isEmpty) return;
-    _promoteAuto(affected);
-    _canvasController.moveChildrenBy(
-      affected.map((model) => model.data.id),
-      gridDelta,
-    );
-    for (final model in affected) {
-      model.moveBy(gridDelta);
-    }
+    _batchDocumentChanges(() {
+      _promoteAuto(affected);
+      _canvasController.moveChildrenBy(
+        affected.map((model) => model.data.id),
+        gridDelta,
+      );
+      for (final model in affected) {
+        model.moveBy(gridDelta);
+      }
+    });
   }
 
   void _resizeTextBlock(
@@ -1240,8 +1306,10 @@ class _CanvasPageState extends State<CanvasPage> {
       return;
     }
     if (!_elements.contains(model)) return;
-    _promoteAuto([model]);
-    model.resize(renderedSize, _localTransformDelta(model.rotation, screenDelta));
+    _batchDocumentChanges(() {
+      _promoteAuto([model]);
+      model.resize(renderedSize, _localTransformDelta(model.rotation, screenDelta));
+    });
   }
 
   void _resizeCodeBlock(CodeBlockModel model, Offset localDelta) {
@@ -1250,11 +1318,13 @@ class _CanvasPageState extends State<CanvasPage> {
       return;
     }
     if (!_elements.contains(model)) return;
-    _promoteAuto([model]);
-    model.size = Size(
-      model.size.width + localDelta.dx,
-      model.size.height + localDelta.dy,
-    );
+    _batchDocumentChanges(() {
+      _promoteAuto([model]);
+      model.size = Size(
+        model.size.width + localDelta.dx,
+        model.size.height + localDelta.dy,
+      );
+    });
   }
 
   void _resizeMedia(MediaModel model, Offset screenDelta) {
@@ -1262,8 +1332,10 @@ class _CanvasPageState extends State<CanvasPage> {
     if (!_documentLoaded || _activeTool.value != _CanvasTool.select || !_elements.contains(model)) {
       return;
     }
-    _promoteAuto([model]);
-    model.resizeBy(_localTransformDelta(model.rotation, screenDelta));
+    _batchDocumentChanges(() {
+      _promoteAuto([model]);
+      model.resizeBy(_localTransformDelta(model.rotation, screenDelta));
+    });
   }
 
   void _resizeShape(ShapeModel model, Offset screenDelta) {
@@ -1274,8 +1346,10 @@ class _CanvasPageState extends State<CanvasPage> {
     if (_selectionBeforeWidgetPointer.contains(model)) {
       _setSelection(_selectionBeforeWidgetPointer);
     }
-    _promoteAuto([model]);
-    model.resizeBy(screenDelta / _canvasController.scale);
+    _batchDocumentChanges(() {
+      _promoteAuto([model]);
+      model.resizeBy(screenDelta / _canvasController.scale);
+    });
   }
 
   Offset _localTransformDelta(double rotation, Offset screenDelta) {
@@ -1288,8 +1362,10 @@ class _CanvasPageState extends State<CanvasPage> {
       return;
     }
     if (!_elements.contains(model)) return;
-    _promoteAuto([model]);
-    model.rotate(angle);
+    _batchDocumentChanges(() {
+      _promoteAuto([model]);
+      model.rotate(angle);
+    });
   }
 
   Offset _elementCenter(CanvasElementModel model) {
@@ -1326,7 +1402,7 @@ class _CanvasPageState extends State<CanvasPage> {
 
     _mountElement(model, requestFocus: true);
     _startTextEditing(model);
-    _scheduleDocumentSave();
+    _documentChanged();
   }
 
   void _addMedia(Offset position) {
@@ -1334,7 +1410,7 @@ class _CanvasPageState extends State<CanvasPage> {
     final model = _newMediaModel('')..moveBy(position);
     _mountElement(model, requestFocus: true);
     _setActiveElement(model);
-    _scheduleDocumentSave();
+    _documentChanged();
     _finishHistoryOperation();
   }
 
@@ -1354,12 +1430,12 @@ class _CanvasPageState extends State<CanvasPage> {
     bool requestFocus = false,
   }) {
     _elements.add(model);
-    model.documentChanges.addListener(_scheduleDocumentSave);
+    model.documentChanges.addListener(_documentChanged);
     switch (model) {
       case TextBlockModel():
-        model.onContentChanged = () => _promoteAuto([model]);
+        model.onContentChanged = () => _promoteAuto([model], contentChanged: true);
       case CodeBlockModel():
-        model.onContentChanged = () => _promoteAuto([model]);
+        model.onContentChanged = () => _promoteAuto([model], contentChanged: true);
     }
     final child = switch (model) {
       final TextBlockModel text => _CanvasElementHost(
@@ -1527,7 +1603,7 @@ class _CanvasPageState extends State<CanvasPage> {
     );
     _mountElement(model, requestFocus: true);
     _setActiveElement(model);
-    _scheduleDocumentSave();
+    _documentChanged();
     _finishHistoryOperation();
   }
 
@@ -1557,7 +1633,7 @@ class _CanvasPageState extends State<CanvasPage> {
       ),
     );
     _mountElement(model);
-    _scheduleDocumentSave();
+    _documentChanged();
     _finishHistoryOperation();
   }
 
@@ -1566,7 +1642,7 @@ class _CanvasPageState extends State<CanvasPage> {
     if (_arrowEnabled) setState(() => _activeTool.value = _CanvasTool.select);
     _mountElement(model);
     _setActiveElement(model);
-    _scheduleDocumentSave();
+    _documentChanged();
     _finishHistoryOperation();
   }
 
@@ -1575,7 +1651,7 @@ class _CanvasPageState extends State<CanvasPage> {
     if (_shapeEnabled) setState(() => _activeTool.value = _CanvasTool.select);
     _mountElement(model);
     _setActiveElement(model);
-    _scheduleDocumentSave();
+    _documentChanged();
     _finishHistoryOperation();
   }
 
@@ -1651,7 +1727,8 @@ class _CanvasPageState extends State<CanvasPage> {
   // ---------- Editing commands ----------
 
   void _selectAll() {
-    if (!_documentLoaded) return;
+    if (!_documentLoaded || _elements.every((model) => model.selected)) return;
+    _invalidatePendingEdits();
     for (final model in _elements) {
       model.selected = true;
     }
@@ -1693,7 +1770,7 @@ class _CanvasPageState extends State<CanvasPage> {
   }
 
   void _handleWebPaste(ClipboardReadEvent event) {
-    if (!_documentLoaded || _filePickerOpen || _editingElement) return;
+    if (!_documentLoaded || _filePickerOpen || ModalRoute.of(context)?.isCurrent == false || _editingElement) return;
     final position = _contextMenuPosition;
     _closeContextMenu();
     unawaited(_pasteSelection(event.getClipboardReader(), position: position));
@@ -1706,11 +1783,12 @@ class _CanvasPageState extends State<CanvasPage> {
   }) async {
     if (!_documentLoaded ||
         _filePickerOpen ||
+        ModalRoute.of(context)?.isCurrent == false ||
         (targets == null && (_contextMenuController.isOpen || _editingElement))) {
       return;
     }
     final selected = targets ?? _selectedInStackingOrder;
-    final generation = _documentGeneration;
+    final generation = _clipboardGeneration;
     if (selected.isEmpty) return;
     final payload = encodeCanvasClipboard(
       selected.map((model) => model.data),
@@ -1725,23 +1803,25 @@ class _CanvasPageState extends State<CanvasPage> {
         final item = DataWriterItem()..add(Formats.plainText(payload));
         await clipboard.write([item]);
       }
-      if (!mounted || _documentGeneration != generation) return;
+      if (!mounted || _clipboardGeneration != generation) return;
       _lastPastedPayload = null;
       _pasteOffset = Offset.zero;
       _cutPayload = cut ? payload : null;
       _pointerReference = (payload, _canvasPointerPosition.value);
-      if (cut && !_filePickerOpen) {
+      if (cut) {
         _removeElements(selected);
       }
     } on Object {
-      _showProjectSnackBar(
+      if (!mounted || _clipboardGeneration != generation) return;
+      _showClipboardError(
         cut ? 'Could not cut canvas elements' : 'Could not copy canvas elements',
       );
     }
   }
 
   Future<void> _pasteSelection(Future<ClipboardReader>? readerFuture, {Offset? position}) async {
-    final generation = _documentGeneration;
+    if (!_documentLoaded || _filePickerOpen || ModalRoute.of(context)?.isCurrent == false) return;
+    final generation = _clipboardGeneration;
     final pointer = _canvasPointerPosition.value;
     final scale = _canvasController.scale;
     final pointerPosition = pointer == null ? null : _screenToCanvas(pointer);
@@ -1757,7 +1837,7 @@ class _CanvasPageState extends State<CanvasPage> {
       } on FormatException {
         return;
       }
-      if (!mounted || !_documentLoaded || _filePickerOpen || _documentGeneration != generation) return;
+      if (!mounted || !_documentLoaded || _clipboardGeneration != generation) return;
       final text = clipboard.text;
       final elements = text == null ? null : decodeCanvasClipboard(text);
       if (elements == null) {
@@ -1795,10 +1875,11 @@ class _CanvasPageState extends State<CanvasPage> {
       _clearTextEditing();
       _setActiveElement(null);
       _setSelection(pasted.toSet());
-      _scheduleDocumentSave();
+      _documentChanged();
       _finishHistoryOperation();
     } on Object {
-      _showProjectSnackBar('Could not paste canvas elements');
+      if (!mounted || _clipboardGeneration != generation) return;
+      _showClipboardError('Could not paste canvas elements');
     }
   }
 
@@ -1813,7 +1894,7 @@ class _CanvasPageState extends State<CanvasPage> {
       model.dispose();
       rethrow;
     }
-    if (!mounted || !_documentLoaded || _filePickerOpen || _documentGeneration != generation) {
+    if (!mounted || !_documentLoaded || _clipboardGeneration != generation) {
       model.dispose();
       try {
         await _attachmentStore.delete(model.data.url);
@@ -1848,7 +1929,7 @@ class _CanvasPageState extends State<CanvasPage> {
     _clearSelection();
     model.selected = true;
     _mountElement(model);
-    _scheduleDocumentSave();
+    _documentChanged();
     _finishHistoryOperation();
   }
 
@@ -1877,6 +1958,7 @@ class _CanvasPageState extends State<CanvasPage> {
     if (!_documentLoaded) return;
     final modelsToDispose = models.where(_elements.contains).toList();
     if (modelsToDispose.isEmpty) return;
+    _clipboardGeneration++;
     if (finishHistory) _finishHistoryOperation();
     if (modelsToDispose.any(_contextMenuTargets.contains)) _closeContextMenu();
 
@@ -1898,7 +1980,7 @@ class _CanvasPageState extends State<CanvasPage> {
       _selectionKeys.remove(model);
       _selectionBeforeDrag.remove(model);
       _selectionBeforeWidgetPointer.remove(model);
-      model.documentChanges.removeListener(_scheduleDocumentSave);
+      model.documentChanges.removeListener(_documentChanged);
     }
     if (_selectionBeforeWidgetPointer.isEmpty) _widgetPointer = null;
     if (modelsToDispose.contains(_dragArrow)) _finishArrowDrag();
@@ -1907,50 +1989,26 @@ class _CanvasPageState extends State<CanvasPage> {
         model.dispose();
       }
     });
-    if (saveDocument) _scheduleDocumentSave();
+    if (saveDocument) _documentChanged();
     if (finishHistory) _finishHistoryOperation();
   }
 
-  // ---------- Settings and project transfer ----------
+  // ---------- Workspace presentation and replacement ----------
 
   Future<void> _showFilePicker() async {
-    if (!_documentLoaded || _projectTransferActive || _filePickerOpen) return;
-    _closeContextMenu();
+    if (!_documentLoaded || _filePickerOpen) return;
     setState(() => _filePickerOpen = true);
-    _clearElementEditing();
-    FocusManager.instance.primaryFocus?.unfocus();
-    _saveTimer?.cancel();
-    _saveTimer = null;
-    final previousId = _documentStore.library.currentId;
+    _endCanvasInteraction();
     try {
-      await _saveQueue;
-      // Capture even a failed autosave before allowing any file operation.
-      await _persistDocument(_currentDocument());
-      _documentDirty = false;
-      if (!mounted) return;
-      final id = await showDialog<String>(
-        context: context,
-        barrierColor: Colors.transparent,
-        builder: (_) => CanvasFilePicker(
-          library: _documentStore.library,
-          onSave: _documentStore.saveLibrary,
-          attachmentStore: _attachmentStore,
-        ),
-      );
-      if (!mounted) return;
-      if (id != null && id != previousId) {
-        final next = _documentStore.library;
-        _replaceLiveModels(next.current.document!);
-        _resetHistory();
-      }
-    } on Object {
-      _showProjectSnackBar('Could not open canvas. Your current canvas is still open.');
+      await widget.onOpenLibrary();
     } finally {
       if (mounted) setState(() => _filePickerOpen = false);
     }
   }
 
   void _showSettingsDialog() {
+    if (_filePickerOpen || widget.blocked) return;
+    _endCanvasInteraction();
     unawaited(
       showDialog<void>(
         context: context,
@@ -1961,236 +2019,19 @@ class _CanvasPageState extends State<CanvasPage> {
           onSurfaceStyleChanged: widget.onSurfaceStyleChanged,
           canvasBackgroundKind: _canvasBackgroundKind,
           onCanvasBackgroundChanged: _setCanvasBackground,
-          onImportCanvas: _importProject,
-          onExportCanvas: _exportProject,
-          onBackupLibrary: _backupLibrary,
-          onRestoreLibrary: _restoreLibrary,
+          onImportCanvas: widget.onImportCanvas,
+          onExportCanvas: widget.onExportCanvas,
+          onBackupLibrary: widget.onBackupLibrary,
+          onRestoreLibrary: widget.onRestoreLibrary,
         ),
       ),
     );
   }
 
-  Future<void> _exportProject() async {
-    if (_projectTransferActive || !_documentLoaded) return;
-    _projectTransferActive = true;
-    try {
-      final snapshot = _currentDocument();
-      final bytes = await encodeCanvasProject(snapshot, _attachmentStore);
-      if (await _projectFiles.save(bytes, suggestedName: 'canvas.elseplane.json', mimeType: 'application/json')) {
-        _showProjectSnackBar('Canvas exported');
-      }
-    } on Object {
-      _showProjectSnackBar('Could not export canvas');
-    } finally {
-      _projectTransferActive = false;
-    }
-  }
-
-  Future<void> _backupLibrary() async {
-    if (_projectTransferActive || !_documentLoaded) return;
-    _projectTransferActive = true;
-    try {
-      await _saveQueue;
-      if (!mounted) return;
-      final library = _documentStore.library;
-      final snapshot = library.replace(library.current.copyWith(document: _currentDocument()));
-      final bytes = await encodeCanvasLibraryArchive(snapshot, _attachmentStore);
-      if (await _projectFiles.save(bytes, suggestedName: 'library.elseplane.zip', mimeType: 'application/zip')) {
-        _showProjectSnackBar('Library backed up');
-      }
-    } on FormatException catch (error) {
-      _showProjectSnackBar(error.message);
-    } on Object {
-      _showProjectSnackBar('Could not back up library');
-    } finally {
-      _projectTransferActive = false;
-    }
-  }
-
-  Future<bool> _confirmReplacement({required String title, required String message, required String action}) async {
-    if (!mounted) return false;
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => SurfaceConfirmationDialog(
-            title: Text(title),
-            content: Text(message),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-              TextButton(onPressed: () => Navigator.pop(context, true), child: Text(action)),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
-  Future<bool> _restoreLibrary() async {
-    if (_projectTransferActive || !_documentLoaded) return false;
-    _projectTransferActive = true;
-    try {
-      final bytes = await _projectFiles.open();
-      if (bytes == null) return false;
-      final imported = await decodeCanvasLibraryArchive(bytes);
-      final count = imported.library.files.where((file) => !file.isFolder).length;
-      if (!await _confirmReplacement(
-        title: 'Replace library?',
-        message:
-            'Restore $count ${count == 1 ? 'canvas' : 'canvases'}? This replaces all existing canvases and folders.',
-        action: 'Replace library',
-      )) {
-        return false;
-      }
-      await _replaceAfterFlush(() => _commitImportedLibrary(imported));
-      _showProjectSnackBar('Library restored');
-      return true;
-    } on Object {
-      if (!_documentLoaded) {
-        _documentLoaded = true;
-        if (mounted) setState(() {});
-      }
-      _showProjectSnackBar('Could not restore library');
-      return false;
-    } finally {
-      _projectTransferActive = false;
-    }
-  }
-
-  Future<bool> _importProject() async {
-    if (_projectTransferActive || !_documentLoaded) return false;
-    _projectTransferActive = true;
-    try {
-      final bytes = await _projectFiles.open();
-      if (bytes == null) return false;
-      final project = await decodeCanvasProject(bytes);
-      if (!await _confirmReplacement(
-        title: 'Replace canvas?',
-        message: 'Importing replaces “${_documentStore.library.current.name}”.',
-        action: 'Replace canvas',
-      )) {
-        return false;
-      }
-      await _replaceAfterFlush(() => _commitImportedProject(project));
-      _showProjectSnackBar('Canvas imported');
-      return true;
-    } on Object {
-      if (!_documentLoaded) {
-        _documentLoaded = true;
-        if (mounted) setState(() {});
-      }
-      _showProjectSnackBar('Could not import canvas');
-      return false;
-    } finally {
-      _projectTransferActive = false;
-    }
-  }
-
-  Future<void> _replaceAfterFlush(Future<void> Function() commit) async {
-    _saveTimer?.cancel();
-    _saveTimer = null;
-    final dirtyFlush = _documentDirty ? _enqueueDocumentSave(throwOnFailure: true) : null;
-    _documentLoaded = false;
-    if (dirtyFlush != null) await dirtyFlush;
-    final operation = _saveQueue.then((_) => commit());
-    _saveQueue = operation.then<void>(
-      (_) {},
-      onError: (Object error, StackTrace stackTrace) {},
-    );
-    await operation;
-  }
-
-  Future<void> _commitImportedLibrary(CanvasLibraryArchive imported) async {
-    final replacements = <String, String>{};
-    final reserved = imported.attachments.keys.toSet();
-    for (final path in imported.attachments.keys.toList()..sort()) {
-      String fresh;
-      do {
-        fresh = 'attachments/${const Uuid().v4()}.${path.split('.').last}';
-      } while (reserved.contains(fresh) || await _attachmentStore.readIfExists(fresh) != null);
-      reserved.add(fresh);
-      replacements[path] = fresh;
-    }
-    final source = imported.library;
-    final next = CanvasLibrary(
-      files: [
-        for (final file in source.files)
-          if (file.isFolder)
-            file
-          else
-            file.copyWith(document: rebaseCanvasDocumentAttachments(file.document!, replacements)),
-      ],
-      currentId: source.currentId,
-    );
-    for (final entry in replacements.entries) {
-      await _attachmentStore.write(entry.value, imported.attachments[entry.key]!);
-    }
-    await _documentStore.saveLibrary(next);
-    _replaceLiveModels(next.current.document!);
-    _resetHistory();
-  }
-
-  Future<void> _commitImportedProject(CanvasProject imported) async {
-    final project = rebaseCanvasProjectAttachments(
-      imported,
-      _documentStore.library.files
-          .where((file) => file.id != _documentStore.library.currentId && !file.isFolder)
-          .expand((file) => canvasAttachmentPaths(file.document!))
-          .toSet(),
-    );
-    final currentDocument = _currentDocument();
-    final currentPaths = canvasAttachmentPaths(currentDocument);
-    final importedPaths = project.attachments.keys.toSet();
-    final collisionPaths = currentPaths.intersection(importedPaths).toList()..sort();
-    final backups = <String, Uint8List>{};
-    final attemptedPaths = <String>[];
-
-    try {
-      for (final path in collisionPaths) {
-        final bytes = await _attachmentStore.readIfExists(path);
-        if (bytes == null) {
-          throw StateError('Missing current attachment: $path');
-        }
-        backups[path] = Uint8List.fromList(bytes);
-      }
-
-      try {
-        final paths = project.attachments.keys.toList()..sort();
-        for (final path in paths) {
-          attemptedPaths.add(path);
-          await _attachmentStore.write(path, project.attachments[path]!);
-        }
-        await _persistDocument(project.document);
-      } on Object catch (error, stackTrace) {
-        Object? rollbackError;
-        StackTrace? rollbackStackTrace;
-        for (final path in attemptedPaths) {
-          final backup = backups[path];
-          if (backup == null) continue;
-          try {
-            await _attachmentStore.write(path, Uint8List.fromList(backup));
-          } on Object catch (error, stackTrace) {
-            rollbackError ??= error;
-            rollbackStackTrace ??= stackTrace;
-          }
-        }
-        if (rollbackError != null) {
-          debugPrint(
-            'Canvas import rollback failed: $rollbackError\n'
-            '$rollbackStackTrace',
-          );
-        }
-        Error.throwWithStackTrace(error, stackTrace);
-      }
-
-      _replaceLiveModels(project.document);
-      _resetHistory();
-    } on Object {
-      _documentLoaded = true;
-      if (mounted) setState(() {});
-      rethrow;
-    }
-  }
-
   void _replaceLiveModels(CanvasDocument document) {
-    _documentGeneration++;
+    _hasDocument = false;
+    _clipboardGeneration++;
+    _pasteField = null;
     _closeContextMenu();
     final oldElements = List<CanvasElementModel>.of(_elements);
     _clearTextEditing();
@@ -2220,7 +2061,7 @@ class _CanvasPageState extends State<CanvasPage> {
     for (final model in oldElements) {
       model.invalidatePendingEdits();
       model.removeListener(_geometryListeners.remove(model)!);
-      model.documentChanges.removeListener(_scheduleDocumentSave);
+      model.documentChanges.removeListener(_documentChanged);
       _editorFocusNode(model)?.removeListener(_finishHistoryOperation);
     }
     _elements.clear();
@@ -2237,12 +2078,11 @@ class _CanvasPageState extends State<CanvasPage> {
         model.dispose();
       }
     });
-    _documentDirty = false;
-    _documentLoaded = true;
+    _hasDocument = true;
     if (mounted) setState(() {});
   }
 
-  void _showProjectSnackBar(String message) {
+  void _showClipboardError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -2253,7 +2093,7 @@ class _CanvasPageState extends State<CanvasPage> {
     if (!_documentLoaded || _canvasBackgroundKind == kind) return;
     _canvasBackgroundKind = kind;
     _canvasController.background = kind.build(BTheme.of(context).colors);
-    _scheduleDocumentSave();
+    _documentChanged();
     _finishHistoryOperation();
   }
 
@@ -2410,34 +2250,18 @@ class _CanvasPageState extends State<CanvasPage> {
     return true;
   }
 
-  // ---------- Document persistence ----------
+  // ---------- Document snapshots ----------
 
-  Future<void> _restoreDocument() async {
+  void _batchDocumentChanges(VoidCallback edit) {
+    _documentBatchDepth++;
     try {
-      final document = await _documentStore.load();
-      if (!mounted) return;
-      if (document != null) {
-        _canvasBackgroundKind = document.background;
-        _canvasController.background = document.background.build(
-          BTheme.of(context).colors,
-        );
-        for (final data in document.elements) {
-          _mountElement(_createElementModel(data));
-        }
+      edit();
+    } finally {
+      _documentBatchDepth--;
+      if (_documentBatchDepth == 0 && _documentBatchChanged) {
+        _documentBatchChanged = false;
+        _documentChanged();
       }
-      _documentLoaded = true;
-      _resetHistory();
-      if (mounted) setState(() {});
-    } on Object {
-      _resetHistory();
-      if (!mounted) return;
-      setState(() {});
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not load saved canvas')),
-        );
-      });
     }
   }
 
@@ -2448,56 +2272,14 @@ class _CanvasPageState extends State<CanvasPage> {
     );
   }
 
-  void _scheduleDocumentSave() {
-    if (!_documentLoaded) return;
+  void _documentChanged() {
+    if (!_hasDocument) return;
+    if (_documentBatchDepth != 0) {
+      _documentBatchChanged = true;
+      return;
+    }
     _noteHistoryChange();
-    _documentDirty = true;
-    _saveTimer?.cancel();
-    _saveTimer = Timer(
-      const Duration(milliseconds: 300),
-      _enqueueDocumentSave,
-    );
-  }
-
-  Future<void>? _enqueueDocumentSave({bool throwOnFailure = false}) {
-    _saveTimer = null;
-    if (!_documentLoaded || !_documentDirty) return null;
-    _documentDirty = false;
-    final snapshot = _currentDocument();
-    final operation = _saveQueue.then(
-      (_) => throwOnFailure ? _persistDocument(snapshot) : _saveDocument(snapshot),
-    );
-    _saveQueue = operation.then<void>(
-      (_) {},
-      onError: (Object error, StackTrace stackTrace) {},
-    );
-    if (!throwOnFailure) return null;
-    return _saveAndRestoreDirty(operation);
-  }
-
-  Future<void> _saveAndRestoreDirty(Future<void> operation) async {
-    try {
-      await operation;
-    } on Object {
-      _documentDirty = true;
-      rethrow;
-    }
-  }
-
-  Future<void> _persistDocument(CanvasDocument document) {
-    return _documentStore.save(document);
-  }
-
-  Future<void> _saveDocument(CanvasDocument document) async {
-    try {
-      await _persistDocument(document);
-    } on Object {
-      _documentDirty = true;
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not save canvas')),
-      );
-    }
+    widget.onDocumentChanged(_currentDocument());
   }
 
   // ---------- History ----------
@@ -2560,11 +2342,11 @@ class _CanvasPageState extends State<CanvasPage> {
     _applyTool(entry.tool, touchSelectionEnabled: entry.touchSelectionEnabled);
     if (documentChanged) _restoreLiveModels(CanvasDocument.fromJson(jsonDecode(entry.document)));
     _historyCurrent = entry;
-    if (documentChanged) _scheduleDocumentSave();
+    if (documentChanged) _documentChanged();
   }
 
   void _restoreLiveModels(CanvasDocument document) {
-    _documentGeneration++;
+    _clipboardGeneration++;
     _clearSelection();
     final snapshots = {for (final data in document.elements) data.id: data};
     _removeElements(
@@ -2844,7 +2626,7 @@ class _CanvasPageState extends State<CanvasPage> {
           Positioned.fill(
             child: CanvasChrome(
               title: CanvasTitle(
-                path: _documentStore.library.path(_documentStore.library.currentId).map((file) => file.name).toList(),
+                path: widget.libraryPath,
                 onPressed: _documentLoaded ? _showFilePicker : null,
               ),
               toolbar: CanvasToolbar(buttonsBuilder: _buildToolbarButtons),

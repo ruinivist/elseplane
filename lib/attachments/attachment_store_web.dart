@@ -1,10 +1,10 @@
-// Implements attachment persistence with browser local storage.
-// Selected by the attachment store facade for the web editor.
+// Persists attachment bytes in the browser origin-private file system.
+// Selected by app composition for the web workspace.
 
 import 'dart:js_interop';
 import 'dart:typed_data';
 
-import 'package:elseplane/canvas/persistence/attachments/store_base.dart';
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:web/web.dart';
 
 // ---------- Browser storage ----------

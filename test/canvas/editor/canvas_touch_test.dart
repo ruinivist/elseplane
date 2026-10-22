@@ -27,7 +27,7 @@ void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
   testWidgets('empty touch pans after slop, preserves selection, and converts zoom', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document([_pen('a')])));
+    await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
     final model = tester.widget<PenStroke>(find.byType(PenStroke)).model..selected = true;
     final controller = _canvas(tester)..updateScalebyDelta(1);
     final before = controller.offset;
@@ -45,7 +45,7 @@ void main() {
   });
 
   testWidgets('empty touch tap clears activation and selection only on release', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document([_code()])));
+    await pumpCanvas(tester, TestLibraryStore(_document([_code()])));
     final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
     await tester.tapAt(const Offset(220, 300));
     await tester.pumpAndSettle();
@@ -64,7 +64,7 @@ void main() {
 
   for (final displacement in [Offset.zero, const Offset(60, 30)]) {
     testWidgets('canceling empty touch at $displacement preserves selection without inertia', (tester) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_document([_pen('a')])));
+      await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
       final model = tester.widget<PenStroke>(find.byType(PenStroke)).model..selected = true;
       final controller = _canvas(tester);
       final touch = await tester.startGesture(const Offset(550, 400));
@@ -83,7 +83,7 @@ void main() {
   }
 
   testWidgets('normal empty touch pan release uses viewport inertia', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     final controller = _canvas(tester);
     final touch = await tester.startGesture(const Offset(200, 300));
     for (var frame = 1; frame <= 5; frame++) {
@@ -100,7 +100,7 @@ void main() {
 
   for (final displacement in [Offset.zero, const Offset(60, 30)]) {
     testWidgets('two fingers take over empty touch at $displacement without a jump or fling', (tester) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_document([_pen('a')])));
+      await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
       final model = tester.widget<PenStroke>(find.byType(PenStroke)).model..selected = true;
       final controller = _canvas(tester);
       final first = await tester.startGesture(const Offset(200, 400), pointer: 1);
@@ -125,7 +125,7 @@ void main() {
   }
 
   testWidgets('tool changes cancel empty touch pan through final release', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     final controller = _canvas(tester);
     final touch = await tester.startGesture(const Offset(200, 300));
     await touch.moveBy(const Offset(60, 30));
@@ -140,7 +140,7 @@ void main() {
   });
 
   testWidgets('document replacement cancels an empty touch pan', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document([_pen('a')])));
+    await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
     await tester.dragFrom(const Offset(150, 300), const Offset(60, 30));
     await tester.pump();
     final controller = _canvas(tester);
@@ -157,7 +157,7 @@ void main() {
 
   for (final select in [false, true]) {
     testWidgets('touch object movement with Select $select leaves the viewport fixed', (tester) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_document([_pen('a')])), platform: TargetPlatform.android);
+      await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])), platform: TargetPlatform.android);
       if (select) await _chooseTool(tester, 'select');
       final model = tester.widget<PenStroke>(find.byType(PenStroke)).model;
       await tester.dragFrom(const Offset(150, 300), const Offset(60, 30));
@@ -168,7 +168,7 @@ void main() {
 
   for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
     testWidgets('Select is initially visible and accessible on $platform', (tester) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_document()), platform: platform);
+      await pumpCanvas(tester, TestLibraryStore(_document()), platform: platform);
       final button = tester.getSemantics(
         find.descendant(of: find.byKey(const ValueKey('toolbar-select')), matching: find.byType(TextButton)),
       );
@@ -184,7 +184,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()), platform: TargetPlatform.linux);
+    await pumpCanvas(tester, TestLibraryStore(_document()), platform: TargetPlatform.linux);
     for (final kind in [PointerDeviceKind.mouse, PointerDeviceKind.stylus]) {
       final pointer = await tester.startGesture(
         tester.getCenter(find.byKey(const ValueKey('toolbar-draw'))),
@@ -200,7 +200,7 @@ void main() {
   });
 
   testWidgets('desktop toolbar touch reveals Select after all releases and keeps it until reload', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()), platform: TargetPlatform.linux);
+    await pumpCanvas(tester, TestLibraryStore(_document()), platform: TargetPlatform.linux);
     final draw = find.byKey(const ValueKey('toolbar-draw'));
     final bounds = tester.getRect(draw);
     final toolbarTouch = await tester.startGesture(bounds.center, pointer: 1);
@@ -220,14 +220,14 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('toolbar-select')), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()), platform: TargetPlatform.linux);
+    await pumpCanvas(tester, TestLibraryStore(_document()), platform: TargetPlatform.linux);
     expect(find.byKey(const ValueKey('toolbar-select')), findsNothing);
   });
 
   testWidgets('browser touch reveals Select after all releases even when Flutter receives only a semantics tap', (
     tester,
   ) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()), platform: TargetPlatform.linux);
+    await pumpCanvas(tester, TestLibraryStore(_document()), platform: TargetPlatform.linux);
     void pointer(String type, int id, {String kind = 'touch'}) {
       web.document.dispatchEvent(web.PointerEvent(type, web.PointerEventInit(pointerId: id, pointerType: kind)));
     }
@@ -254,7 +254,7 @@ void main() {
   ) async {
     await pumpCanvas(
       tester,
-      TestCanvasDocumentStore(_document([_pen('a'), _pen('b', const Offset(350, 250))])),
+      TestLibraryStore(_document([_pen('a'), _pen('b', const Offset(350, 250))])),
       platform: TargetPlatform.android,
     );
     await _chooseTool(tester, 'select');
@@ -284,7 +284,7 @@ void main() {
   });
 
   testWidgets('Select empty tap clears activation and selection on release', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document([_code()])), platform: TargetPlatform.android);
+    await pumpCanvas(tester, TestLibraryStore(_document([_code()])), platform: TargetPlatform.android);
     await _chooseTool(tester, 'select');
     final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
     await tester.tapAt(const Offset(220, 300));
@@ -304,7 +304,7 @@ void main() {
     testWidgets('$interruption restores prior touch selection and removes the marquee', (tester) async {
       await pumpCanvas(
         tester,
-        TestCanvasDocumentStore(_document([_pen('a'), _pen('b', const Offset(350, 250))])),
+        TestLibraryStore(_document([_pen('a'), _pen('b', const Offset(350, 250))])),
         platform: TargetPlatform.android,
       );
       await _chooseTool(tester, 'select');
@@ -338,7 +338,7 @@ void main() {
   }
 
   testWidgets('Select cancels drawing and other tools reset touch selection', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()), platform: TargetPlatform.android);
+    await pumpCanvas(tester, TestLibraryStore(_document()), platform: TargetPlatform.android);
     await _chooseTool(tester, 'draw');
     final drawing = await tester.startGesture(const Offset(200, 300), pointer: 1);
     await drawing.moveBy(const Offset(40, 20));
@@ -358,7 +358,7 @@ void main() {
 
   for (final touchSelect in [false, true]) {
     testWidgets('Escape deselects inactive objects with touch Select $touchSelect', (tester) async {
-      final store = TestCanvasDocumentStore(_document([_pen('a'), _pen('b', const Offset(350, 250))]));
+      final store = TestLibraryStore(_document([_pen('a'), _pen('b', const Offset(350, 250))]));
       await pumpCanvas(tester, store, platform: touchSelect ? TargetPlatform.android : TargetPlatform.linux);
       if (touchSelect) await _chooseTool(tester, 'select');
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
@@ -380,7 +380,7 @@ void main() {
   }
 
   testWidgets('Escape dismisses editing before disabling Select', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document([_code()])), platform: TargetPlatform.android);
+    await pumpCanvas(tester, TestLibraryStore(_document([_code()])), platform: TargetPlatform.android);
     await _chooseTool(tester, 'select');
     await tester.tapAt(const Offset(220, 300));
     await tester.pumpAndSettle();
@@ -401,7 +401,7 @@ void main() {
   testWidgets('mixed touch group moves in either mode as one undo step and preserves Select', (tester) async {
     await pumpCanvas(
       tester,
-      TestCanvasDocumentStore(
+      TestLibraryStore(
         _document([
           _pen('pen'),
           ShapeElementData(
@@ -457,7 +457,7 @@ void main() {
 
   testWidgets('touch marquee overlaps rotated bounds at non-default zoom', (tester) async {
     final code = _code().copyWith(position: const Offset(160, 140), rotation: math.pi / 2, title: '');
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document([code])), platform: TargetPlatform.android);
+    await pumpCanvas(tester, TestLibraryStore(_document([code])), platform: TargetPlatform.android);
     await _chooseTool(tester, 'select');
     final controller = _canvas(tester)..updateScalebyDelta(0.5, focalPoint: Offset.zero);
     await tester.pump();
@@ -477,7 +477,7 @@ void main() {
   testWidgets('mouse marquee and modifier selection retain their behavior with Select enabled', (tester) async {
     await pumpCanvas(
       tester,
-      TestCanvasDocumentStore(_document([_pen('a'), _pen('b', const Offset(350, 250))])),
+      TestLibraryStore(_document([_pen('a'), _pen('b', const Offset(350, 250))])),
       platform: TargetPlatform.linux,
     );
     final models = tester.widgetList<PenStroke>(find.byType(PenStroke)).map((stroke) => stroke.model).toList();
@@ -511,7 +511,7 @@ void main() {
 
   for (final (tool, type) in [('draw', PenStroke), ('arrow', Arrow), ('shape', Shape)]) {
     testWidgets('$tool draws with one finger and discards on navigation takeover', (tester) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+      await pumpCanvas(tester, TestLibraryStore(_document()));
       await _chooseTool(tester, tool);
       final controller = _canvas(tester);
       final first = await tester.startGesture(const Offset(200, 300), pointer: 1);
@@ -538,7 +538,7 @@ void main() {
 
   for (final (tool, type) in [('text', TextTool), ('code', CodeTool), ('media', MediaTool)]) {
     testWidgets('$tool touch placement waits for release and cancels for pinch', (tester) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+      await pumpCanvas(tester, TestLibraryStore(_document()));
       await _chooseTool(tester, tool);
       final first = await tester.startGesture(const Offset(200, 300), pointer: 1);
       expect(find.byType(type), findsNothing);
@@ -567,7 +567,7 @@ void main() {
   }
 
   testWidgets('two actual fingers discard a stylus stroke until interrupted pointers release', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     await _chooseTool(tester, 'draw');
     final controller = _canvas(tester);
     final stylus = await tester.startGesture(const Offset(200, 300), pointer: 1, kind: PointerDeviceKind.stylus);
@@ -595,7 +595,7 @@ void main() {
   });
 
   testWidgets('group movement stops on takeover and remains one undo step', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document([_pen('a'), _pen('b', const Offset(350, 250))])));
+    await pumpCanvas(tester, TestLibraryStore(_document([_pen('a'), _pen('b', const Offset(350, 250))])));
     final models = tester.widgetList<PenStroke>(find.byType(PenStroke)).map((stroke) => stroke.model).toList();
     for (final model in models) {
       model.selected = true;
@@ -617,7 +617,7 @@ void main() {
   });
 
   testWidgets('eraser keeps prior deletions and stops erasing during navigation', (tester) async {
-    final store = TestCanvasDocumentStore(_document([_pen('a'), _pen('b', const Offset(350, 250))]));
+    final store = TestLibraryStore(_document([_pen('a'), _pen('b', const Offset(350, 250))]));
     await pumpCanvas(tester, store);
     await _chooseTool(tester, 'erase');
     final first = await tester.startGesture(const Offset(150, 300), pointer: 1);
@@ -638,7 +638,7 @@ void main() {
 
   for (final control in ['code-block-handle', 'code-block-rotate-control', 'code-block-resize-handle']) {
     testWidgets('$control hands off without further object changes', (tester) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_document([_code()])));
+      await pumpCanvas(tester, TestLibraryStore(_document([_code()])));
       final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
       await tester.tapAt(const Offset(220, 300));
       await tester.pumpAndSettle();
@@ -668,7 +668,7 @@ void main() {
   }
 
   testWidgets('pinch from a code title does not activate on final release', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document([_code()])));
+    await pumpCanvas(tester, TestLibraryStore(_document([_code()])));
     final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
     final title = find.text('title');
     final first = await tester.startGesture(tester.getCenter(title), pointer: 1);
@@ -689,7 +689,7 @@ void main() {
   testWidgets('arrow point editing freezes while its pointers navigate', (tester) async {
     await pumpCanvas(
       tester,
-      TestCanvasDocumentStore(
+      TestLibraryStore(
         _document([
           ArrowElementData(
             id: 'arrow',

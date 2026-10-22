@@ -15,8 +15,8 @@ void validateAttachmentSize(int byteLength, String errorMessage) {
 
 // ---------- Storage contract ----------
 
-/// Defines persistence operations for editor-owned attachment bytes.
-/// Implemented by the browser attachment store.
+/// Defines byte storage shared by editor resources and library transfers.
+/// Implemented by platform attachment stores.
 abstract interface class AttachmentStore {
   Future<void> write(String path, Uint8List bytes);
 

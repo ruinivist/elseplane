@@ -6,8 +6,8 @@ import 'dart:js_interop';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/tools/media/media_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:flutter/foundation.dart';
@@ -69,7 +69,7 @@ void main() {
               ),
             );
           }
-          await pumpCanvas(tester, TestCanvasDocumentStore(document), attachmentStore: attachments);
+          await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
           final text = media ? null : tester.widget<TextTool>(find.byType(TextTool)).model;
           final image = media ? tester.widget<MediaTool>(find.byType(MediaTool)).model : null;
           await tester.tap(find.byKey(ValueKey(media ? 'media-url-field' : 'text-markdown-preview')));
@@ -126,7 +126,7 @@ void main() {
   });
 
   testWidgets('media places as a selectable URL-only node', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
 
     await tester.tap(find.byKey(const ValueKey('toolbar-media')));
     await tester.pump();
@@ -190,7 +190,7 @@ void main() {
     await _cacheImage(url);
     await pumpCanvas(
       tester,
-      TestCanvasDocumentStore(
+      TestLibraryStore(
         _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: 'original')),
       ),
     );
@@ -232,7 +232,7 @@ void main() {
     await _cacheImage(editedUrl);
     await pumpCanvas(
       tester,
-      TestCanvasDocumentStore(
+      TestLibraryStore(
         _document(
           MediaElementData(
             id: 'media',
@@ -290,7 +290,7 @@ void main() {
       const editedUrl = 'https://example.com/edited.png';
       await _cacheImage(url);
       await _cacheImage(editedUrl);
-      final store = TestCanvasDocumentStore(
+      final store = TestLibraryStore(
         _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
       );
       await pumpCanvas(tester, store);
@@ -346,7 +346,7 @@ void main() {
       await _cacheImage(url);
       await pumpCanvas(
         tester,
-        TestCanvasDocumentStore(
+        TestLibraryStore(
           _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
         ),
       );
@@ -372,7 +372,7 @@ void main() {
     await _cacheImage(url);
     await pumpCanvas(
       tester,
-      TestCanvasDocumentStore(
+      TestLibraryStore(
         _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
       ),
     );
@@ -396,7 +396,7 @@ void main() {
     final attachments = TestAttachmentStore();
     await pumpCanvas(
       tester,
-      TestCanvasDocumentStore(_document()),
+      TestLibraryStore(_document()),
       attachmentStore: attachments,
     );
 
@@ -431,7 +431,7 @@ void main() {
     final attachments = TestAttachmentStore();
     await pumpCanvas(
       tester,
-      TestCanvasDocumentStore(
+      TestLibraryStore(
         _document(
           MediaElementData(
             id: 'media',
@@ -475,7 +475,7 @@ void main() {
     final attachments = TestAttachmentStore();
     await pumpCanvas(
       tester,
-      TestCanvasDocumentStore(_document()),
+      TestLibraryStore(_document()),
       attachmentStore: attachments,
       readClipboard: () async => (
         text: null,
@@ -508,7 +508,7 @@ void main() {
   ) async {
     const url = 'https://example.com/image.png';
     await _cacheImage(url);
-    final store = TestCanvasDocumentStore(
+    final store = TestLibraryStore(
       _document(
         MediaElementData(
           id: 'media',
@@ -651,7 +651,7 @@ void main() {
   });
 
   testWidgets('URL-only media can be deleted from its controls', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
 
     await tester.tap(find.byKey(const ValueKey('toolbar-media')));
     await tester.pump();

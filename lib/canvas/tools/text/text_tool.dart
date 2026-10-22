@@ -1,9 +1,9 @@
 // Renders and resizes a persisted canvas text tool element.
 // Used by the canvas element stack for text display and editing.
 
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/tools/text/text_block_model.dart';
 import 'package:elseplane/canvas/tools/text/text_markdown_editor.dart';
 import 'package:elseplane/canvas/tools/text/text_markdown_preview.dart';

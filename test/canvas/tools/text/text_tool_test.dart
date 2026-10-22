@@ -3,14 +3,14 @@
 
 import 'dart:math' as math;
 
+import 'package:elseplane/app/workspace.dart';
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
-import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_markdown_preview.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/main.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/preset_colors.dart';
@@ -44,7 +44,7 @@ void main() {
     GoogleFontsLite.config.allowRuntimeFetching = false;
     SharedPreferencesAsyncWeb.registerWith(null);
     final preferences = SharedPreferencesAsync();
-    await preferences.remove(CanvasDocumentStore.libraryKey);
+    await preferences.remove(PreferencesLibraryStore.libraryKey);
     originalLauncher = UrlLauncherPlatform.instance;
     launcher = _FakeUrlLauncher();
     UrlLauncherPlatform.instance = launcher;
@@ -56,7 +56,7 @@ void main() {
   });
 
   testWidgets('renderer owns initial and live rotation with rotated pointer targets', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_rendererDocument(rotation: math.pi / 2)));
+    await pumpCanvas(tester, TestLibraryStore(_rendererDocument(rotation: math.pi / 2)));
     final block = find.byType(TextTool);
     final model = tester.widget<TextTool>(block).model;
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
@@ -89,7 +89,7 @@ void main() {
   });
 
   testWidgets('auto-height measurements survive transient changes, rotation, and culling', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_rendererDocument(autoHeight: true)));
+    await pumpCanvas(tester, TestLibraryStore(_rendererDocument(autoHeight: true)));
     final model = tester.widget<TextTool>(find.byType(TextTool)).model;
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
     final measured = tester.getSize(find.byType(TextTool));
@@ -1291,7 +1291,11 @@ Inline $x^2$''';
           theme: starlessLightThemeData,
           darkTheme: starlessDarkThemeData,
           themeMode: themeMode,
-          home: CanvasPage(documentStore: TestCanvasDocumentStore(_rendererDocument())),
+          home: Workspace(
+            libraryStore: TestLibraryStore(_rendererDocument()),
+            attachmentStore: TestAttachmentStore(),
+            projectFiles: TestProjectFiles(),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -1367,7 +1371,7 @@ Inline $x^2$''';
 
   for (final picker in ['text-font-select', 'text-background-select']) {
     testWidgets('$picker owns Escape before the active canvas block', (tester) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_rendererDocument()));
+      await pumpCanvas(tester, TestLibraryStore(_rendererDocument()));
       await tester.tap(find.byKey(const ValueKey('text-markdown-preview-surface')));
       await tester.pumpAndSettle();
       final model = tester.widget<TextTool>(find.byType(TextTool)).model;
@@ -1489,7 +1493,7 @@ Inline $x^2$''';
     await tester.pump();
     await pumpPastSave(tester);
 
-    final savedDocument = (await CanvasDocumentStore().load())!;
+    final savedDocument = (await PreferencesLibraryStore().load())!.current.document!;
     final savedNodes = savedDocument.elements.whereType<TextElementData>().toList();
     expect(savedNodes, hasLength(2));
     final savedSecond = savedNodes.first;
@@ -1531,7 +1535,7 @@ Inline $x^2$''';
   ) async {
     const invalid = '{"version":99,"currentId":"invalid","files":[]}';
     final preferences = SharedPreferencesAsync();
-    await preferences.setString(CanvasDocumentStore.libraryKey, invalid);
+    await preferences.setString(PreferencesLibraryStore.libraryKey, invalid);
 
     await tester.pumpWidget(const ElseplaneApp());
     await tester.pump();
@@ -1539,14 +1543,14 @@ Inline $x^2$''';
 
     expect(find.byType(TextTool), findsNothing);
     expect(find.text('Could not load saved canvas'), findsOneWidget);
-    expect(await preferences.getString(CanvasDocumentStore.libraryKey), invalid);
+    expect(await preferences.getString(PreferencesLibraryStore.libraryKey), invalid);
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
     await tester.tapAt(const Offset(120, 200));
     await pumpPastSave(tester);
     expect(find.byType(TextTool), findsNothing);
-    expect(await preferences.getString(CanvasDocumentStore.libraryKey), invalid);
+    expect(await preferences.getString(PreferencesLibraryStore.libraryKey), invalid);
   });
 }
 
@@ -1581,7 +1585,7 @@ Future<void> _addTextBlock(
   } else {
     await pumpCanvas(
       tester,
-      CanvasDocumentStore(),
+      PreferencesLibraryStore(),
       attachmentStore: attachmentStore,
       platform: platform,
     );

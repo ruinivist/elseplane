@@ -6,8 +6,6 @@ import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
-import 'package:elseplane/canvas/editor/widgets/canvas_file_picker.dart';
-import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
@@ -15,6 +13,8 @@ import 'package:elseplane/canvas/tools/media/media_tool.dart';
 import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
 import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/library/widgets/canvas_file_picker.dart';
+import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/glass_surface.dart';
 import 'package:elseplane/ui/common/labeled_switch.dart';
@@ -40,7 +40,7 @@ void main() {
         final document = _autoDocument(kind).withElements(
           (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
         );
-        final store = TestCanvasDocumentStore(document);
+        final store = TestLibraryStore(document);
         await pumpCanvas(tester, store);
         await tester.tapAt(_autoHitPoint(tester, kind));
         await tester.pumpAndSettle();
@@ -75,7 +75,7 @@ void main() {
         expect(_canvas(tester).childOrder, ['other', 'editor']);
         await pumpPastSave(tester);
         await tester.pumpWidget(const SizedBox());
-        await pumpCanvas(tester, TestCanvasDocumentStore(store.persisted));
+        await pumpCanvas(tester, TestLibraryStore(store.persisted));
         expect(_canvas(tester).childOrder, ['other', 'editor']);
       });
     }
@@ -84,7 +84,7 @@ void main() {
       final document = _autoDocument(kind).withElements(
         (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
       );
-      await pumpCanvas(tester, TestCanvasDocumentStore(document));
+      await pumpCanvas(tester, TestLibraryStore(document));
       await tester.tapAt(_autoHitPoint(tester, kind));
       await tester.pumpAndSettle();
       final text = kind == 'text' ? tester.widget<TextTool>(find.byType(TextTool)).model : null;
@@ -129,7 +129,7 @@ void main() {
       final document = _autoDocument(kind).withElements(
         (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
       );
-      await pumpCanvas(tester, TestCanvasDocumentStore(document));
+      await pumpCanvas(tester, TestLibraryStore(document));
       await tester.tapAt(_autoHitPoint(tester, kind));
       await tester.pumpAndSettle();
       await _promoteOther(tester);
@@ -147,12 +147,14 @@ void main() {
     });
   }
 
-  testWidgets('Auto completed image paste promotes after leaving editing and shares its undo step', (tester) async {
+  testWidgets('canceled image paste leaves content, stacking, and history unchanged after editing ends', (
+    tester,
+  ) async {
     final document = _autoDocument('text').withElements(
       (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
     );
     final attachments = _DelayedAttachmentStore();
-    await pumpCanvas(tester, TestCanvasDocumentStore(document), attachmentStore: attachments);
+    await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
     await tester.tapAt(_autoHitPoint(tester, 'text'));
     await tester.pumpAndSettle();
     final model = tester.widget<TextTool>(find.byType(TextTool)).model;
@@ -165,15 +167,15 @@ void main() {
     attachments.resume.complete();
     await paste;
     await tester.pumpAndSettle();
-    expect(_canvas(tester).childOrder, ['other', 'editor']);
-    final pasted = model.controller.text;
-    expect(pasted, startsWith('![pasted image](attachments/'));
-    await _shortcut(tester, LogicalKeyboardKey.keyZ);
     expect(_canvas(tester).childOrder, ['editor', 'other']);
     expect(model.controller.text, 'contents');
-    await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+    expect(attachments.files, isEmpty);
+    await _shortcut(tester, LogicalKeyboardKey.keyZ);
     expect(_canvas(tester).childOrder, ['other', 'editor']);
-    expect(model.controller.text, pasted);
+    expect(model.controller.text, 'contents');
+    await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+    expect(_canvas(tester).childOrder, ['editor', 'other']);
+    expect(model.controller.text, 'contents');
   });
 
   for (final image in [false, true]) {
@@ -192,7 +194,7 @@ void main() {
                   : '[link](javascript:alert(1))',
             ),
           );
-          await pumpCanvas(tester, TestCanvasDocumentStore(document));
+          await pumpCanvas(tester, TestLibraryStore(document));
           await tester.pumpAndSettle();
           final Offset point;
           if (image) {
@@ -228,7 +230,7 @@ void main() {
       testWidgets('Auto $kind $device click promotes permanently without changing activation rules', (tester) async {
         final document = _autoDocument(kind);
         final target = document.elements.first.id;
-        final store = TestCanvasDocumentStore(document);
+        final store = TestLibraryStore(document);
         await pumpCanvas(tester, store);
         await tester.tapAt(_autoHitPoint(tester, kind), kind: device);
         await tester.pumpAndSettle();
@@ -243,7 +245,7 @@ void main() {
         await pumpPastSave(tester);
         expect(_order(store.persisted!), expected);
         await tester.pumpWidget(const SizedBox());
-        await pumpCanvas(tester, TestCanvasDocumentStore(store.persisted));
+        await pumpCanvas(tester, TestLibraryStore(store.persisted));
         expect(_canvas(tester).childOrder, expected);
       });
     }
@@ -251,7 +253,7 @@ void main() {
       final document = _autoDocument(kind);
       final initial = _order(document);
       final target = document.elements.first.id;
-      await pumpCanvas(tester, TestCanvasDocumentStore(document));
+      await pumpCanvas(tester, TestLibraryStore(document));
       final controller = _canvas(tester);
       final position = controller.getInfo(target).gsPosition;
       final start = kind == 'media'
@@ -274,7 +276,7 @@ void main() {
     var document = _document();
     document = document.withElements((elements) => elements[0] = elements[0].copyWith(autoArrange: true));
     document = document.withElements((elements) => elements[2] = elements[2].copyWith(autoArrange: true));
-    await pumpCanvas(tester, TestCanvasDocumentStore(document));
+    await pumpCanvas(tester, TestLibraryStore(document));
     final models = _models(tester);
     for (final id in ['a', 'b', 'c']) {
       models[id]!.selected = true;
@@ -302,7 +304,7 @@ void main() {
   });
 
   testWidgets('Auto modifier-click and right-click promote without activation', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document(auto: true)));
+    await pumpCanvas(tester, TestLibraryStore(_document(auto: true)));
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
     await tester.tapAt(const Offset(305, 305));
@@ -323,7 +325,7 @@ void main() {
   });
 
   testWidgets('manual boundary choice disables Auto and undo restores its setting', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document(auto: true)));
+    await pumpCanvas(tester, TestLibraryStore(_document(auto: true)));
     await tester.tapAt(const Offset(305, 305));
     await tester.pumpAndSettle();
     await tester.tapAt(const Offset(305, 305));
@@ -348,7 +350,7 @@ void main() {
 
   testWidgets('Auto switch applies to a mixed group and promotes immediately in one step', (tester) async {
     final document = _document().withElements((elements) => elements[2] = elements[2].copyWith(autoArrange: true));
-    await pumpCanvas(tester, TestCanvasDocumentStore(document));
+    await pumpCanvas(tester, TestLibraryStore(document));
     _models(tester)['a']!.selected = true;
     _models(tester)['c']!.selected = true;
     await _open(tester, const Offset(305, 305));
@@ -383,7 +385,7 @@ void main() {
   });
 
   testWidgets('manual group shortcut disables Auto only for its targets', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document(auto: true)));
+    await pumpCanvas(tester, TestLibraryStore(_document(auto: true)));
     _models(tester)['a']!.selected = true;
     _models(tester)['c']!.selected = true;
     await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
@@ -398,7 +400,7 @@ void main() {
   });
 
   testWidgets('Auto menu toggle supports native hover and keyboard activation', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document(auto: true)));
+    await pumpCanvas(tester, TestLibraryStore(_document(auto: true)));
     await _open(tester, const Offset(305, 305));
     await _openArrange(tester);
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
@@ -416,7 +418,7 @@ void main() {
   });
 
   testWidgets('direct heading is noninteractive and navigation skips disabled commands', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     await tester.tapAt(const Offset(375, 375));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Arrange'));
@@ -439,7 +441,7 @@ void main() {
 
   testWidgets('direct menu with no available commands can dismiss without saving', (tester) async {
     final document = _document().withElements((elements) => elements.removeRange(1, 4));
-    final store = TestCanvasDocumentStore(document);
+    final store = TestLibraryStore(document);
     await pumpCanvas(tester, store);
     await tester.tapAt(const Offset(305, 305));
     await tester.pumpAndSettle();
@@ -461,7 +463,7 @@ void main() {
 
   for (final escape in [false, true]) {
     testWidgets('direct ${escape ? 'Escape preserves' : 'click-away clears'} single selection', (tester) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+      await pumpCanvas(tester, TestLibraryStore(_document()));
       await tester.tapAt(const Offset(305, 305));
       await tester.pumpAndSettle();
       _models(tester)['c']!.selected = true;
@@ -482,7 +484,7 @@ void main() {
   }
 
   testWidgets('direct group placeholder restores pre-pointer selection and leaves activation intact', (tester) async {
-    final store = TestCanvasDocumentStore(_document());
+    final store = TestLibraryStore(_document());
     await pumpCanvas(tester, store);
     await tester.tapAt(const Offset(305, 305));
     await tester.pumpAndSettle();
@@ -508,7 +510,7 @@ void main() {
 
   for (final editor in ['text', 'code', 'title', 'media']) {
     testWidgets('direct $editor Arrange ends editing and transfers focus', (tester) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_editorDocument(editor)));
+      await pumpCanvas(tester, TestLibraryStore(_editorDocument(editor)));
       final surface = switch (editor) {
         'text' => find.byKey(const ValueKey('text-markdown-preview')),
         'title' => find.byKey(const ValueKey('code-title-text')),
@@ -543,7 +545,7 @@ void main() {
   }
 
   testWidgets('direct shortcuts use captured targets and navigation dismisses the popover', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     await tester.tapAt(const Offset(305, 305));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Arrange'));
@@ -578,7 +580,7 @@ void main() {
             size: codeBlockMinimumSize,
           ),
         );
-        await pumpCanvas(tester, TestCanvasDocumentStore(document));
+        await pumpCanvas(tester, TestLibraryStore(document));
         final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
         await tester.pumpWidget(
           MaterialApp(
@@ -624,7 +626,7 @@ void main() {
       testWidgets(
         '${direct ? 'direct' : 'submenu'} $label saves ${group ? 'group' : 'single'} order',
         (tester) async {
-          final store = TestCanvasDocumentStore(_document());
+          final store = TestLibraryStore(_document());
           await pumpCanvas(tester, store);
           final canvas = _canvas(tester);
           final before = _models(tester);
@@ -681,7 +683,7 @@ void main() {
           await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
           await pumpPastSave(tester);
           await tester.pumpWidget(const SizedBox());
-          await pumpCanvas(tester, TestCanvasDocumentStore(store.persisted));
+          await pumpCanvas(tester, TestLibraryStore(store.persisted));
           expect(_canvas(tester).childOrder, expected);
         },
       );
@@ -692,7 +694,7 @@ void main() {
     testWidgets('$tool Arrange tooltip follows layout through transforms', (tester) async {
       await pumpCanvas(
         tester,
-        TestCanvasDocumentStore(_editorDocument(tool)),
+        TestLibraryStore(_editorDocument(tool)),
         attachmentStore: TestAttachmentStore(),
       );
       if (tool == 'media') {
@@ -769,7 +771,7 @@ void main() {
         fillColor: Colors.red,
       ),
     );
-    final store = TestCanvasDocumentStore(document);
+    final store = TestLibraryStore(document);
     await pumpCanvas(tester, store);
     await tester.pumpAndSettle();
     final canvas = _canvas(tester);
@@ -852,7 +854,7 @@ void main() {
       document = document.withElements(
         (elements) => elements[0] = (elements.first as CodeElementData).copyWith(position: const Offset(100, 100)),
       );
-      await pumpCanvas(tester, TestCanvasDocumentStore(document));
+      await pumpCanvas(tester, TestLibraryStore(document));
       final canvas = _canvas(tester)..updateScalebyDelta(scale - 1, focalPoint: Offset.zero);
       await tester.pumpAndSettle();
       final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
@@ -925,7 +927,7 @@ void main() {
   }
 
   testWidgets('submenu has native keyboard navigation and disabled actions', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     await _open(tester, const Offset(375, 375));
     expect(find.text('Arrange'), findsOneWidget);
     expect(find.text('Bring Forward'), findsNothing);
@@ -964,7 +966,7 @@ void main() {
           (
             tester,
           ) async {
-            await pumpCanvas(tester, TestCanvasDocumentStore(_editorDocument(kind)));
+            await pumpCanvas(tester, TestLibraryStore(_editorDocument(kind)));
             final point = _autoHitPoint(tester, kind);
             final model = kind == 'text'
                 ? tester.widget<TextTool>(find.byType(TextTool)).model as CanvasElementModel
@@ -997,7 +999,7 @@ void main() {
   }
 
   testWidgets('outside modifier-click toggles selection and selected drag keeps the group', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     final models = _models(tester);
     models['a']!.selected = true;
     models['c']!.selected = true;
@@ -1027,7 +1029,7 @@ void main() {
   });
 
   testWidgets('menu padding stays inside and a toolbar click dismisses and clears selection', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     await _open(tester, const Offset(305, 305));
     await tester.tapAt(tester.getTopLeft(find.byType(MenuSurface)) + const Offset(2, 2));
     await tester.pumpAndSettle();
@@ -1047,7 +1049,7 @@ void main() {
   });
 
   testWidgets('outside right-click replaces the menu targets', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     await _open(tester, const Offset(375, 375));
     await _open(tester, const Offset(305, 305));
     expect(find.byType(MenuSurface), findsOneWidget);
@@ -1056,7 +1058,7 @@ void main() {
   });
 
   testWidgets('Arrange outside editor click clears selection and resumes editing', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_editorDocument('code')));
+    await pumpCanvas(tester, TestLibraryStore(_editorDocument('code')));
     final point = _autoHitPoint(tester, 'code');
     await tester.tapAt(point);
     await tester.pumpAndSettle();
@@ -1075,7 +1077,7 @@ void main() {
   });
 
   testWidgets('hover opens the submenu and click-away clears selection', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     await tester.tapAt(const Offset(305, 305));
     await tester.pumpAndSettle();
     final model = _models(tester)['a']!;
@@ -1097,7 +1099,7 @@ void main() {
   for (final scale in [1.0, 2.0]) {
     for (final jitter in [3.0, 4.0]) {
       testWidgets('right-click tolerates $jitter pixels of jitter at zoom $scale', (tester) async {
-        await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+        await pumpCanvas(tester, TestLibraryStore(_document()));
         final canvas = _canvas(tester)..updateScalebyDelta(scale - 1);
         await tester.pumpAndSettle();
         final models = _models(tester);
@@ -1125,7 +1127,7 @@ void main() {
     testWidgets('right-drag commits beyond four pixels even when returning to the press at zoom $scale', (
       tester,
     ) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+      await pumpCanvas(tester, TestLibraryStore(_document()));
       final canvas = _canvas(tester)..updateScalebyDelta(scale - 1);
       await tester.pumpAndSettle();
       final model = _models(tester)['a']!..selected = true;
@@ -1148,7 +1150,7 @@ void main() {
   }
 
   testWidgets('empty-canvas right-click jitter ends activation and preserves selection', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     await tester.tapAt(const Offset(305, 305));
     await tester.pumpAndSettle();
     final model = _models(tester)['a']!..selected = true;
@@ -1171,7 +1173,7 @@ void main() {
 
   for (final displacement in [const Offset(3, 0), const Offset(30, 0)]) {
     testWidgets('canceling right-click or pan at $displacement clears the gesture without inertia', (tester) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+      await pumpCanvas(tester, TestLibraryStore(_document()));
       final canvas = _canvas(tester);
       final drag = await tester.startGesture(
         const Offset(355, 355),
@@ -1191,7 +1193,7 @@ void main() {
   }
 
   testWidgets('tool changes cancel a right-drag through final release', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     final canvas = _canvas(tester);
     final drag = await tester.startGesture(
       const Offset(355, 355),
@@ -1212,7 +1214,7 @@ void main() {
   });
 
   testWidgets('right-click stops existing inertia before deciding whether to pan', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     final canvas = _canvas(tester)
       ..onScaleStart(ScaleStartDetails())
       ..onScaleEnd(ScaleEndDetails(velocity: const Velocity(pixelsPerSecond: Offset(500, 0))));
@@ -1235,7 +1237,7 @@ void main() {
   });
 
   testWidgets('right-click replaces selection and right-drag still pans', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     final before = _models(tester);
     before['a']!.selected = true;
     before['b']!.selected = true;
@@ -1266,7 +1268,7 @@ void main() {
 
   for (final platform in [TargetPlatform.macOS, TargetPlatform.linux]) {
     testWidgets('$platform shortcuts support all commands, repeats, and active fallback', (tester) async {
-      await pumpCanvas(tester, TestCanvasDocumentStore(_document()), platform: platform);
+      await pumpCanvas(tester, TestLibraryStore(_document()), platform: platform);
       await tester.tapAt(const Offset(305, 305));
       await tester.pumpAndSettle();
       final model = _models(tester)['a']!;
@@ -1307,7 +1309,7 @@ void main() {
   }
 
   testWidgets('menu shortcuts use captured targets and block unrelated canvas keys', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     await _open(tester, const Offset(305, 305));
     _models(tester)['a']!.selected = false;
     _models(tester)['c']!.selected = true;
@@ -1319,7 +1321,7 @@ void main() {
 
   for (final editor in ['text', 'code', 'title', 'media']) {
     testWidgets('$editor right-click transfers focus and deactivates without changing content', (tester) async {
-      final store = TestCanvasDocumentStore(_editorDocument(editor));
+      final store = TestLibraryStore(_editorDocument(editor));
       await pumpCanvas(tester, store);
       final surface = switch (editor) {
         'text' => find.byKey(const ValueKey('text-markdown-preview')),
@@ -1374,7 +1376,7 @@ void main() {
   }
 
   testWidgets('image Arrange ends activation and reopening captures the inactive image', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_editorDocument('media')), attachmentStore: TestAttachmentStore());
+    await pumpCanvas(tester, TestLibraryStore(_editorDocument('media')), attachmentStore: TestAttachmentStore());
     final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
     await tester.runAsync(() => model.setDeviceImage(onePixelPngBytes, 'png'));
     await tester.pumpAndSettle();
@@ -1400,7 +1402,7 @@ void main() {
   testWidgets('unknown layout sizes disable overlap commands but allow ends', (tester) async {
     var document = _document();
     document = document.withElements((elements) => elements.add(_text('unknown', const Offset(100000, 100000))));
-    await pumpCanvas(tester, TestCanvasDocumentStore(document));
+    await pumpCanvas(tester, TestLibraryStore(document));
     final canvas = _canvas(tester);
     final info = canvas.getInfo('unknown');
     canvas
@@ -1419,7 +1421,7 @@ void main() {
   testWidgets('unknown size disables Backward shortcut without affecting Send to Back', (tester) async {
     var document = _document();
     document = document.withElements((elements) => elements.add(_text('unknown', const Offset(100000, 100000))));
-    final store = TestCanvasDocumentStore(document);
+    final store = TestLibraryStore(document);
     await pumpCanvas(tester, store);
     final canvas = _canvas(tester);
     final info = canvas.getInfo('unknown');
@@ -1445,7 +1447,7 @@ void main() {
     document = document.withElements(
       (elements) => elements[1] = (elements[1] as ShapeElementData).copyWith(position: const Offset(650, 450)),
     );
-    final store = TestCanvasDocumentStore(document);
+    final store = TestLibraryStore(document);
     await pumpCanvas(tester, store);
     _models(tester)['a']!.selected = true;
     await _shortcut(tester, LogicalKeyboardKey.bracketLeft);
@@ -1468,7 +1470,7 @@ void main() {
         rotation: math.pi / 4,
       ),
     );
-    await pumpCanvas(tester, TestCanvasDocumentStore(document));
+    await pumpCanvas(tester, TestLibraryStore(document));
     _canvas(tester).updateScalebyDelta(0.5);
     await tester.pump();
     await _open(tester, tester.getCenter(find.byKey(const ValueKey('code-block-surface'))));
@@ -1486,7 +1488,7 @@ void main() {
   });
 
   testWidgets('navigation, tools, file picker, and disposal close menus', (tester) async {
-    final store = TestCanvasDocumentStore(_document());
+    final store = TestLibraryStore(_document());
     await pumpCanvas(tester, store);
     await _open(tester, const Offset(305, 305));
     _canvas(tester).updateScalebyDelta(0.1);
@@ -1512,7 +1514,7 @@ void main() {
   });
 
   testWidgets('target deletion and document replacement close menus', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(_document()));
     await tester.tapAt(const Offset(305, 305));
     await tester.pumpAndSettle();
     expect(_models(tester)['a']!.active, isTrue);

@@ -1,7 +1,7 @@
 // Previews the canvas title and its hover-revealed breadcrumb path.
 // Used by Flutter widget previews before the title is placed in the editor.
 
-import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
+import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/previews/theme_preview.dart';
 import 'package:flutter/material.dart';

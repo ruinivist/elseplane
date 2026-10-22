@@ -1,39 +1,33 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:elseplane/app/workspace.dart';
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
-import 'package:elseplane/canvas/editor/canvas_page.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
-import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
-import 'package:elseplane/canvas/persistence/canvas_library.dart';
-import 'package:elseplane/canvas/persistence/canvas_project_files.dart';
+import 'package:elseplane/library/canvas_library.dart';
+import 'package:elseplane/library/library_store.dart';
+import 'package:elseplane/library/transfer/canvas_project_files.dart';
 import 'package:elseplane/main.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-class TestCanvasDocumentStore extends CanvasDocumentStore {
-  TestCanvasDocumentStore([this.initial]);
+class TestLibraryStore implements LibraryStore {
+  TestLibraryStore([this.initial]) : library = CanvasLibrary.initial(initial);
 
-  CanvasDocument? initial;
+  CanvasLibrary library;
   CanvasDocument? persisted;
 
-  @override
-  Future<CanvasDocument?> load() async {
-    library = CanvasLibrary.initial(initial);
-    return initial;
-  }
+  CanvasDocument? initial;
 
   @override
-  Future<void> save(CanvasDocument document) async {
-    persisted = document;
-    library = library.replace(library.current.copyWith(document: document));
-  }
+  Future<CanvasLibrary?> load() async => library;
 
   @override
-  Future<void> saveLibrary(CanvasLibrary next) async {
-    library = next;
+  Future<void> save(CanvasLibrary snapshot) async {
+    library = snapshot;
+    persisted = snapshot.current.document;
   }
 }
 
@@ -63,6 +57,14 @@ class TestAttachmentStore implements AttachmentStore {
   }
 }
 
+class TestProjectFiles implements CanvasProjectFiles {
+  @override
+  Future<Uint8List?> open() async => null;
+
+  @override
+  Future<bool> save(Uint8List bytes, {required String suggestedName, required String mimeType}) async => false;
+}
+
 final onePixelPngBytes = Uint8List.fromList(
   base64Decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8A'
@@ -72,7 +74,7 @@ final onePixelPngBytes = Uint8List.fromList(
 
 Future<void> pumpCanvas(
   WidgetTester tester,
-  CanvasDocumentStore documentStore, {
+  LibraryStore libraryStore, {
   AttachmentStore? attachmentStore,
   Future<CanvasClipboardSnapshot> Function()? readClipboard,
   Future<void> Function(String text)? writeClipboardText,
@@ -81,9 +83,10 @@ Future<void> pumpCanvas(
   await tester.pumpWidget(
     MaterialApp(
       theme: platform == null ? starlessLightThemeData : starlessLightThemeData.copyWith(platform: platform),
-      home: CanvasPage(
-        documentStore: documentStore,
-        attachmentStore: attachmentStore,
+      home: Workspace(
+        libraryStore: libraryStore,
+        attachmentStore: attachmentStore ?? TestAttachmentStore(),
+        projectFiles: TestProjectFiles(),
         readClipboard: readClipboard,
         writeClipboardText: writeClipboardText,
       ),
@@ -96,13 +99,13 @@ Future<void> pumpCanvas(
 Future<void> pumpElseplaneApp(
   WidgetTester tester, {
   AttachmentStore? attachmentStore,
-  CanvasDocumentStore? documentStore,
+  LibraryStore? libraryStore,
   CanvasProjectFiles? projectFiles,
 }) async {
   await tester.pumpWidget(
     ElseplaneApp(
       attachmentStore: attachmentStore,
-      documentStore: documentStore,
+      libraryStore: libraryStore,
       projectFiles: projectFiles,
     ),
   );

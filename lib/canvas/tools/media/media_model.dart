@@ -106,11 +106,20 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
       final path = 'attachments/${const Uuid().v4()}.$normalizedExtension';
       final ratio = await _imageAspectRatio(bytes);
       if (generation != asyncEditGeneration) return;
-      await attachmentStore.write(path, bytes);
-      if (generation != asyncEditGeneration) {
-        await attachmentStore.delete(path);
-        return;
+      var written = false;
+      try {
+        await attachmentStore.write(path, bytes);
+        written = true;
+      } finally {
+        if (!written || generation != asyncEditGeneration) {
+          try {
+            await attachmentStore.delete(path);
+          } on Object {
+            // Cleanup cannot revive a canceled edit or hide the write failure.
+          }
+        }
       }
+      if (generation != asyncEditGeneration) return;
 
       replaceData(
         data.copyWith(url: path),

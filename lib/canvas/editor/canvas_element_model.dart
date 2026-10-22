@@ -21,6 +21,7 @@ abstract class CanvasElementModel<T extends CanvasElementData> extends ChangeNot
   int get asyncEditGeneration => _asyncEditGeneration;
 
   void invalidatePendingEdits() => _asyncEditGeneration++;
+
   final ValueNotifier<int> _documentRevision = ValueNotifier(0);
   bool _selected = false;
   bool _active = false;
@@ -72,6 +73,7 @@ abstract class CanvasElementModel<T extends CanvasElementData> extends ChangeNot
 
   set active(bool value) {
     if (_active == value) return;
+    if (!value) invalidatePendingEdits();
     _active = value;
     notifyListeners();
   }

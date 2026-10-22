@@ -8,11 +8,11 @@ import 'dart:convert';
 
 import 'package:archive/archive.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/persistence/canvas_library.dart';
-import 'package:elseplane/canvas/persistence/canvas_library_archive.dart';
+import 'package:elseplane/library/canvas_library.dart';
+import 'package:elseplane/library/transfer/canvas_library_archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../test_helpers.dart';
+import '../../canvas/test_helpers.dart';
 
 // ---------- Tests ----------
 

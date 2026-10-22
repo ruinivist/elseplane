@@ -5,8 +5,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 
 // ---------- Clipboard format ----------

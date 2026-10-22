@@ -10,12 +10,14 @@ class _MediaUrlPanel extends StatelessWidget {
     required this.model,
     required this.onActivate,
     required this.onPickImage,
+    required this.onPaste,
     this.onMove,
   });
 
   final MediaModel model;
   final VoidCallback onActivate;
   final VoidCallback onPickImage;
+  final VoidCallback onPaste;
   final ValueChanged<Offset>? onMove;
 
   @override
@@ -30,34 +32,50 @@ class _MediaUrlPanel extends StatelessWidget {
         raised: false,
         child: Stack(
           children: [
-            TextField(
-              key: const ValueKey('media-url-field'),
-              groupId: model,
-              contextMenuBuilder: null,
-              controller: model.controller,
-              focusNode: model.focusNode,
-              onTap: onActivate,
-              onTapOutside: (_) {
-                model.commitUrl();
-                model.focusNode.unfocus();
+            Actions(
+              actions: {
+                PasteTextIntent: CallbackAction<PasteTextIntent>(
+                  onInvoke: (_) {
+                    onPaste();
+                    return null;
+                  },
+                ),
               },
-              onSubmitted: (_) => model.commitUrl(),
-              minLines: 1,
-              maxLines: 3,
-              textAlignVertical: TextAlignVertical.center,
-              keyboardType: TextInputType.url,
-              textInputAction: TextInputAction.done,
-              cursorColor: colors.accent,
-              style: theme.typo.body.copyWith(color: colors.textPrimary),
-              decoration: InputDecoration(
-                hintText: 'Paste link',
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                suffixIcon: IconButton(
-                  key: const ValueKey('media-device-picker'),
-                  tooltip: 'Choose image from device',
-                  onPressed: onPickImage,
-                  icon: const Icon(LucideIcons.imageUp, size: 20),
+              child: TextField(
+                key: const ValueKey('media-url-field'),
+                groupId: model,
+                contextMenuBuilder: null,
+                controller: model.controller,
+                focusNode: model.focusNode,
+                onTap: onActivate,
+                onTapOutside: (_) {
+                  model
+                    ..invalidatePendingEdits()
+                    ..commitUrl();
+                  model.focusNode.unfocus();
+                },
+                onSubmitted: (_) {
+                  model
+                    ..invalidatePendingEdits()
+                    ..commitUrl();
+                },
+                minLines: 1,
+                maxLines: 3,
+                textAlignVertical: TextAlignVertical.center,
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.done,
+                cursorColor: colors.accent,
+                style: theme.typo.body.copyWith(color: colors.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Paste link',
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  suffixIcon: IconButton(
+                    key: const ValueKey('media-device-picker'),
+                    tooltip: 'Choose image from device',
+                    onPressed: onPickImage,
+                    icon: const Icon(LucideIcons.imageUp, size: 20),
+                  ),
                 ),
               ),
             ),

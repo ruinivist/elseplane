@@ -16,12 +16,11 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
     titleController = TextEditingController(text: data.title)..addListener(_syncTitle);
   }
 
-  final controller = CodeLineEditingController(
-    options: const CodeLineOptions(indentSize: 4),
-  );
+  final controller = CodeLineEditingController(options: const CodeLineOptions(indentSize: 4));
   late final TextEditingController titleController;
   VoidCallback? onContentChanged;
   final focusNode = FocusNode();
+  final titleFocusNode = FocusNode();
   final scrollController = CodeScrollController(
     verticalScroller: AnimatedScrollController(
       animationFactory: const ChromiumEaseInOut(),
@@ -110,6 +109,35 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
     replaceData(data.copyWith(position: data.position + delta));
   }
 
+  Future<void> paste({bool intoTitle = false}) async {
+    final generation = asyncEditGeneration;
+    try {
+      final clipboard = await Clipboard.getData(Clipboard.kTextPlain);
+      if (generation != asyncEditGeneration) return;
+      final text = clipboard?.text;
+      if (text == null || text.isEmpty) return;
+      if (intoTitle) {
+        final value = titleController.value;
+        final selection = value.selection.isValid
+            ? value.selection
+            : TextSelection.collapsed(offset: value.text.length);
+        titleController.value = FilteringTextInputFormatter.singleLineFormatter.formatEditUpdate(
+          value,
+          value
+              .replaced(selection, text)
+              .copyWith(
+                selection: TextSelection.collapsed(offset: selection.start + text.length),
+              ),
+        );
+      } else {
+        controller.replaceSelection(text);
+      }
+    } on Object {
+      if (generation != asyncEditGeneration) return;
+      rethrow;
+    }
+  }
+
   // ---------- Synchronization ----------
 
   @override
@@ -141,6 +169,7 @@ class CodeBlockModel extends RotatableCanvasElementModel<CodeElementData> {
       ..removeListener(_syncTitle)
       ..dispose();
     focusNode.dispose();
+    titleFocusNode.dispose();
     scrollController
       ..verticalScroller.dispose()
       ..horizontalScroller.dispose()

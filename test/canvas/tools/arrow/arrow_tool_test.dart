@@ -3,8 +3,8 @@
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
-import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
 import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
+import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/ui/common/menu_surface.dart';
 import 'package:flutter/gestures.dart';
@@ -23,7 +23,7 @@ void main() {
   setUp(() async {
     SharedPreferencesAsyncWeb.registerWith(null);
     final preferences = SharedPreferencesAsync();
-    await preferences.remove(CanvasDocumentStore.libraryKey);
+    await preferences.remove(PreferencesLibraryStore.libraryKey);
   });
 
   test('arrow bends continuously toward the visual counterclockwise side', () {
@@ -216,7 +216,7 @@ void main() {
   });
 
   testWidgets('active arrows expose zoom-aware editable points with one-step undo', (tester) async {
-    await pumpCanvas(tester, TestCanvasDocumentStore(_arrowDocument()));
+    await pumpCanvas(tester, TestLibraryStore(_arrowDocument()));
     final arrowFinder = find.byType(Arrow);
     var model = tester.widget<Arrow>(arrowFinder).model;
 
@@ -262,7 +262,7 @@ void main() {
   });
 
   testWidgets('multi-handle dragging stays on canvas, edits at zoom, saves and undoes', (tester) async {
-    final store = TestCanvasDocumentStore(CanvasDocument(background: CanvasBackgroundKind.plain, elements: []));
+    final store = TestLibraryStore(CanvasDocument(background: CanvasBackgroundKind.plain, elements: []));
     await pumpCanvas(tester, store);
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller
       ..updateScalebyDelta(1, focalPoint: Offset.zero);
@@ -339,7 +339,7 @@ void main() {
   });
 
   testWidgets('inactive arrow dragging preserves layers and activation requires a click', (tester) async {
-    final store = TestCanvasDocumentStore(_arrowDocument());
+    final store = TestLibraryStore(_arrowDocument());
     await pumpCanvas(tester, store);
     final model = tester.widget<Arrow>(find.byType(Arrow)).model;
     final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
@@ -380,7 +380,7 @@ void main() {
           ),
         ),
       );
-      await pumpCanvas(tester, TestCanvasDocumentStore(document), platform: platform);
+      await pumpCanvas(tester, TestLibraryStore(document), platform: platform);
       final models = tester.widgetList<Arrow>(find.byType(Arrow)).map((arrow) => arrow.model).toList();
       final first = models.first;
       final second = models.last;

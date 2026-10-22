@@ -21,7 +21,7 @@ void main() {
       const source = 'final value = 1;';
       await pumpCanvas(
         tester,
-        TestCanvasDocumentStore(
+        TestLibraryStore(
           CanvasDocument(
             background: CanvasBackgroundKind.plain,
             elements: [

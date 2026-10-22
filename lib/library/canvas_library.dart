@@ -1,5 +1,5 @@
-// Defines the browser's named canvases and folder hierarchy.
-// Used by canvas persistence and the file picker.
+// Defines named canvases and their immutable folder hierarchy.
+// Used by library operations, storage codecs, and file presentation.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:uuid/uuid.dart';
@@ -41,7 +41,7 @@ class CanvasFile {
 // ---------- Library ----------
 
 class CanvasLibrary {
-  CanvasLibrary({required this.files, required this.currentId});
+  CanvasLibrary({required List<CanvasFile> files, required this.currentId}) : files = List.unmodifiable(files);
 
   factory CanvasLibrary.initial([CanvasDocument? document]) {
     final file = CanvasFile(id: const Uuid().v4(), name: 'Untitled', document: document ?? emptyDocument);

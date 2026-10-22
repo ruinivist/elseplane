@@ -6,16 +6,16 @@ import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
-import 'package:elseplane/canvas/editor/widgets/canvas_file_picker.dart';
-import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
-import 'package:elseplane/canvas/persistence/canvas_document_store.dart';
-import 'package:elseplane/canvas/persistence/canvas_library.dart';
 import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/library/canvas_library.dart';
+import 'package:elseplane/library/library_store.dart';
+import 'package:elseplane/library/widgets/canvas_file_picker.dart';
+import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/main.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
@@ -35,7 +35,7 @@ void main() {
   setUp(() async {
     SharedPreferencesAsyncWeb.registerWith(null);
     final preferences = SharedPreferencesAsync();
-    await preferences.remove(CanvasDocumentStore.libraryKey);
+    await preferences.remove(PreferencesLibraryStore.libraryKey);
   });
 
   testWidgets('toolbar displays tool icons', (
@@ -353,7 +353,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 320));
     await tester.pump();
 
-    final document = (await CanvasDocumentStore().load())!;
+    final document = (await PreferencesLibraryStore().load())!.current.document!;
     final ids = document.elements.map((element) => element.id).toList();
     expect(document.background, CanvasBackgroundKind.plain);
     expect(document.elements, hasLength(4));
@@ -392,7 +392,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final restored = (await CanvasDocumentStore().load())!;
+    final restored = (await PreferencesLibraryStore().load())!.current.document!;
     expect(restored.elements.map((element) => element.id), ids);
     expect(find.byType(TextTool), findsOneWidget);
     expect(find.byType(CodeTool), findsOneWidget);
@@ -500,7 +500,7 @@ void main() {
       ],
     );
     await SharedPreferencesAsync().setString(
-      CanvasDocumentStore.libraryKey,
+      PreferencesLibraryStore.libraryKey,
       jsonEncode(CanvasLibrary.initial(document).toJson()),
     );
     await tester.pumpWidget(const ElseplaneApp());
@@ -565,7 +565,7 @@ void main() {
     expect(arrow.selected, isFalse);
 
     await tester.pump(const Duration(milliseconds: 320));
-    final saved = (await CanvasDocumentStore().load())!;
+    final saved = (await PreferencesLibraryStore().load())!.current.document!;
     expect(saved.elements.map((element) => element.id), ['pen', 'arrow']);
   });
 
@@ -1064,7 +1064,7 @@ void main() {
     }
     await tester.pump(const Duration(milliseconds: 320));
     await tester.pump();
-    final savedNodes = (await CanvasDocumentStore().load())!.elements;
+    final savedNodes = (await PreferencesLibraryStore().load())!.current.document!.elements;
     expect(savedNodes, hasLength(0));
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.delete);
@@ -1749,7 +1749,7 @@ void main() {
       ],
     );
     await SharedPreferencesAsync().setString(
-      CanvasDocumentStore.libraryKey,
+      PreferencesLibraryStore.libraryKey,
       jsonEncode(CanvasLibrary.initial(document).toJson()),
     );
     await tester.pumpWidget(const ElseplaneApp());
@@ -1792,7 +1792,7 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 320));
     await tester.pump();
-    final saved = (await CanvasDocumentStore().load())!;
+    final saved = (await PreferencesLibraryStore().load())!.current.document!;
     expect(saved.elements.map((element) => element.id), ['pen-safe']);
   });
 }

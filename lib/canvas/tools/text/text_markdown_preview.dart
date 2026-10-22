@@ -5,8 +5,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/persistence/attachments/store.dart';
 import 'package:elseplane/canvas/tools/code/code_language.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';

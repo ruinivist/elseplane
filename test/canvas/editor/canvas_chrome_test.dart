@@ -2,9 +2,9 @@
 // Exercises title anchoring, wrapping, and pointer access in canvas chrome.
 
 import 'package:elseplane/canvas/editor/widgets/canvas_chrome.dart';
-import 'package:elseplane/canvas/editor/widgets/canvas_title.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_toolbar.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
+import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:flutter/gestures.dart';
