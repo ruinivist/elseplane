@@ -190,12 +190,18 @@ String _rebaseMarkdownAttachments(String source, Map<String, String> replacement
       edits[range] = replacement;
     }
   }
-  final ranges = edits.keys.toList()..sort((a, b) => b.start.compareTo(a.start));
-  var rebased = source;
+  if (edits.isEmpty) return source;
+  final ranges = edits.keys.toList()..sort((a, b) => a.start.compareTo(b.start));
+  final rebased = StringBuffer();
+  var cursor = 0;
   for (final range in ranges) {
-    rebased = rebased.replaceRange(range.start, range.end, edits[range]!);
+    rebased
+      ..write(source.substring(cursor, range.start))
+      ..write(edits[range]);
+    cursor = range.end;
   }
-  return rebased;
+  rebased.write(source.substring(cursor));
+  return rebased.toString();
 }
 
 Map<String, Object?> _jsonObject(

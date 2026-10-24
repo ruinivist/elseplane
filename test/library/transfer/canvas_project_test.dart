@@ -209,6 +209,41 @@ Prose $path
     expect(canvasAttachmentPaths(rebased), {destination});
   });
 
+  test('rebasing sorts inline and shared reference destinations by source position', () {
+    String markdown(String inline, String shared) =>
+        '''
+![first][shared] ![inline]($inline) ![shared][] ![shared]
+
+[shared]: <$shared> "title ${_path(0)}"
+
+Suffix ${_path(1)}
+''';
+    final inline = _path(2).replaceFirst('.png', '.jpg');
+    final shared = _path(1).replaceFirst('.png', '.webp');
+    final document = _document(markdown: markdown(_path(1), _path(0)));
+    final rebased = rebaseCanvasDocumentAttachments(document, {
+      _path(0): shared,
+      _path(1): inline,
+    });
+
+    expect(rebased.elements.whereType<TextElementData>().single.markdown, markdown(inline, shared));
+    expect(document.elements.whereType<TextElementData>().single.markdown, markdown(_path(1), _path(0)));
+  });
+
+  test('rebasing handles 16000 repeated images while preserving surrounding text', () {
+    String markdown(String destination) =>
+        'Prefix 😀\r\n\r\n'
+        '${List.filled(16000, '![repeat](<$destination> "title")\r\n').join()}'
+        '\r\nSuffix ${_path(0)}';
+    final source = markdown(_path(0));
+    final destination = _path(1).replaceFirst('.png', '.webp');
+    final document = _document(markdown: source);
+    final rebased = rebaseCanvasDocumentAttachments(document, {_path(0): destination});
+
+    expect(rebased.elements.whereType<TextElementData>().single.markdown, markdown(destination));
+    expect(document.elements.whereType<TextElementData>().single.markdown, source);
+  });
+
   test('rebasing matches normalized destinations without cascading replacements', () {
     final escaped = _path(0).replaceFirst('/', r'\/');
     final source = '![one]($escaped) ![two](${_path(1)}) ![repeat](${_path(0)})';
