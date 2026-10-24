@@ -89,7 +89,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tester.widget<MarkdownBody>(find.byType(MarkdownBody)).styleSheet!.p!.fontFamily, defaultFontFamily);
-    final model = _model()..style = style;
+    final model = _model()..setStyle(style);
     await _pumpSettings(tester, model, loadTextFont);
     expect(find.text(family), findsOneWidget);
     expect(model.style.fontFamily, family);
@@ -130,7 +130,7 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
     expect(model.style.fontFamily, defaultFontFamily);
     model.controller.text = 'changed while loading';
-    model.style = model.style.copyWith(color: const Color(0xffABCDEF), background: BlockBackgroundKind.glass);
+    model.setStyle(model.style.copyWith(color: const Color(0xffABCDEF), background: BlockBackgroundKind.glass));
     load.complete();
     await tester.pumpAndSettle();
     expect(model.style.fontFamily, 'ABeeZee');
@@ -168,8 +168,8 @@ void main() {
     _choose(tester, 'ABeeZee');
     await tester.pump();
     model
-      ..active = false
-      ..active = true;
+      ..setActive(value: false)
+      ..setActive(value: true);
     await tester.pump();
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(tester.widget<SearchableSelect<String>>(find.byType(SearchableSelect<String>)).onChanged, isNotNull);
@@ -202,9 +202,9 @@ void main() {
       } else if (stale == 'replaced') {
         await _pumpSettings(tester, replacement, (_) async {});
       } else if (stale == 'inactive') {
-        model.active = false;
+        model.setActive(value: false);
       } else {
-        model.style = model.style.copyWith(fontFamily: 'Inter');
+        model.setStyle(model.style.copyWith(fontFamily: 'Inter'));
       }
       load.complete();
       await tester.pumpAndSettle();
@@ -376,8 +376,8 @@ void main() {
     _choose(tester, 'ABeeZee');
     await tester.pump();
     previewModel
-      ..active = false
-      ..active = true;
+      ..setActive(value: false)
+      ..setActive(value: true);
     await tester.pump();
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(transport.aborted, hasLength(4));
@@ -397,9 +397,11 @@ void main() {
     expect(previewModel.style.fontFamily, defaultFontFamily);
     expect(boundaries, 0);
     _choose(tester, 'Abel');
-    previewModel.style = previewModel.style.copyWith(
-      color: const Color(0xffABCDEF),
-      background: BlockBackgroundKind.glass,
+    previewModel.setStyle(
+      previewModel.style.copyWith(
+        color: const Color(0xffABCDEF),
+        background: BlockBackgroundKind.glass,
+      ),
     );
     await tester.pumpAndSettle();
     expect(previewModel.style.fontFamily, 'Abel');
@@ -424,7 +426,7 @@ void main() {
 
 // ---------- Helpers ----------
 
-TextBlockModel _model() => TextBlockModel(
+TextBlockModel _model() => testTextModel(
   TextElementData(
     id: 'text',
     position: Offset.zero,
@@ -433,7 +435,7 @@ TextBlockModel _model() => TextBlockModel(
     markdown: 'original',
     style: const TextNodeStyle(fontFamily: defaultFontFamily, color: Color(0xff201C1A)),
   ),
-)..active = true;
+)..setActive(value: true);
 
 Future<void> _pumpSettings(
   WidgetTester tester,

@@ -67,6 +67,8 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 - [Unfinished pastes belong to their original input context](adr/0001-cancel-unfinished-pastes.md). Selecting another field or object, explicitly ending editing, changing tools (including tool-only undo or redo), opening an app dialog or file picker, document restoration, replacement, removal, and disposal cancel affected pending pastes and image uploads. Code source and title are separate contexts; returning to a field does not revive canceled work. Temporary browser focus loss, clipboard permission prompts, and the device image picker do not cancel work. Ordinary typing, caret movement, and transforms that keep the same editor open preserve the context and use its live selection. Canceled writes attempt cleanup of their new unpublished attachment paths. Cancellation is silent; current-context failures remain visible. Ordinary image loads continue when their source is unchanged.
 
+- Canvas history groups text and code changes by logical field. Moving between code source and title, ending editing, or starting another document operation closes the group. Temporary browser focus loss does not split it. A placement is separate from subsequent typing; its automatic return to Select remains part of placement.
+
 - Explicit tool choices, switching tools, toggling a tool off, and Escape disabling a tool each form one undo step. Touch Select is included; choosing it from another tool is one step.
 - Undoing a stroke keeps the pen enabled. Another Undo reverses choosing the pen. Redo restores these actions in order.
 - Undoing object placement re-enables its placement tool. Automatically returning to Select belongs to the placement operation and does not add a separate step.

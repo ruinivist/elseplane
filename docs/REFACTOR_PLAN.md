@@ -56,6 +56,8 @@ Workspace now connects canvas snapshots to `LibraryController`; the controller o
 
 ## 4. Introduce editor operations and typed history
 
+**Status:** complete.
+
 - Introduce `EditorSession` as the sole writer of the open document. Move selection IDs, active/editing state, tool choice, defaults, and history out of page state and element models.
 - Route document changes through named operations. Keep algorithms in geometry/history and I/O with its owners so the session remains an editor coordinator.
 - Replace JSON-based history capture and save-driven change detection with typed snapshots and explicit operation boundaries. Preserve the 50-operation limit.
@@ -64,13 +66,15 @@ Workspace now connects canvas snapshots to `LibraryController`; the controller o
 
 **Exit:** views and resources cannot mutate saved fields. No-op behavior, redo invalidation, tool restoration, and grouped operations match the interaction model. Autosave timing does not determine undo boundaries.
 
+Workspace owns `EditorSession`, which publishes immutable documents through named operations. Typed history retains document values and explicit operation groups without JSON comparisons. Selection, activation, logical editing contexts, tools, and drawing defaults belong to the session; existing models retain presentation resources and request session edits. Session tokens cancel stale clipboard and upload completions. The grid's read-only `arrangedOrder` query and value-only creation callbacks were brought forward so all saved changes can pass through the session. Rendering and pointer extraction remain in stage 5.
+
 ## 5. Separate rendering resources and input
 
 - Introduce `CanvasView` as the document-to-grid projection and owner of the grid controller. Retain element resources by ID/type outside lazily culled widgets.
 - Split existing models into immutable values, required resource owners, and views. Preserve controllers, scroll positions, loaded images, and measured layout when identity survives restoration.
 - Move pointer arbitration into `CanvasInput` and focus-aware keyboard handling into `CanvasShortcuts`. Use explicit gesture transitions and preserve native browser clipboard-event access.
-- Separate creation tools from persisted element views. Pen, arrow, shape, and placement tools produce values; session operations commit them.
-- In the owned `infinite_lazy_grid`, expose its existing arrangement calculation as a non-mutating query and have mutating commands reuse it. The app commits proposed order through its session and projects it back to the grid.
+- Finish separating creation tools from persisted element views. Creation callbacks already produce values and session operations commit them; move their remaining presentation and pointer responsibilities to the intended owners.
+- Preserve the read-only arrangement query introduced in stage 4. Keep measured overlap calculations in the grid and saved order in the session as CanvasView takes over projection.
 - Keep generic navigation mechanics in the grid. Improve its public navigation lifecycle if necessary to remove application dependence on callback ordering; keep tool/selection policy in the app.
 - Remove old shared-private tool libraries and model wrappers as their callers migrate.
 

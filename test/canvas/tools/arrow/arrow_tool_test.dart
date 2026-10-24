@@ -61,8 +61,8 @@ void main() {
   });
 
   test('arrow tool previews, commits on up, and discards tiny drags', () {
-    final committed = <ArrowModel>[];
-    final tool = ArrowTool(onArrow: committed.add)
+    final committed = <ArrowElementData>[];
+    final tool = ArrowTool(session: testSessionProvider(), onArrow: committed.add)
       ..setColor(const Color(0xffd85b5b))
       ..setStrokeStyle(ArrowStrokeStyle.dashed)
       ..setStrokeWidth(3);
@@ -98,9 +98,11 @@ void main() {
     expect(committed.single.color, const Color(0xffd85b5b));
     expect(committed.single.strokeStyle, ArrowStrokeStyle.dashed);
     expect(committed.single.strokeWidth, 3);
-    final bounds = committed.single.bounds;
-    committed.single.strokeWidth = arrowStrokeWidthMaximum;
-    expect(committed.single.bounds, bounds);
+    final resource = testArrowModel(committed.single);
+    final bounds = resource.bounds;
+    resource.setStrokeWidth(arrowStrokeWidthMaximum);
+    expect(resource.bounds, bounds);
+    resource.dispose();
     expect(tool.preview, isNull);
 
     final tinyPointer = TestPointer(2, PointerDeviceKind.mouse);
@@ -115,12 +117,11 @@ void main() {
       );
     expect(committed, hasLength(1));
     tool.dispose();
-    committed.single.dispose();
   });
 
   test('RMB presses pin controls and LMB release commits while RMB remains held', () {
-    final committed = <ArrowModel>[];
-    final tool = ArrowTool(onArrow: committed.add);
+    final committed = <ArrowElementData>[];
+    final tool = ArrowTool(session: testSessionProvider(), onArrow: committed.add);
     final pointer = TestPointer(1, PointerDeviceKind.mouse);
     tool.onPointerDown(pointer.down(Offset.zero), Offset.zero);
     void move(Offset position, int buttons) => tool.onPointerMove(pointer.move(position, buttons: buttons), position);
@@ -146,15 +147,12 @@ void main() {
     expect(committed, hasLength(1));
     expect(committed.single.end, const Offset(120, 20));
 
-    for (final model in committed) {
-      model.dispose();
-    }
     tool.dispose();
   });
 
   test('canceling clears controls and secondary-only input does not draw', () {
-    final committed = <ArrowModel>[];
-    final tool = ArrowTool(onArrow: committed.add);
+    final committed = <ArrowElementData>[];
+    final tool = ArrowTool(session: testSessionProvider(), onArrow: committed.add);
     final pointer = TestPointer(1, PointerDeviceKind.mouse);
     tool.onPointerDown(pointer.down(Offset.zero, buttons: kSecondaryButton), Offset.zero);
     expect(tool.isDrawing, isFalse);
@@ -177,12 +175,11 @@ void main() {
     expect(tool.preview!.showControls, isFalse);
     tool.onPointerUp(pointer.up(), const Offset(100, 0));
     expect(committed.single.controls, [arrowControlPoint(start: Offset.zero, end: const Offset(100, 0))]);
-    committed.single.dispose();
     tool.dispose();
   });
 
   test('arrow points edit independently and preserve minimum length', () {
-    final model = ArrowModel(
+    final model = testArrowModel(
       ArrowElementData(
         id: 'arrow',
         start: const Offset(10, 20),
@@ -355,7 +352,7 @@ void main() {
     expect(model.active, isFalse);
     expect(model.selected, isFalse);
     expect(canvas.childOrder, order);
-    model.selected = true;
+    model.setSelected(value: true);
     await tester.tapAt(model.start);
     await tester.pumpAndSettle();
     expect(model.active, isTrue);
@@ -384,8 +381,8 @@ void main() {
       final models = tester.widgetList<Arrow>(find.byType(Arrow)).map((arrow) => arrow.model).toList();
       final first = models.first;
       final second = models.last;
-      first.selected = true;
-      second.selected = true;
+      first.setSelected(value: true);
+      second.setSelected(value: true);
       Future<void> openMenu() async {
         final click = await tester.startGesture(second.start, kind: PointerDeviceKind.mouse, buttons: kSecondaryButton);
         await click.up();

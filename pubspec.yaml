@@ -22,7 +22,7 @@ dependencies:
   infinite_lazy_grid:
     git:
       url: https://github.com/ruinivist/infinite_lazy_grid.git
-      ref: main
+      ref: f1387065bb39967d4c996db533ec56cc944d7cc3
   json_annotation: ^4.12.0
   lucide_icons_flutter: ^3.1.21
   markdown:

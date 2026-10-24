@@ -29,14 +29,14 @@ void main() {
   testWidgets('URL changes publish the value after clearing the previous image', (tester) async {
     const url = 'https://example.com/image.png';
     await _cacheImage(url);
-    final model = MediaModel(
+    final model = testMediaModel(
       MediaElementData(id: 'media', position: Offset.zero, width: 280, url: url),
       TestAttachmentStore(),
     );
     addTearDown(model.dispose);
     expect(model.hasImage, isTrue);
     final changes = <(String, bool)>[];
-    model.documentChanges.addListener(() => changes.add((model.data.url, model.hasImage)));
+    model.session.documentChanges.addListener(() => changes.add((model.data.url, model.hasImage)));
     model.controller.text = 'not an image';
     model.commitUrl();
     expect(changes, [('not an image', false)]);
@@ -80,9 +80,9 @@ void main() {
           });
           if (stale) {
             if (media) {
-              image!.restoreData(image.data);
+              image!.session.invalidatePendingEdits();
             } else {
-              text!.restoreData(text.data);
+              text!.session.invalidatePendingEdits();
             }
           }
           await tester.runAsync(() async {
@@ -103,7 +103,7 @@ void main() {
     tester,
   ) async {
     final attachments = TestAttachmentStore();
-    final model = MediaModel(
+    final model = testMediaModel(
       MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'),
       attachments,
     );
@@ -113,7 +113,7 @@ void main() {
     ]) {
       await tester.runAsync(() async {
         final pending = model.setDeviceImage(bytes, 'png');
-        model.restoreData(model.data);
+        model.session.invalidatePendingEdits();
         await pending;
       });
       expect(attachments.files, isEmpty);
@@ -272,7 +272,7 @@ void main() {
     tester.testTextInput.enterText(editedUrl);
     await tester.pump();
     expect(model.data.url, url);
-    model.selected = true;
+    model.setSelected(value: true);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
@@ -298,7 +298,7 @@ void main() {
       final image = model.image;
       final size = model.canvasSize;
       var changes = 0;
-      model.documentChanges.addListener(() => changes++);
+      model.session.documentChanges.addListener(() => changes++);
       await tester.tap(find.byKey(const ValueKey('media-image')));
       await tester.pumpAndSettle();
       final field = find.byKey(const ValueKey('media-url-field'));
@@ -381,8 +381,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('media-image')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('media-url-field')), 'unfinished');
+    model.session
+      ..setBackground(CanvasBackgroundKind.dotGrid)
+      ..finishOperation()
+      ..undo();
     model.focusNode.unfocus();
-    model.restoreData(model.data);
     await tester.pumpAndSettle();
     expect(model.controller.text, url);
     expect(model.data.url, url);

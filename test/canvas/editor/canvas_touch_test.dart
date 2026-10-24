@@ -28,7 +28,7 @@ void main() {
 
   testWidgets('empty touch pans after slop, preserves selection, and converts zoom', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
-    final model = tester.widget<PenStroke>(find.byType(PenStroke)).model..selected = true;
+    final model = tester.widget<PenStroke>(find.byType(PenStroke)).model..setSelected(value: true);
     final controller = _canvas(tester)..updateScalebyDelta(1);
     final before = controller.offset;
     final first = await tester.startGesture(const Offset(550, 400));
@@ -49,7 +49,7 @@ void main() {
     final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
     await tester.tapAt(const Offset(220, 300));
     await tester.pumpAndSettle();
-    model.selected = true;
+    model.setSelected(value: true);
     final touch = await tester.startGesture(const Offset(550, 400));
     await touch.moveBy(const Offset(5, 0));
     expect(model.active, isTrue);
@@ -65,7 +65,7 @@ void main() {
   for (final displacement in [Offset.zero, const Offset(60, 30)]) {
     testWidgets('canceling empty touch at $displacement preserves selection without inertia', (tester) async {
       await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
-      final model = tester.widget<PenStroke>(find.byType(PenStroke)).model..selected = true;
+      final model = tester.widget<PenStroke>(find.byType(PenStroke)).model..setSelected(value: true);
       final controller = _canvas(tester);
       final touch = await tester.startGesture(const Offset(550, 400));
       await touch.moveBy(displacement, timeStamp: const Duration(milliseconds: 16));
@@ -101,7 +101,7 @@ void main() {
   for (final displacement in [Offset.zero, const Offset(60, 30)]) {
     testWidgets('two fingers take over empty touch at $displacement without a jump or fling', (tester) async {
       await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
-      final model = tester.widget<PenStroke>(find.byType(PenStroke)).model..selected = true;
+      final model = tester.widget<PenStroke>(find.byType(PenStroke)).model..setSelected(value: true);
       final controller = _canvas(tester);
       final first = await tester.startGesture(const Offset(200, 400), pointer: 1);
       await first.moveBy(displacement, timeStamp: const Duration(milliseconds: 16));
@@ -259,7 +259,7 @@ void main() {
     );
     await _chooseTool(tester, 'select');
     final models = tester.widgetList<PenStroke>(find.byType(PenStroke)).map((stroke) => stroke.model).toList();
-    models[1].selected = true;
+    models[1].setSelected(value: true);
     final touch = await tester.startGesture(const Offset(60, 200));
     await touch.moveBy(const Offset(5, 0));
     await tester.pump();
@@ -289,7 +289,7 @@ void main() {
     final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
     await tester.tapAt(const Offset(220, 300));
     await tester.pumpAndSettle();
-    model.selected = true;
+    model.setSelected(value: true);
     final touch = await tester.startGesture(const Offset(550, 400));
     await touch.moveBy(const Offset(5, 0));
     expect((model.active, model.selected), (true, true));
@@ -309,7 +309,7 @@ void main() {
       );
       await _chooseTool(tester, 'select');
       final models = tester.widgetList<PenStroke>(find.byType(PenStroke)).map((stroke) => stroke.model).toList();
-      models[1].selected = true;
+      models[1].setSelected(value: true);
       final touch = await tester.startGesture(const Offset(60, 200), pointer: 1);
       await touch.moveTo(const Offset(250, 350));
       expect(models.map((model) => model.selected), [true, false]);
@@ -386,7 +386,7 @@ void main() {
     await tester.pumpAndSettle();
     final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
     expect(model.active, isTrue);
-    model.selected = true;
+    model.setSelected(value: true);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(model.active, isFalse);
@@ -434,9 +434,9 @@ void main() {
     final before = positions();
     for (final select in [false, true]) {
       if (select) await _chooseTool(tester, 'select');
-      tester.widget<PenStroke>(find.byType(PenStroke)).model.selected = true;
-      tester.widget<Shape>(find.byType(Shape)).model.selected = true;
-      tester.widget<Arrow>(find.byType(Arrow)).model.selected = true;
+      tester.widget<PenStroke>(find.byType(PenStroke)).model.setSelected(value: true);
+      tester.widget<Shape>(find.byType(Shape)).model.setSelected(value: true);
+      tester.widget<Arrow>(find.byType(Arrow)).model.setSelected(value: true);
       final move = await tester.startGesture(before[0] + const Offset(50, 50));
       await move.moveBy(const Offset(40, 20));
       await move.moveBy(const Offset(30, 10));
@@ -598,7 +598,7 @@ void main() {
     await pumpCanvas(tester, TestLibraryStore(_document([_pen('a'), _pen('b', const Offset(350, 250))])));
     final models = tester.widgetList<PenStroke>(find.byType(PenStroke)).map((stroke) => stroke.model).toList();
     for (final model in models) {
-      model.selected = true;
+      model.setSelected(value: true);
     }
     final before = models.map((model) => model.data.position).toList();
     final first = await tester.startGesture(const Offset(150, 300), pointer: 1);

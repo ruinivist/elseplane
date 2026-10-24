@@ -1,5 +1,5 @@
-// Owns media source resolution, sizing, activation, and persisted state.
-// Used by the media tool, attachment storage, and canvas persistence flows.
+// Retains media drafts, image resources, and import work.
+// Used by media views while the session owns saved source and geometry.
 
 part of 'media_tool.dart';
 
@@ -10,7 +10,7 @@ part of 'media_tool.dart';
 class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
   // ---------- Construction ----------
 
-  MediaModel(MediaElementData data, this.attachmentStore) : super(data) {
+  MediaModel(EditorSession session, MediaElementData data, this.attachmentStore) : super(session, data) {
     controller = TextEditingController(text: data.url);
     focusNode.addListener(_commitOnFocusLost);
     _loadImage();
@@ -24,6 +24,7 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
   ImageStreamListener? _imageListener;
   Object? _attachmentLoad;
   double? _aspectRatio;
+  bool _applyingDeviceImage = false;
 
   // ---------- State and geometry ----------
 
@@ -44,44 +45,24 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
 
   @override
   Size get canvasSize =>
-      hasImage ? Size(data.width, data.width / _aspectRatio!) : Size(urlPanelWidth, _mediaUrlPanelCanvasHeight);
+      hasImage ? Size(data.width, data.width / _aspectRatio!) : Size(urlPanelWidth, mediaUrlPanelCanvasHeight);
 
-  @override
-  void moveBy(Offset delta) {
-    if (delta == Offset.zero) return;
-    replaceData(data.copyWith(position: data.position + delta));
-  }
-
-  void resizeBy(Offset delta) {
-    final aspectRatio = _aspectRatio;
-    if (aspectRatio == null) return;
-    final inverseRatio = 1 / aspectRatio;
-    final widthDelta = (delta.dx + delta.dy * inverseRatio) / (1 + inverseRatio * inverseRatio);
-    final width = math.max(mediaNodeMinimumWidth, data.width + widthDelta);
-    if (width == data.width) return;
-    replaceData(data.copyWith(width: width));
-  }
-
-  @override
-  void rotate(double angle) {
-    if (data.rotation == angle) return;
-    replaceData(data.copyWith(rotation: angle));
-  }
+  double? get aspectRatio => _aspectRatio;
 
   // ---------- Image updates ----------
 
   void commitUrl() {
-    if (data.url == controller.text) return;
-    replaceData(data.copyWith(url: controller.text), synchronize: _loadImage);
+    if (!attached || data.url == controller.text) return;
+    session.setMediaUrl(data.id, controller.text);
   }
 
   Future<void> paste(Future<ClipboardReader> readerFuture) async {
-    final generation = asyncEditGeneration;
+    final token = session.captureEdit(data.id);
     try {
       final reader = await readerFuture;
-      if (generation != asyncEditGeneration) return;
+      if (!token.isCurrent || !attached) return;
       final clipboard = await readCanvasClipboard(reader);
-      if (generation != asyncEditGeneration) return;
+      if (!token.isCurrent || !attached) return;
       if (clipboard.image case final image?) {
         await setDeviceImage(image.bytes, image.extension);
       } else if (clipboard.text case final text?) {
@@ -89,13 +70,13 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
         if (!focusNode.hasFocus) commitUrl();
       }
     } on Object {
-      if (generation != asyncEditGeneration) return;
+      if (!token.isCurrent || !attached) return;
       rethrow;
     }
   }
 
   Future<void> setDeviceImage(Uint8List bytes, String extension) async {
-    final generation = asyncEditGeneration;
+    final token = session.captureEdit(data.id);
     try {
       final normalizedExtension = extension.toLowerCase() == 'jpeg' ? 'jpg' : extension.toLowerCase();
       if (!const {'png', 'jpg', 'gif', 'webp'}.contains(normalizedExtension)) {
@@ -104,14 +85,14 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
       validateAttachmentSize(bytes.length, 'Image exceeds 10 MiB');
 
       final path = 'attachments/${const Uuid().v4()}.$normalizedExtension';
-      final ratio = await _imageAspectRatio(bytes);
-      if (generation != asyncEditGeneration) return;
+      final ratio = (await readCanvasImageSize(bytes)).aspectRatio;
+      if (!token.isCurrent || !attached) return;
       var written = false;
       try {
         await attachmentStore.write(path, bytes);
         written = true;
       } finally {
-        if (!written || generation != asyncEditGeneration) {
+        if (!written || !token.isCurrent || !attached) {
           try {
             await attachmentStore.delete(path);
           } on Object {
@@ -119,19 +100,19 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
           }
         }
       }
-      if (generation != asyncEditGeneration) return;
+      if (!token.isCurrent || !attached) return;
 
-      replaceData(
-        data.copyWith(url: path),
-        synchronize: () {
-          controller.text = path;
-          _detachImage();
-          _image = MemoryImage(bytes);
-          _aspectRatio = ratio;
-        },
-      );
+      _detachImage();
+      _image = MemoryImage(bytes);
+      _aspectRatio = ratio;
+      _applyingDeviceImage = true;
+      try {
+        session.setMediaUrl(data.id, path);
+      } finally {
+        _applyingDeviceImage = false;
+      }
     } on Object {
-      if (generation != asyncEditGeneration) return;
+      if (!token.isCurrent || !attached) return;
       rethrow;
     }
   }
@@ -149,9 +130,9 @@ class MediaModel extends RotatableCanvasElementModel<MediaElementData> {
   }
 
   @override
-  void synchronizeRestoredData(MediaElementData previous) {
-    if (controller.text != data.url) controller.text = data.url;
-    if (previous.url.trim() != data.url.trim()) _loadImage();
+  void synchronizeData(MediaElementData previous, {required bool restored}) {
+    if ((restored || previous.url != data.url) && controller.text != data.url) controller.text = data.url;
+    if (!_applyingDeviceImage && previous.url.trim() != data.url.trim()) _loadImage();
   }
 
   void _commitOnFocusLost() {

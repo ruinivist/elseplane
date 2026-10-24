@@ -1,13 +1,11 @@
 // Provides shape geometry, creation state, rendering, and interaction.
 // Used by the canvas shape tool and persisted shape elements.
 
-import 'dart:math' as math;
-
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
 import 'package:elseplane/canvas/geometry/shape_geometry.dart';
-import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/icon_drag.dart';
 import 'package:flutter/gestures.dart';
@@ -27,14 +25,15 @@ part 'shape_view.dart';
 class ShapeTool extends ChangeNotifier {
   // ---------- Construction ----------
 
-  ShapeTool({required this.onShape});
+  ShapeTool({required this.session, required this.onShape});
 
-  final ValueChanged<ShapeModel> onShape;
+  final EditorSession Function() session;
+  final ValueChanged<ShapeElementData> onShape;
   final _uuid = const Uuid();
-  ShapeKind _kind = ShapeKind.roundedRectangle;
-  Color _strokeColor = defaultCanvasColor;
-  Color? _fillColor;
-  double _strokeWidth = 2;
+  ShapeKind get _kind => session().defaults.shapeKind;
+  Color get _strokeColor => session().defaults.shapeColor;
+  Color? get _fillColor => session().defaults.shapeFill;
+  double get _strokeWidth => session().defaults.shapeWidth;
   int? _pointer;
   Offset? _start;
   Offset? _end;
@@ -61,25 +60,25 @@ class ShapeTool extends ChangeNotifier {
 
   void setKind(ShapeKind kind) {
     if (_kind == kind) return;
-    _kind = kind;
+    session().setDrawingDefaults(session().defaults.copyWith(shapeKind: kind));
     notifyListeners();
   }
 
   void setStrokeColor(Color color) {
     if (_strokeColor == color) return;
-    _strokeColor = color;
+    session().setDrawingDefaults(session().defaults.copyWith(shapeColor: color));
     notifyListeners();
   }
 
   void setFillColor(Color? color) {
     if (_fillColor == color) return;
-    _fillColor = color;
+    session().setDrawingDefaults(session().defaults.copyWith(shapeFill: color, clearShapeFill: color == null));
     notifyListeners();
   }
 
   void setStrokeWidth(double width) {
     if (_strokeWidth == width) return;
-    _strokeWidth = width;
+    session().setDrawingDefaults(session().defaults.copyWith(shapeWidth: width));
     notifyListeners();
   }
 
@@ -112,16 +111,14 @@ class ShapeTool extends ChangeNotifier {
       return;
     }
     onShape(
-      ShapeModel(
-        ShapeElementData(
-          id: _uuid.v4(),
-          kind: preview.kind,
-          position: preview.rect.topLeft,
-          size: preview.rect.size,
-          strokeColor: preview.strokeColor,
-          fillColor: preview.fillColor,
-          strokeWidth: preview.strokeWidth,
-        ),
+      ShapeElementData(
+        id: _uuid.v4(),
+        kind: preview.kind,
+        position: preview.rect.topLeft,
+        size: preview.rect.size,
+        strokeColor: preview.strokeColor,
+        fillColor: preview.fillColor,
+        strokeWidth: preview.strokeWidth,
       ),
     );
   }

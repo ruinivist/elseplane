@@ -6,7 +6,6 @@ import 'dart:ui' as ui;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
-import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
@@ -159,16 +158,13 @@ void main() {
         await attachments.started.future;
       });
       if (removal) {
-        text.selected = true;
+        text.setSelected(value: true);
         await tester.sendKeyEvent(LogicalKeyboardKey.delete);
       } else {
-        (tester.widget<CanvasPage>(find.byType(CanvasPage)).replacement as ValueNotifier<CanvasReplacement>).value = (
-          document: CanvasLibrary.emptyDocument,
-          token: Object(),
-        );
+        await replaceTestEditor(tester, CanvasLibrary.emptyDocument);
       }
-      expect(text.disposed, isFalse);
-      expect(text.asyncEditGeneration, greaterThan(0));
+      expect(text.disposed, !removal);
+      expect(text.session.editGeneration, greaterThan(0));
       await tester.runAsync(() async {
         attachments.release.complete();
         await pending;
@@ -315,7 +311,7 @@ void main() {
     code
       ..moveBy(const Offset(10, 10))
       ..rotate(0.2)
-      ..size = const Size(300, 260);
+      ..setSize(const Size(300, 260));
     await _shortcut(tester);
     expect(tester.widget<CodeTool>(find.byType(CodeTool)).model, same(code));
     expect(code.controller, same(controller));
@@ -394,46 +390,45 @@ void main() {
   });
 
   test('ordinary edits preserve published values and pending edit generations', () {
-    final model = TextBlockModel(_textDocument().elements.single as TextElementData);
+    final model = testTextModel(_textDocument().elements.single as TextElementData);
     final original = model.data;
     final document = CanvasDocument(background: CanvasBackgroundKind.plain, elements: [original]);
-    final generation = model.asyncEditGeneration;
+    final generation = model.session.editGeneration;
     var edits = 0;
-    model.documentChanges.addListener(() => edits++);
+    model.session.documentChanges.addListener(() => edits++);
     model
       ..moveBy(Offset.zero)
-      ..autoArrange = original.autoArrange;
+      ..setAutoArrange(value: original.autoArrange);
     expect(edits, 0);
     model.moveBy(const Offset(20, 10));
     model.controller.text = 'changed';
-    model.autoArrange = !original.autoArrange;
+    model.setAutoArrange(value: !original.autoArrange);
     expect(edits, 3);
-    expect(model.asyncEditGeneration, generation);
+    expect(model.session.editGeneration, generation);
     expect(document.elements.single, same(original));
     expect(model.data.position, original.position + const Offset(20, 10));
     expect(original.markdown, isNot('changed'));
     expect(original.autoArrange, isNot(model.autoArrange));
-    model.restoreData(original);
-    expect(model.asyncEditGeneration, generation + 1);
+    model.session.finishOperation();
+    model.session.undo();
+    expect(model.session.editGeneration, generation + 1);
     expect(model.data, same(original));
     expect(model.controller.text, original.markdown);
-    expect(edits, 3);
+    expect(edits, 4);
     model.dispose();
   });
 
-  test('restore rejects identity changes and refreshes pen geometry without edits', () {
-    final pen = PenStrokeModel(_penDocument(1).elements.single as PenElementData);
-    var edits = 0;
-    pen.documentChanges.addListener(() => edits++);
-    final path = pen.path;
-    final snapshot = pen.data.copyWith(width: 20);
-    pen.restoreData(snapshot);
-    expect(pen.path, isNot(same(path)));
-    expect(pen.path.getBounds(), isNot(path.getBounds()));
-    expect(edits, 0);
-    expect(() => pen.restoreData(snapshot.copyWith(id: 'other')), throwsArgumentError);
-    expect(pen.data, same(snapshot));
-    pen.dispose();
+  testWidgets('detached resource disposal preserves edits started after removal', (tester) async {
+    final document = _textDocument().withElements((elements) => elements.add(_penDocument(1).elements.single));
+    await pumpCanvas(tester, TestLibraryStore(document));
+    final text = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final removed = _stroke(tester);
+    text.session.remove([removed.data.id]);
+    final pending = text.session.captureEdit(text.data.id);
+    expect(removed.disposed, isFalse);
+    await tester.pump();
+    expect(removed.disposed, isTrue);
+    expect(pending.isCurrent, isTrue);
   });
 
   testWidgets('background undo retains objects and saves one reversible step', (tester) async {
@@ -508,7 +503,7 @@ void main() {
     testWidgets('$tool choice, toggle, and Escape undo without saving or replacing objects', (tester) async {
       final store = TestLibraryStore(_document());
       await pumpCanvas(tester, store);
-      final original = _stroke(tester)..selected = true;
+      final original = _stroke(tester)..setSelected(value: true);
       await tester.tap(find.byKey(ValueKey('toolbar-$tool')));
       await tester.pump();
       expect(_toolSelected(tester, tool), isTrue);
@@ -589,7 +584,7 @@ void main() {
   testWidgets('choosing touch Select from Pen is one reversible tool action', (tester) async {
     final store = TestLibraryStore(_document());
     await pumpCanvas(tester, store, platform: TargetPlatform.android);
-    final original = _stroke(tester)..selected = true;
+    final original = _stroke(tester)..setSelected(value: true);
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('toolbar-select')));
@@ -612,8 +607,8 @@ void main() {
     final store = TestLibraryStore(_document());
     await pumpCanvas(tester, store);
     final model = _stroke(tester)
-      ..selected = true
-      ..active = true;
+      ..setSelected(value: true)
+      ..setActive(value: true);
     await pumpPastSave(tester);
     expect(store.persisted, isNull);
 
@@ -672,7 +667,7 @@ void main() {
     await pumpCanvas(tester, store);
 
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
-    final removed = _stroke(tester)..selected = true;
+    final removed = _stroke(tester)..setSelected(value: true);
     await tester.sendKeyEvent(LogicalKeyboardKey.delete);
     // Removed models remain alive until their widgets unmount, without a renderer listener.
     removed.moveBy(const Offset(10, 10));
@@ -722,7 +717,7 @@ void main() {
     await _shortcut(tester);
     expect(_stroke(tester).data.position, start);
 
-    _stroke(tester).selected = true;
+    _stroke(tester).setSelected(value: true);
     await tester.sendKeyEvent(LogicalKeyboardKey.delete);
     await tester.pump();
     await _shortcut(tester, redo: true);
@@ -745,6 +740,55 @@ void main() {
       tester.widget<TextTool>(find.byType(TextTool)).model,
       same(original),
     );
+  });
+
+  testWidgets('typing before and after a code resize forms three canvas operations', (tester) async {
+    await pumpCanvas(tester, TestLibraryStore(_codeDocument()));
+    final tool = tester.widgetList<CodeTool>(find.byType(CodeTool)).first;
+    tool.onEdit();
+    await tester.pumpAndSettle();
+    final code = tool.model;
+    final originalSource = code.data.source;
+    final originalSize = code.size;
+    code.session.setSelection([code.data.id]);
+    code.controller.text = 'before resize';
+    final token = code.session.captureEdit(code.data.id);
+    final resize = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('code-block-resize-handle'))));
+    await resize.moveBy(const Offset(20, 20));
+    await resize.moveBy(const Offset(20, 20));
+    await resize.up();
+    await tester.pumpAndSettle();
+    final resized = code.size;
+    expect(resized, isNot(originalSize));
+    expect(token.isCurrent, isTrue);
+    code.controller.text = 'after resize';
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await _shortcut(tester);
+    expect(code.data.source, 'before resize');
+    expect(code.size, resized);
+    await _shortcut(tester);
+    expect(code.data.source, 'before resize');
+    expect(code.size, originalSize);
+    await _shortcut(tester);
+    expect(code.data.source, originalSource);
+  });
+
+  testWidgets('viewport navigation preserves the current content history group', (tester) async {
+    await pumpCanvas(tester, TestLibraryStore(_codeDocument()));
+    final tool = tester.widgetList<CodeTool>(find.byType(CodeTool)).first;
+    tool.onEdit();
+    await tester.pumpAndSettle();
+    final code = tool.model;
+    final original = code.data.source;
+    code.controller.text = 'before navigation';
+    final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas));
+    canvas.onTouchNavigationChanged!(true);
+    canvas.onTouchNavigationChanged!(false);
+    code.controller.text = 'after navigation';
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await _shortcut(tester);
+    expect(code.data.source, original);
+    await tester.pumpAndSettle();
   });
 
   testWidgets('font choice is one undo step and restores the saved family', (tester) async {
@@ -888,11 +932,10 @@ void main() {
 
     for (var index = 0; index < 51; index++) {
       tester
-              .widgetList<PenStroke>(find.byType(PenStroke))
-              .map((widget) => widget.model)
-              .firstWhere((model) => model.data.id == 'pen-$index')
-              .selected =
-          true;
+          .widgetList<PenStroke>(find.byType(PenStroke))
+          .map((widget) => widget.model)
+          .firstWhere((model) => model.data.id == 'pen-$index')
+          .setSelected(value: true);
       await tester.sendKeyEvent(LogicalKeyboardKey.delete);
       await tester.pump();
     }

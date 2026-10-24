@@ -279,7 +279,7 @@ void main() {
     await pumpCanvas(tester, TestLibraryStore(document));
     final models = _models(tester);
     for (final id in ['a', 'b', 'c']) {
-      models[id]!.selected = true;
+      models[id]!.setSelected(value: true);
     }
     final positions = {
       for (final id in ['a', 'b', 'c']) id: models[id]!.canvasPosition,
@@ -351,8 +351,8 @@ void main() {
   testWidgets('Auto switch applies to a mixed group and promotes immediately in one step', (tester) async {
     final document = _document().withElements((elements) => elements[2] = elements[2].copyWith(autoArrange: true));
     await pumpCanvas(tester, TestLibraryStore(document));
-    _models(tester)['a']!.selected = true;
-    _models(tester)['c']!.selected = true;
+    _models(tester)['a']!.setSelected(value: true);
+    _models(tester)['c']!.setSelected(value: true);
     await _open(tester, const Offset(305, 305));
     await _openArrange(tester);
     expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isFalse);
@@ -369,8 +369,8 @@ void main() {
     expect(_models(tester)['c']!.autoArrange, isTrue);
     await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
     expect(_canvas(tester).childOrder, ['b', 'd', 'a', 'c']);
-    _models(tester)['a']!.selected = true;
-    _models(tester)['c']!.selected = true;
+    _models(tester)['a']!.setSelected(value: true);
+    _models(tester)['c']!.setSelected(value: true);
     await _open(tester, const Offset(355, 355));
     await _openArrange(tester);
     expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isTrue);
@@ -386,8 +386,8 @@ void main() {
 
   testWidgets('manual group shortcut disables Auto only for its targets', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document(auto: true)));
-    _models(tester)['a']!.selected = true;
-    _models(tester)['c']!.selected = true;
+    _models(tester)['a']!.setSelected(value: true);
+    _models(tester)['c']!.setSelected(value: true);
     await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
     expect(_canvas(tester).childOrder, ['b', 'd', 'a', 'c']);
     expect(_models(tester)['a']!.autoArrange, isFalse);
@@ -466,8 +466,8 @@ void main() {
       await pumpCanvas(tester, TestLibraryStore(_document()));
       await tester.tapAt(const Offset(305, 305));
       await tester.pumpAndSettle();
-      _models(tester)['c']!.selected = true;
-      _models(tester)['d']!.selected = true;
+      _models(tester)['c']!.setSelected(value: true);
+      _models(tester)['d']!.setSelected(value: true);
       await tester.tap(find.byTooltip('Arrange'));
       await tester.pumpAndSettle();
       expect(_models(tester).values.where((model) => model.selected).map((model) => model.data.id), ['a']);
@@ -489,8 +489,8 @@ void main() {
     await tester.tapAt(const Offset(305, 305));
     await tester.pumpAndSettle();
     final models = _models(tester);
-    models['a']!.selected = true;
-    models['c']!.selected = true;
+    models['a']!.setSelected(value: true);
+    models['c']!.setSelected(value: true);
     await tester.pump();
     final click = await tester.startGesture(tester.getCenter(find.byTooltip('Arrange')));
     expect(models['a']!.selected, isFalse);
@@ -550,8 +550,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Arrange'));
     await tester.pumpAndSettle();
-    _models(tester)['a']!.selected = false;
-    _models(tester)['c']!.selected = true;
+    _models(tester)['a']!.setSelected(value: false);
+    _models(tester)['c']!.setSelected(value: true);
     await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
     expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
     expect(find.byType(MenuSurface), findsNothing);
@@ -632,8 +632,8 @@ void main() {
           final before = _models(tester);
           final original = {for (final data in store.initial!.elements) data.id: data.toJson()};
           if (group) {
-            before[target]!.selected = true;
-            before[target == 'a' ? 'c' : 'b']!.selected = true;
+            before[target]!.setSelected(value: true);
+            before[target == 'a' ? 'c' : 'b']!.setSelected(value: true);
           }
           final position = before[target]!.data.position + const Offset(5, 5);
           if (direct) {
@@ -850,6 +850,8 @@ void main() {
 
   for (final scale in [1.0, 1.5]) {
     testWidgets('code title preserves body geometry and transforms at zoom $scale', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       var document = _editorDocument('code').withElements((elements) => elements.removeLast());
       document = document.withElements(
         (elements) => elements[0] = (elements.first as CodeElementData).copyWith(position: const Offset(100, 100)),
@@ -917,7 +919,7 @@ void main() {
       expect(model.active, isTrue);
       expectGeometry();
       final bounds = (model.canvasPosition, model.canvasSize);
-      model.title = '';
+      model.setTitle('');
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(model.active, isFalse);
@@ -972,8 +974,8 @@ void main() {
                 ? tester.widget<TextTool>(find.byType(TextTool)).model as CanvasElementModel
                 : tester.widget<CodeTool>(find.byType(CodeTool)).model;
             final other = _models(tester)['other']!;
-            model.selected = sameObject || multiple;
-            other.selected = !sameObject || multiple;
+            model.setSelected(value: sameObject || multiple);
+            other.setSelected(value: !sameObject || multiple);
             await _open(tester, sameObject ? point : const Offset(555, 405));
             await tester.tapAt(point - const Offset(25, 0));
             await tester.pumpAndSettle();
@@ -1001,8 +1003,8 @@ void main() {
   testWidgets('outside modifier-click toggles selection and selected drag keeps the group', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document()));
     final models = _models(tester);
-    models['a']!.selected = true;
-    models['c']!.selected = true;
+    models['a']!.setSelected(value: true);
+    models['c']!.setSelected(value: true);
     await _open(tester, const Offset(355, 355));
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
@@ -1103,7 +1105,7 @@ void main() {
         final canvas = _canvas(tester)..updateScalebyDelta(scale - 1);
         await tester.pumpAndSettle();
         final models = _models(tester);
-        models['a']!.selected = true;
+        models['a']!.setSelected(value: true);
         final before = canvas.offset;
         final position = canvas.getInfo('c').ssPosition + const Offset(5, 5);
         final click = await tester.startGesture(position, kind: PointerDeviceKind.mouse, buttons: kSecondaryButton);
@@ -1130,7 +1132,7 @@ void main() {
       await pumpCanvas(tester, TestLibraryStore(_document()));
       final canvas = _canvas(tester)..updateScalebyDelta(scale - 1);
       await tester.pumpAndSettle();
-      final model = _models(tester)['a']!..selected = true;
+      final model = _models(tester)['a']!..setSelected(value: true);
       final before = canvas.offset;
       final position = canvas.getInfo('c').ssPosition + const Offset(5, 5);
       final drag = await tester.startGesture(position, kind: PointerDeviceKind.mouse, buttons: kSecondaryButton);
@@ -1153,7 +1155,7 @@ void main() {
     await pumpCanvas(tester, TestLibraryStore(_document()));
     await tester.tapAt(const Offset(305, 305));
     await tester.pumpAndSettle();
-    final model = _models(tester)['a']!..selected = true;
+    final model = _models(tester)['a']!..setSelected(value: true);
     final canvas = _canvas(tester);
     final before = canvas.offset;
     final click = await tester.startGesture(
@@ -1239,8 +1241,8 @@ void main() {
   testWidgets('right-click replaces selection and right-drag still pans', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document()));
     final before = _models(tester);
-    before['a']!.selected = true;
-    before['b']!.selected = true;
+    before['a']!.setSelected(value: true);
+    before['b']!.setSelected(value: true);
     final drag = await tester.startGesture(
       const Offset(355, 355),
       kind: PointerDeviceKind.mouse,
@@ -1311,8 +1313,8 @@ void main() {
   testWidgets('menu shortcuts use captured targets and block unrelated canvas keys', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document()));
     await _open(tester, const Offset(305, 305));
-    _models(tester)['a']!.selected = false;
-    _models(tester)['c']!.selected = true;
+    _models(tester)['a']!.setSelected(value: false);
+    _models(tester)['c']!.setSelected(value: true);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
     await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
     expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
@@ -1429,7 +1431,7 @@ void main() {
       ..removeChild('unknown')
       ..addChild(info.gsPosition, info.child, id: 'unknown')
       ..sendToBack(['unknown']);
-    _models(tester)['a']!.selected = true;
+    _models(tester)['a']!.setSelected(value: true);
     await _shortcut(tester, LogicalKeyboardKey.bracketLeft);
     expect(canvas.childOrder, ['unknown', 'a', 'b', 'c', 'd']);
     expect(store.persisted, isNull);
@@ -1449,14 +1451,14 @@ void main() {
     );
     final store = TestLibraryStore(document);
     await pumpCanvas(tester, store);
-    _models(tester)['a']!.selected = true;
+    _models(tester)['a']!.setSelected(value: true);
     await _shortcut(tester, LogicalKeyboardKey.bracketLeft);
     await pumpPastSave(tester);
     expect(store.persisted, isNull);
     await _shortcut(tester, LogicalKeyboardKey.bracketRight);
     expect(_canvas(tester).childOrder, ['b', 'c', 'a', 'd']);
     await _shortcut(tester, LogicalKeyboardKey.keyZ);
-    _models(tester)['a']!.selected = true;
+    _models(tester)['a']!.setSelected(value: true);
     await _shortcut(tester, LogicalKeyboardKey.bracketLeft, shift: true);
     await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
     expect(_canvas(tester).childOrder, ['b', 'c', 'a', 'd']);
@@ -1703,7 +1705,7 @@ CanvasDocument _editorDocument(String editor) => CanvasDocument(
         autoArrange: false,
         id: 'editor',
         position: const Offset(150, 230),
-        size: const Size(300, 220),
+        size: const Size(300, 240),
         language: CodeLanguage.plainText,
         source: 'contents',
         title: 'Title',

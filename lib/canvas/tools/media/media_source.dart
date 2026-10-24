@@ -6,7 +6,7 @@ part of 'media_tool.dart';
 // ---------- Limits and formats ----------
 
 const mediaUrlPanelMinimumWidth = 480.0;
-const _mediaUrlPanelCanvasHeight = 48.0;
+const mediaUrlPanelCanvasHeight = 48.0;
 const _imageTypes = XTypeGroup(
   label: 'images',
   extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'],

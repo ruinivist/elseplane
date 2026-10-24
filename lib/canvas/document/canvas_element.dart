@@ -1,6 +1,9 @@
 // Defines immutable saved element values and document enums.
 // Shared by editing, storage, clipboard, and project transfer.
 
+// Immutable values stay independent of Flutter metadata.
+// ignore_for_file: avoid_equals_and_hash_code_on_mutable_classes
+
 part of 'canvas_document.dart';
 
 // ---------- Types ----------
@@ -87,6 +90,21 @@ sealed class CanvasElementData {
 
   CanvasElementData copyWith({String? id, bool? autoArrange});
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CanvasElementData &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          type == other.type &&
+          autoArrange == other.autoArrange &&
+          _sameElement(this, other);
+
+  @override
+  int get hashCode => Object.hash(id, type, autoArrange, _elementHash(this));
+
+  void validate() => _validateElement(this);
+
   // ---------- Validation ----------
 
   void validateType(String expected) {
@@ -126,14 +144,9 @@ final class ShapeElementData extends CanvasElementData {
     super.autoArrange,
   }) : super(id, type);
 
-  factory ShapeElementData.fromJson(Object? json) {
-    final shape = _decode(json, 'shape element', _$ShapeElementDataFromJson)..validateType('shape');
-    if (shape.size.width < shapeMinimumSize.width || shape.size.height < shapeMinimumSize.height) {
-      throw const FormatException('element.size is below the shape minimum');
-    }
-    _validatePositive(shape.strokeWidth, 'element.strokeWidth');
-    return shape;
-  }
+  factory ShapeElementData.fromJson(Object? json) => _decode(json, 'shape element', _$ShapeElementDataFromJson)
+    ..validateType('shape')
+    ..validate();
 
   // ---------- State ----------
 
@@ -203,15 +216,9 @@ final class MediaElementData extends CanvasElementData {
     super.autoArrange,
   }) : super(id, type);
 
-  factory MediaElementData.fromJson(Object? json) {
-    final media = _decode(json, 'media element', _$MediaElementDataFromJson)..validateType('media');
-    _validateFinite(media.width, 'element.width');
-    if (media.width < mediaNodeMinimumWidth) {
-      throw const FormatException('element.width is below the minimum');
-    }
-    _validateFinite(media.rotation, 'element.rotation');
-    return media;
-  }
+  factory MediaElementData.fromJson(Object? json) => _decode(json, 'media element', _$MediaElementDataFromJson)
+    ..validateType('media')
+    ..validate();
 
   // ---------- State ----------
 
@@ -297,6 +304,14 @@ final class TextNodeStyle {
     );
   }
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TextNodeStyle && (fontFamily, color, background) == (other.fontFamily, other.color, other.background);
+
+  @override
+  int get hashCode => Object.hash(fontFamily, color, background);
+
   // ---------- Serialization ----------
 
   Map<String, Object?> toJson() => _$TextNodeStyleToJson(this);
@@ -331,17 +346,9 @@ final class TextElementData extends CanvasElementData {
     super.autoArrange,
   }) : super(id, type);
 
-  factory TextElementData.fromJson(Object? json) {
-    final text = _decode(json, 'text element', _$TextElementDataFromJson)..validateType('text');
-    if (text.width < textNodeMinimumWidth) {
-      throw const FormatException('element.size.width is below the minimum');
-    }
-    if (text.height != null && text.height! < textNodeMinimumHeight) {
-      throw const FormatException('element.size.height is below the minimum');
-    }
-    _validateFinite(text.rotation, 'element.rotation');
-    return text;
-  }
+  factory TextElementData.fromJson(Object? json) => _decode(json, 'text element', _$TextElementDataFromJson)
+    ..validateType('text')
+    ..validate();
 
   // ---------- State ----------
 
@@ -422,14 +429,9 @@ final class CodeElementData extends CanvasElementData {
     super.autoArrange,
   }) : super(id, type);
 
-  factory CodeElementData.fromJson(Object? json) {
-    final code = _decode(json, 'code element', _$CodeElementDataFromJson)..validateType('code');
-    if (code.size.width < codeBlockMinimumSize.width || code.size.height < codeBlockMinimumSize.height) {
-      throw const FormatException('element.size is below the minimum');
-    }
-    _validateFinite(code.rotation, 'element.rotation');
-    return code;
-  }
+  factory CodeElementData.fromJson(Object? json) => _decode(json, 'code element', _$CodeElementDataFromJson)
+    ..validateType('code')
+    ..validate();
 
   // ---------- State ----------
 
@@ -513,6 +515,13 @@ final class PenPointData {
   double get x => position.dx;
   double get y => position.dy;
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || other is PenPointData && (position, pressure) == (other.position, other.pressure);
+
+  @override
+  int get hashCode => Object.hash(position, pressure);
+
   // ---------- Serialization ----------
 
   Map<String, Object?> toJson() => _$PenPointDataToJson(this);
@@ -571,22 +580,9 @@ final class PenElementData extends CanvasElementData {
        streamline = streamline ?? original.streamline,
        super(id ?? original.id, original.type, autoArrange: autoArrange ?? original.autoArrange);
 
-  factory PenElementData.fromJson(Object? json) {
-    final pen = _decode(json, 'pen element', _$PenElementDataFromJson)..validateType('pen');
-    _validateFinite(pen.hitSlop, 'element.hitSlop');
-    if (pen.hitSlop < 0) {
-      throw const FormatException('element.hitSlop must be non-negative');
-    }
-    if (pen.points.isEmpty) {
-      throw const FormatException('element.points must not be empty');
-    }
-    _validatePositive(pen.width, 'element.width');
-    _validateFinite(pen.streamline, 'element.streamline');
-    if (pen.streamline < penStreamlineMinimum || pen.streamline > penStreamlineMaximum) {
-      throw const FormatException('element.streamline is outside the supported range');
-    }
-    return pen;
-  }
+  factory PenElementData.fromJson(Object? json) => _decode(json, 'pen element', _$PenElementDataFromJson)
+    ..validateType('pen')
+    ..validate();
 
   // ---------- State ----------
 
@@ -682,20 +678,9 @@ final class ArrowElementData extends CanvasElementData {
        strokeWidth = strokeWidth ?? original.strokeWidth,
        super(id ?? original.id, original.type, autoArrange: autoArrange ?? original.autoArrange);
 
-  factory ArrowElementData.fromJson(Object? json) {
-    final arrow = _decode(json, 'arrow element', _$ArrowElementDataFromJson)..validateType('arrow');
-    if (arrow.controls.isEmpty) {
-      throw const FormatException('element.controls must not be empty');
-    }
-    if ((arrow.end - arrow.start).distance < arrowMinimumLength) {
-      throw const FormatException('element arrow is shorter than the minimum');
-    }
-    _validateFinite(arrow.strokeWidth, 'element.strokeWidth');
-    if (arrow.strokeWidth < arrowStrokeWidthMinimum || arrow.strokeWidth > arrowStrokeWidthMaximum) {
-      throw const FormatException('element.strokeWidth is outside the supported range');
-    }
-    return arrow;
-  }
+  factory ArrowElementData.fromJson(Object? json) => _decode(json, 'arrow element', _$ArrowElementDataFromJson)
+    ..validateType('arrow')
+    ..validate();
 
   // ---------- State ----------
 
@@ -738,4 +723,135 @@ final class ArrowElementData extends CanvasElementData {
     strokeStyle: strokeStyle,
     strokeWidth: strokeWidth,
   );
+}
+
+// ---------- Value comparison and edit validation ----------
+
+bool _valuesEqual<T>(List<T> first, List<T> second) {
+  if (identical(first, second)) return true;
+  if (first.length != second.length) return false;
+  for (var index = 0; index < first.length; index++) {
+    if (first[index] != second[index]) return false;
+  }
+  return true;
+}
+
+bool _sameElement(CanvasElementData first, CanvasElementData second) => switch ((first, second)) {
+  (final ShapeElementData a, final ShapeElementData b) =>
+    (a.kind, a.position, a.size, a.strokeColor, a.fillColor, a.strokeWidth) ==
+        (b.kind, b.position, b.size, b.strokeColor, b.fillColor, b.strokeWidth),
+  (final MediaElementData a, final MediaElementData b) =>
+    (a.position, a.width, a.url, a.rotation) == (b.position, b.width, b.url, b.rotation),
+  (final TextElementData a, final TextElementData b) =>
+    (a.position, a.textSize, a.markdown, a.style, a.rotation) ==
+        (b.position, b.textSize, b.markdown, b.style, b.rotation),
+  (final CodeElementData a, final CodeElementData b) =>
+    (a.position, a.size, a.language, a.source, a.title, a.showLineNumbers, a.background, a.rotation) ==
+        (b.position, b.size, b.language, b.source, b.title, b.showLineNumbers, b.background, b.rotation),
+  (final PenElementData a, final PenElementData b) =>
+    (a.position, a.size, a.hitSlop, a.color, a.width, a.streamline) ==
+            (b.position, b.size, b.hitSlop, b.color, b.width, b.streamline) &&
+        _valuesEqual(a.points, b.points),
+  (final ArrowElementData a, final ArrowElementData b) =>
+    (a.start, a.end, a.color, a.strokeStyle, a.strokeWidth) ==
+            (b.start, b.end, b.color, b.strokeStyle, b.strokeWidth) &&
+        _valuesEqual(a.controls, b.controls),
+  _ => false,
+};
+
+int _elementHash(CanvasElementData value) => switch (value) {
+  final ShapeElementData a => Object.hash(a.kind, a.position, a.size, a.strokeColor, a.fillColor, a.strokeWidth),
+  final MediaElementData a => Object.hash(a.position, a.width, a.url, a.rotation),
+  final TextElementData a => Object.hash(a.position, a.textSize, a.markdown, a.style, a.rotation),
+  final CodeElementData a => Object.hash(
+    a.position,
+    a.size,
+    a.language,
+    a.source,
+    a.title,
+    a.showLineNumbers,
+    a.background,
+    a.rotation,
+  ),
+  final PenElementData a => Object.hash(
+    a.position,
+    a.size,
+    a.hitSlop,
+    a.color,
+    a.width,
+    a.streamline,
+    Object.hashAll(a.points),
+  ),
+  final ArrowElementData a => Object.hash(
+    a.start,
+    a.end,
+    a.color,
+    a.strokeStyle,
+    a.strokeWidth,
+    Object.hashAll(a.controls),
+  ),
+};
+
+void _validateElement(CanvasElementData value) {
+  value.validateType(value.type);
+  void position(Offset offset) {
+    _validateFinite(offset.dx, 'position.x');
+    _validateFinite(offset.dy, 'position.y');
+  }
+
+  void size(Size size, Size minimum) {
+    _validateFinite(size.width, 'size.width');
+    _validateFinite(size.height, 'size.height');
+    if (size.width < minimum.width || size.height < minimum.height) {
+      throw const FormatException('Element size is below the minimum');
+    }
+  }
+
+  switch (value) {
+    case final ShapeElementData a:
+      position(a.position);
+      size(a.size, shapeMinimumSize);
+      _validatePositive(a.strokeWidth, 'strokeWidth');
+    case final MediaElementData a:
+      position(a.position);
+      size(Size(a.width, 0), const Size(mediaNodeMinimumWidth, 0));
+      _validateFinite(a.rotation, 'rotation');
+    case final TextElementData a:
+      position(a.position);
+      size(Size(a.width, a.height ?? textNodeMinimumHeight), const Size(textNodeMinimumWidth, textNodeMinimumHeight));
+      _validateFinite(a.rotation, 'rotation');
+      if (a.style.fontFamily.trim().isEmpty) throw const FormatException('Font family must not be blank');
+    case final CodeElementData a:
+      position(a.position);
+      size(a.size, codeBlockMinimumSize);
+      _validateFinite(a.rotation, 'rotation');
+    case final PenElementData a:
+      position(a.position);
+      size(a.size, Size.zero);
+      _validateFinite(a.hitSlop, 'hitSlop');
+      _validatePositive(a.width, 'width');
+      _validateFinite(a.streamline, 'streamline');
+      if (a.hitSlop < 0 ||
+          a.streamline < penStreamlineMinimum ||
+          a.streamline > penStreamlineMaximum ||
+          a.points.isEmpty) {
+        throw const FormatException('Invalid stroke geometry');
+      }
+      for (final point in a.points) {
+        position(point.position);
+        _validateFinite(point.pressure, 'pressure');
+        if (point.pressure < 0 || point.pressure > 1) throw const FormatException('Invalid pressure');
+      }
+    case final ArrowElementData a:
+      position(a.start);
+      position(a.end);
+      a.controls.forEach(position);
+      _validateFinite(a.strokeWidth, 'strokeWidth');
+      if (a.controls.isEmpty ||
+          (a.end - a.start).distance < arrowMinimumLength ||
+          a.strokeWidth < arrowStrokeWidthMinimum ||
+          a.strokeWidth > arrowStrokeWidthMaximum) {
+        throw const FormatException('Invalid arrow geometry');
+      }
+  }
 }

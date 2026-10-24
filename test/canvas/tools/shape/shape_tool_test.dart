@@ -24,8 +24,8 @@ void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
   test('shape tool normalizes drags and rejects undersized shapes', () {
-    final shapes = <ShapeModel>[];
-    final tool = ShapeTool(onShape: shapes.add)
+    final shapes = <ShapeElementData>[];
+    final tool = ShapeTool(session: testSessionProvider(), onShape: shapes.add)
       ..setKind(ShapeKind.hexagon)
       ..setStrokeColor(const Color(0xffdc3f3f))
       ..setFillColor(const Color(0xff2f6fde))
@@ -45,12 +45,12 @@ void main() {
     tool.onPointerUp(pointer.up(), const Offset(40, 20));
 
     expect(shapes, hasLength(1));
-    expect(shapes.single.data.kind, ShapeKind.hexagon);
-    expect(shapes.single.data.position, const Offset(40, 20));
-    expect(shapes.single.data.size, const Size(140, 120));
-    expect(shapes.single.data.strokeColor, const Color(0xffdc3f3f));
-    expect(shapes.single.data.fillColor, const Color(0xff2f6fde));
-    expect(shapes.single.data.strokeWidth, 3);
+    expect(shapes.single.kind, ShapeKind.hexagon);
+    expect(shapes.single.position, const Offset(40, 20));
+    expect(shapes.single.size, const Size(140, 120));
+    expect(shapes.single.strokeColor, const Color(0xffdc3f3f));
+    expect(shapes.single.fillColor, const Color(0xff2f6fde));
+    expect(shapes.single.strokeWidth, 3);
     expect(tool.preview, isNull);
 
     final tiny = TestPointer(2, PointerDeviceKind.mouse);
@@ -63,13 +63,10 @@ void main() {
     expect(shapes, hasLength(1));
 
     tool.dispose();
-    for (final shape in shapes) {
-      shape.dispose();
-    }
   });
 
   testWidgets('hollow shapes hit their full geometric area', (tester) async {
-    final model = ShapeModel(
+    final model = testShapeModel(
       ShapeElementData(
         id: 'ellipse',
         kind: ShapeKind.ellipse,

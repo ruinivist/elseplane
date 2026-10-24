@@ -219,7 +219,7 @@ void main() {
     await tester.pumpAndSettle();
     final state = tester.state(find.byType(CanvasPage));
     final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model..selected = true;
+    final model = tester.widget<TextTool>(find.byType(TextTool)).model..setSelected(value: true);
     final original = model.data.toJson();
     await _openAppearance(tester);
     expect(_surfaceStyle(tester), SurfaceStyle.solid);

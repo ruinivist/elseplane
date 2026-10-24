@@ -114,15 +114,14 @@ CanvasDocument _document(int count, {required bool auto}) => CanvasDocument(
 );
 
 Future<void> _pumpEditor(WidgetTester tester, CanvasDocument document, ValueChanged<CanvasDocument> onChanged) async {
-  final replacement = ValueNotifier<CanvasReplacement>((document: document, token: Object()));
-  addTearDown(replacement.dispose);
+  final session = testSession(document);
+  session.documentChanges.addListener(() => onChanged(session.document));
   await tester.pumpWidget(
     MaterialApp(
       theme: starlessLightThemeData.copyWith(platform: TargetPlatform.linux),
       home: CanvasPage(
-        replacement: replacement,
+        session: session,
         attachmentStore: TestAttachmentStore(),
-        onDocumentChanged: onChanged,
         libraryPath: const ['Test'],
         onOpenLibrary: () async {},
         onImportCanvas: () async => false,
@@ -142,7 +141,7 @@ Future<void> _selectGroup(WidgetTester tester) async {
   final sentinel = tester
       .widgetList<PenStroke>(find.byType(PenStroke))
       .firstWhere((stroke) => stroke.model.data.id == 'sentinel');
-  sentinel.model.selected = false;
+  sentinel.model.setSelected(value: false);
 }
 
 Future<void> _shortcut(WidgetTester tester, LogicalKeyboardKey key, {bool shift = false}) async {

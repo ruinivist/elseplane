@@ -60,12 +60,15 @@ class _TextToolSettingsState extends State<TextToolSettings> {
     final model = widget.model;
     if (_loading || family == model.style.fontFamily) return;
     final previousFamily = model.style.fontFamily;
+    final restoration = model.session.restorationGeneration;
     final request = Object();
     _request = request;
     setState(() => _loading = true);
     bool ownsRequest() =>
         mounted &&
         !model.disposed &&
+        model.session.isLive &&
+        model.session.restorationGeneration == restoration &&
         model.active &&
         identical(_request, request) &&
         identical(widget.model, model) &&
@@ -74,7 +77,7 @@ class _TextToolSettingsState extends State<TextToolSettings> {
       await widget.loadFont(family);
       if (!ownsRequest()) return;
       widget.onChangeBoundary();
-      model.style = model.style.copyWith(fontFamily: family);
+      model.session.setTextStyle(model.data.id, model.style.copyWith(fontFamily: family));
       widget.onChangeBoundary();
     } on Object {
       if (!mounted || !ownsRequest()) return;
@@ -138,7 +141,7 @@ class _TextToolSettingsState extends State<TextToolSettings> {
               onExpandedChanged: widget.onColorPickerExpandedChanged,
               onChanged: (color) {
                 onChangeBoundary();
-                model.style = style.copyWith(color: color);
+                model.session.setTextStyle(model.data.id, model.style.copyWith(color: color));
                 onChangeBoundary();
               },
             ),
@@ -155,7 +158,7 @@ class _TextToolSettingsState extends State<TextToolSettings> {
               ],
               onChanged: (background) {
                 onChangeBoundary();
-                model.style = style.copyWith(background: background);
+                model.session.setTextStyle(model.data.id, model.style.copyWith(background: background));
                 onChangeBoundary();
               },
             ),

@@ -49,15 +49,13 @@ class _MediaUrlPanel extends StatelessWidget {
                 focusNode: model.focusNode,
                 onTap: onActivate,
                 onTapOutside: (_) {
-                  model
-                    ..invalidatePendingEdits()
-                    ..commitUrl();
+                  model.session.invalidatePendingEdits();
+                  model.commitUrl();
                   model.focusNode.unfocus();
                 },
                 onSubmitted: (_) {
-                  model
-                    ..invalidatePendingEdits()
-                    ..commitUrl();
+                  model.session.invalidatePendingEdits();
+                  model.commitUrl();
                 },
                 minLines: 1,
                 maxLines: 3,

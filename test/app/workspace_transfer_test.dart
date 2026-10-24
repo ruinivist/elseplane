@@ -200,7 +200,7 @@ void main() {
       attachmentStore: attachments,
       projectFiles: files,
     );
-    tester.widget<TextTool>(find.byType(TextTool)).model.selected = true;
+    tester.widget<TextTool>(find.byType(TextTool)).model.setSelected(value: true);
     await tester.sendKeyEvent(LogicalKeyboardKey.delete);
     await tester.pump();
     await _historyShortcut(tester);
@@ -291,7 +291,7 @@ void main() {
         projectFiles: files,
       );
       await _openCanvasSettings(tester);
-      tester.widget<TextTool>(find.byType(TextTool)).model.selected = true;
+      tester.widget<TextTool>(find.byType(TextTool)).model.setSelected(value: true);
       await pumpPastSave(tester);
 
       final writeGate = Completer<void>();

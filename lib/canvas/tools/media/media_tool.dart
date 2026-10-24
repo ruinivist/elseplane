@@ -4,12 +4,13 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:elseplane/attachments/attachment_store.dart';
+import 'package:elseplane/attachments/image_import.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/icon_drag.dart';
@@ -104,23 +105,23 @@ class _MediaToolState extends State<MediaTool> {
   Future<void> _pickImage() async {
     widget.onActivate();
     final model = widget.model;
-    final generation = model.asyncEditGeneration;
+    final token = model.session.captureEdit(model.data.id);
     try {
       final file = await openFile(acceptedTypeGroups: const [_imageTypes]);
-      if (file == null || generation != model.asyncEditGeneration) return;
+      if (file == null || !token.isCurrent || !model.attached) return;
       final separator = file.name.lastIndexOf('.');
       if (separator < 0) throw const FormatException('Missing image type');
       final length = await file.length();
-      if (generation != model.asyncEditGeneration) return;
+      if (!token.isCurrent || !model.attached) return;
       validateAttachmentSize(length, 'Image exceeds 10 MiB');
       final bytes = await file.readAsBytes();
-      if (generation != model.asyncEditGeneration) return;
+      if (!token.isCurrent || !model.attached) return;
       await model.setDeviceImage(
         bytes,
         file.name.substring(separator + 1),
       );
     } on Object {
-      if (!mounted || generation != model.asyncEditGeneration) return;
+      if (!mounted || !token.isCurrent || !model.attached) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Could not open image')));

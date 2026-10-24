@@ -97,11 +97,11 @@ void main() {
     expect(controller.getInfo(model.data.id).childSize, measured);
 
     model
-      ..selected = true
-      ..active = true;
+      ..setSelected(value: true)
+      ..setActive(value: true);
     expect(controller.getInfo(model.data.id).childSize, measured);
     model
-      ..active = false
+      ..setActive(value: false)
       ..rotate(math.pi / 4);
     expect(controller.getInfo(model.data.id).childSize, measured);
     await tester.pump();
@@ -109,7 +109,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(TextTool), findsNothing);
     model
-      ..selected = false
+      ..setSelected(value: false)
       ..rotate(math.pi / 2)
       ..moveBy(const Offset(20, 10));
     expect(controller.getInfo(model.data.id).childSize, measured);
@@ -166,7 +166,7 @@ void main() {
       findsOneWidget,
     );
 
-    model.selected = true;
+    model.setSelected(value: true);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
 
@@ -225,7 +225,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     await _placeCodeBlock(tester, const Offset(300, 200));
-    final code = tester.widget<CodeTool>(find.byType(CodeTool)).model..selected = true;
+    final code = tester.widget<CodeTool>(find.byType(CodeTool)).model..setSelected(value: true);
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
@@ -258,7 +258,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     await _placeCodeBlock(tester, const Offset(300, 200));
-    final code = tester.widget<CodeTool>(find.byType(CodeTool)).model..selected = true;
+    final code = tester.widget<CodeTool>(find.byType(CodeTool)).model..setSelected(value: true);
     code.controller.text = 'native code';
     code.focusNode.requestFocus();
     await tester.pump();
@@ -281,7 +281,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     await _placeCodeBlock(tester, const Offset(300, 200));
-    final code = tester.widget<CodeTool>(find.byType(CodeTool)).model..selected = true;
+    final code = tester.widget<CodeTool>(find.byType(CodeTool)).model..setSelected(value: true);
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
@@ -302,7 +302,7 @@ void main() {
     expect(find.byType(TextTool), findsOneWidget);
     expect(text.editing, isTrue);
     expect(find.byKey(const ValueKey('text-block-handle')), findsOneWidget);
-    expect(code.selected, isTrue);
+    expect(code.session.selectedIds, isNot(contains(code.data.id)));
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump(const Duration(milliseconds: 100));
   });
@@ -1131,7 +1131,7 @@ x+y
         findsOneWidget,
       );
 
-      model.style = model.style.copyWith(fontFamily: 'ABeeZee');
+      model.setStyle(model.style.copyWith(fontFamily: 'ABeeZee'));
       await tester.pump();
       await tester.tap(_selectTrigger('text-font-select'));
       await tester.pump();
@@ -1291,7 +1291,7 @@ x+y
     expect(model.editing, isFalse);
     expect(border(), BorderSide.none);
 
-    model.selected = true;
+    model.setSelected(value: true);
     await tester.pump();
 
     expect(border(), isNot(BorderSide.none));
@@ -1343,7 +1343,7 @@ x+y
       expectGlass();
 
       final previewColor = tester.widget<Material>(surface).color;
-      model.selected = true;
+      model.setSelected(value: true);
       await tester.pump();
       expectGlass();
       expect(tester.widget<Material>(surface).color, isNot(previewColor));
@@ -1413,8 +1413,8 @@ x+y
     final first = await _placeTextBlock(tester, const Offset(120, 200));
     final second = await _placeTextBlock(tester, const Offset(480, 360));
     await tester.pumpAndSettle();
-    first.style = first.style.copyWith(fontFamily: 'Inter');
-    second.style = second.style.copyWith(fontFamily: 'ABeeZee');
+    first.setStyle(first.style.copyWith(fontFamily: 'Inter'));
+    second.setStyle(second.style.copyWith(fontFamily: 'ABeeZee'));
     await tester.pump();
 
     tester

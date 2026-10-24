@@ -6,10 +6,12 @@ import 'dart:async';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/canvas_page.dart';
+import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/library/library_controller.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_project_files.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
+import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:flutter/material.dart';
@@ -50,7 +52,8 @@ class _WorkspaceState extends State<Workspace> {
     attachments: widget.attachmentStore,
     files: widget.projectFiles,
   );
-  final _replacement = ValueNotifier<CanvasReplacement>((document: null, token: Object()));
+  EditorSession? _editor;
+  VoidCallback? _documentListener;
   String? _fileId;
   Object? _reportedSaveError;
   var _blocked = false;
@@ -81,13 +84,27 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   void _replaceEditor() => setState(() {
-    _fileId = _library.library.currentId;
-    _replacement.value = (document: _library.library.current.document, token: _library.documentToken);
+    final previous = _editor;
+    if (_documentListener != null) previous?.documentChanges.removeListener(_documentListener!);
+    previous?.endLifetime();
+    final fileId = _fileId = _library.library.currentId;
+    final token = _library.documentToken;
+    final editor = _editor = EditorSession(
+      _library.library.current.document!,
+      initialColor: defaultCanvasColor,
+      defaults: previous?.defaults,
+    );
+    _documentListener = () {
+      if (editor.isLive && identical(token, _library.documentToken)) _library.updateDocument(fileId, editor.document);
+    };
+    editor.documentChanges.addListener(_documentListener!);
+    if (previous != null) WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
   });
 
   @override
   void dispose() {
-    _replacement.dispose();
+    if (_documentListener != null) _editor?.documentChanges.removeListener(_documentListener!);
+    _editor?.dispose();
     _library
       ..removeListener(_libraryChanged)
       ..dispose();
@@ -97,7 +114,7 @@ class _WorkspaceState extends State<Workspace> {
   // ---------- File presentation ----------
 
   Future<void> _showLibrary() async {
-    if (_replacement.value.document == null || _transferActive || _blocked) return;
+    if (_editor == null || _transferActive || _blocked) return;
     setState(() => _blocked = true);
     try {
       await _library.flush();
@@ -235,19 +252,13 @@ class _WorkspaceState extends State<Workspace> {
   @override
   Widget build(BuildContext context) {
     final fileId = _fileId;
-    final token = _replacement.value.token;
     return CanvasPage(
-      replacement: _replacement,
+      session: _editor,
       blocked: _blocked,
       libraryPath: fileId == null
           ? const ['Untitled']
           : _library.library.path(_library.library.currentId).map((file) => file.name).toList(),
       attachmentStore: widget.attachmentStore,
-      onDocumentChanged: (document) {
-        if (fileId != null && identical(token, _replacement.value.token) && identical(token, _library.documentToken)) {
-          _library.updateDocument(fileId, document);
-        }
-      },
       onOpenLibrary: _showLibrary,
       onImportCanvas: _importCanvas,
       onExportCanvas: _exportCanvas,

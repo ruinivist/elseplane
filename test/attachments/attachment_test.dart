@@ -6,7 +6,6 @@ import 'dart:async';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/attachment_store_web.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/tools/media/media_tool.dart';
 import 'package:elseplane/canvas/tools/text/text_block_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -27,16 +26,19 @@ void main() {
             final store = TestAttachmentStore();
             final text = media ? null : _model('original');
             final image = media
-                ? MediaModel(MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'), store)
+                ? testMediaModel(
+                    MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'),
+                    store,
+                  )
                 : null;
             final reader = Completer<ClipboardReader>();
             final pending = media ? image!.paste(reader.future) : text!.paste(reader.future, store);
             if (dispose) {
               (text ?? image!).dispose();
             } else if (media) {
-              image!.restoreData(image.data);
+              image!.session.invalidatePendingEdits();
             } else {
-              text!.restoreData(text.data);
+              text!.session.invalidatePendingEdits();
             }
             if (failure) {
               reader.completeError(StateError('clipboard failed'));
@@ -56,16 +58,16 @@ void main() {
       final store = TestAttachmentStore();
       final text = media ? null : _model('original');
       final image = media
-          ? MediaModel(MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'), store)
+          ? testMediaModel(MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'), store)
           : null;
       final value = Completer<String>();
       final reader = _TextReader(value.future);
       final pending = media ? image!.paste(Future.value(reader)) : text!.paste(Future.value(reader), store);
       await reader.started.future;
       if (media) {
-        image!.invalidatePendingEdits();
+        image!.session.invalidatePendingEdits();
       } else {
-        text!.invalidatePendingEdits();
+        text!.session.invalidatePendingEdits();
       }
       value.complete('late');
       await pending;
@@ -77,7 +79,7 @@ void main() {
       final store = TestAttachmentStore();
       final text = media ? null : _model('original');
       final image = media
-          ? MediaModel(MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'), store)
+          ? testMediaModel(MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'), store)
           : null;
       final reader = Completer<ClipboardReader>();
       final pending = media ? image!.paste(reader.future) : text!.paste(reader.future, store);
@@ -88,16 +90,16 @@ void main() {
     });
   }
 
-  test('invalidation is silent and invalid restoration keeps pending edits', () {
+  test('invalidation is silent and invalid edits keep pending work', () {
     final model = _model('original');
     var notifications = 0;
     model.addListener(() => notifications++);
-    model.documentChanges.addListener(() => notifications++);
-    final generation = model.asyncEditGeneration;
-    expect(() => model.restoreData(model.data.copyWith(id: 'other')), throwsArgumentError);
-    expect(model.asyncEditGeneration, generation);
-    model.invalidatePendingEdits();
-    expect(model.asyncEditGeneration, generation + 1);
+    model.session.documentChanges.addListener(() => notifications++);
+    final generation = model.session.editGeneration;
+    expect(() => model.session.move([model.data.id], const Offset(double.nan, 0)), throwsFormatException);
+    expect(model.session.editGeneration, generation);
+    model.session.invalidatePendingEdits();
+    expect(model.session.editGeneration, generation + 1);
     expect(notifications, 0);
     model.dispose();
   });
@@ -223,7 +225,7 @@ void main() {
   });
 }
 
-TextBlockModel _model(String markdown) => TextBlockModel(
+TextBlockModel _model(String markdown) => testTextModel(
   TextElementData(
     id: 'text',
     position: Offset.zero,

@@ -402,11 +402,11 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: main
-      resolved-ref: "023a22c180f5492dae1ca6847ec352226b4a4ee8"
+      ref: f1387065bb39967d4c996db533ec56cc944d7cc3
+      resolved-ref: f1387065bb39967d4c996db533ec56cc944d7cc3
       url: "https://github.com/ruinivist/infinite_lazy_grid.git"
     source: git
-    version: "1.0.5"
+    version: "2.0.0"
   intl:
     dependency: transitive
     description:

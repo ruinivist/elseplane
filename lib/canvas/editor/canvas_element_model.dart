@@ -1,108 +1,60 @@
-// Defines the shared mutable model contract for canvas elements.
-// Extended by each interactive element tool and renderer.
+// Retains element presentation state while reading accepted editor snapshots.
+// Used by existing views until rendering resources move into CanvasView.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:flutter/material.dart';
 
-// ---------- Model contract ----------
+// ---------- Presentation adapter ----------
 
-/// Adds selection and canvas geometry behavior to persisted element data.
-/// Extended by each concrete interactive canvas element model.
 abstract class CanvasElementModel<T extends CanvasElementData> extends ChangeNotifier {
-  // ---------- Construction ----------
+  CanvasElementModel(this.session, T data)
+    : _data = data,
+      _restoration = session.restorationGeneration,
+      _targetLifetime = session.elementLifetime(data.id) {
+    session.addListener(_synchronize);
+  }
 
-  CanvasElementModel(T data) : _data = data;
-
-  // ---------- State ----------
-
+  final EditorSession session;
   T _data;
+  final Object? _targetLifetime;
+  int _restoration;
+  bool _disposed = false;
+  bool get disposed => _disposed;
   T get data => _data;
-  int _asyncEditGeneration = 0;
-  int get asyncEditGeneration => _asyncEditGeneration;
-
-  void invalidatePendingEdits() => _asyncEditGeneration++;
-
-  final ValueNotifier<int> _documentRevision = ValueNotifier(0);
-  bool _selected = false;
-  bool _active = false;
-
-  Listenable get documentChanges => _documentRevision;
-
-  /// Restores persisted state without recording a document edit.
-  void restoreData(covariant T snapshot) {
-    if (snapshot.id != data.id || snapshot.runtimeType != data.runtimeType) {
-      throw ArgumentError('Restoration must preserve element identity and type');
-    }
-    invalidatePendingEdits();
-    final previous = _data;
-    _data = snapshot;
-    synchronizeRestoredData(previous);
-    notifyListeners();
-  }
-
-  @protected
-  void synchronizeRestoredData(T previous) {}
-
-  @protected
-  void replaceData(T next, {bool rebuild = true, VoidCallback? synchronize}) {
-    if (next.id != data.id || next.runtimeType != data.runtimeType) {
-      throw ArgumentError('Edits must preserve element identity and type');
-    }
-    _data = next;
-    synchronize?.call();
-    _documentRevision.value++;
-    if (rebuild) notifyListeners();
-  }
-
+  bool get selected => attached && session.isSelected(data.id);
+  bool get active => attached && session.activeId == data.id;
   bool get autoArrange => data.autoArrange;
+  bool get attached => !disposed && session.isLive && identical(_targetLifetime, session.elementLifetime(data.id));
 
-  set autoArrange(bool value) {
-    if (data.autoArrange == value) return;
-    replaceData(data.copyWith(autoArrange: value) as T);
-  }
-
-  bool get selected => _selected;
-
-  set selected(bool value) {
-    if (_selected == value) return;
-    _selected = value;
+  void _synchronize() {
+    if (!attached) return;
+    final next = session.element(data.id);
+    if (next is! T || next.runtimeType != data.runtimeType) return;
+    final previous = _data;
+    _data = next;
+    final restored = _restoration != session.restorationGeneration;
+    _restoration = session.restorationGeneration;
+    synchronizeData(previous, restored: restored);
     notifyListeners();
   }
 
-  bool get active => _active;
-
-  set active(bool value) {
-    if (_active == value) return;
-    if (!value) invalidatePendingEdits();
-    _active = value;
-    notifyListeners();
-  }
-
-  // ---------- Geometry ----------
+  @protected
+  void synchronizeData(T previous, {required bool restored}) {}
 
   Offset get canvasPosition;
-
   Size get canvasSize;
-
-  void moveBy(Offset delta);
 
   @override
   void dispose() {
-    invalidatePendingEdits();
-    _documentRevision.dispose();
+    _disposed = true;
+    session.removeListener(_synchronize);
     super.dispose();
   }
 }
 
-/// Adds center rotation to canvas element models.
-/// Floating controls anchor to the element's laid-out render box.
-/// Used by elements that share the editor's floating transform controls.
 abstract class RotatableCanvasElementModel<T extends CanvasElementData> extends CanvasElementModel<T> {
-  RotatableCanvasElementModel(super.data);
-
+  RotatableCanvasElementModel(super.session, super.data);
   bool get canRotate => true;
-
   double get rotation;
-
-  void rotate(double angle);
 }

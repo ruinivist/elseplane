@@ -29,6 +29,8 @@ import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
+import '../../test_helpers.dart';
+
 // ---------- Tests ----------
 
 void main() {
@@ -119,7 +121,7 @@ void main() {
 
   test('pen normalizes pressure and filters non-owner or nearby points', () {
     final strokes = <RawPenStroke>[];
-    final tool = PenTool(onStroke: strokes.add)
+    final tool = PenTool(session: testSessionProvider(), onStroke: strokes.add)
       ..onPointerDown(
         const PointerDownEvent(
           pointer: 1,
@@ -172,7 +174,7 @@ void main() {
 
   test('pen defers smoothing changes until the active stroke finishes', () {
     final strokes = <RawPenStroke>[];
-    final tool = PenTool(onStroke: strokes.add)
+    final tool = PenTool(session: testSessionProvider(), onStroke: strokes.add)
       ..onPointerDown(const PointerDownEvent(pointer: 1))
       ..setStreamline(1)
       ..onPointerUp(const PointerUpEvent(pointer: 1, position: Offset(4, 0)))
@@ -185,7 +187,7 @@ void main() {
 
   test('pen cancellation discards while mouse exit commits once', () {
     final strokes = <RawPenStroke>[];
-    final tool = PenTool(onStroke: strokes.add)
+    final tool = PenTool(session: testSessionProvider(), onStroke: strokes.add)
       ..onPointerDown(const PointerDownEvent(pointer: 1))
       ..onPointerCancel(
         const PointerCancelEvent(pointer: 1, position: Offset(4, 0)),
@@ -206,7 +208,7 @@ void main() {
 
   test('discarded pen strokes apply queued options to the next stroke', () {
     final strokes = <RawPenStroke>[];
-    final tool = PenTool(onStroke: strokes.add)
+    final tool = PenTool(session: testSessionProvider(), onStroke: strokes.add)
       ..onPointerDown(const PointerDownEvent(pointer: 1))
       ..setColor(Colors.red)
       ..setStrokeWidth(8)
@@ -223,7 +225,7 @@ void main() {
   });
 
   test('positioned pen models keep durable geometry when moved', () {
-    final model = PenStrokeModel(
+    final model = testPenModel(
       PenElementData(
         id: 'pen',
         position: const Offset(10, 20),
@@ -244,7 +246,7 @@ void main() {
   });
 
   test('code source edits update durable data', () {
-    final model = CodeBlockModel(
+    final model = testCodeModel(
       CodeElementData(
         id: 'code',
         position: Offset.zero,
@@ -265,7 +267,7 @@ void main() {
   });
 
   test('arrow movement shifts every durable point equally', () {
-    final model = ArrowModel(
+    final model = testArrowModel(
       ArrowElementData(
         id: 'arrow',
         start: Offset.zero,
@@ -305,7 +307,7 @@ void main() {
 
     await _placeCodeBlock(tester, const Offset(120, 140));
     final code = tester.widget<CodeTool>(find.byType(CodeTool)).model
-      ..language = CodeLanguage.json
+      ..setLanguage(CodeLanguage.json)
       ..controller.text = '{"saved": true}';
     final codePosition = code.data.position;
     await tester.pump();
@@ -792,7 +794,7 @@ void main() {
       ..text = 'final answer = 42;'
       ..selectAll();
     expect(code.controller.selection.isCollapsed, isFalse);
-    code.selected = true;
+    code.setSelected(value: true);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(find.byType(CodeTool), findsOneWidget);
@@ -1560,7 +1562,7 @@ void main() {
     await _placeCodeBlock(tester, const Offset(200, 200));
 
     final model = tester.widget<CodeTool>(find.byType(CodeTool)).model
-      ..size = const Size(400, 200)
+      ..setSize(const Size(400, 200))
       ..rotate(math.pi / 4);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();

@@ -1,5 +1,5 @@
-// Owns editable text element state and persistence synchronization.
-// Used by text rendering, editing, transformation, and document storage.
+// Retains text controllers and requests accepted content edits.
+// Used by text views, clipboard insertion, and editing controls.
 
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -8,6 +8,7 @@ import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:flutter/material.dart';
 import 'package:scroll_animator/scroll_animator.dart';
 import 'package:super_clipboard/super_clipboard.dart';
@@ -20,7 +21,7 @@ import 'package:uuid/uuid.dart';
 class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
   // ---------- Construction ----------
 
-  TextBlockModel(TextElementData data) : super(data) {
+  TextBlockModel(EditorSession session, TextElementData data) : super(session, data) {
     controller = TextEditingController(text: data.markdown);
     controller.addListener(_syncMarkdown);
   }
@@ -29,14 +30,10 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
 
   TextElementData get node => data;
   late final TextEditingController controller;
-  VoidCallback? onContentChanged;
   final FocusNode focusNode = FocusNode();
   final scrollController = AnimatedScrollController(
     animationFactory: const ChromiumEaseInOut(),
   );
-  bool _editing = false;
-  bool _disposed = false;
-  bool get disposed => _disposed;
 
   @override
   double get rotation => node.rotation;
@@ -47,60 +44,25 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
   @override
   Size get canvasSize => Size(data.width, data.height ?? textNodeMinimumHeight);
 
-  @override
-  void moveBy(Offset delta) {
-    if (delta == Offset.zero) return;
-    replaceData(data.copyWith(position: data.position + delta));
-  }
-
-  bool get editing => _editing;
-
-  set editing(bool value) {
-    if (_editing == value) return;
-    if (!value) invalidatePendingEdits();
-    _editing = value;
-    notifyListeners();
-  }
-
+  bool get editing => attached && session.editing == (id: data.id, field: EditorField.markdown);
   TextNodeStyle get style => node.style;
-
-  set style(TextNodeStyle value) {
-    if (_sameStyle(node.style, value)) return;
-    replaceData(data.copyWith(style: value));
-  }
-
-  void resize(Size renderedSize, Offset delta) {
-    final width = math.max(textNodeMinimumWidth, node.width + delta.dx);
-    final height = math.max(
-      textNodeMinimumHeight,
-      (node.height ?? renderedSize.height) + delta.dy,
-    );
-    if (node.width == width && node.height == height) return;
-    replaceData(data.copyWith(width: width, height: height));
-  }
-
-  @override
-  void rotate(double angle) {
-    if (node.rotation == angle) return;
-    replaceData(data.copyWith(rotation: angle));
-  }
 
   // ---------- Content insertion ----------
 
   Future<void> paste(Future<ClipboardReader> readerFuture, AttachmentStore store) async {
-    final generation = asyncEditGeneration;
+    final token = session.captureEdit(data.id);
     try {
       final reader = await readerFuture;
-      if (generation != asyncEditGeneration) return;
+      if (!token.isCurrent || !attached) return;
       final clipboard = await readCanvasClipboard(reader);
-      if (generation != asyncEditGeneration) return;
+      if (!token.isCurrent || !attached) return;
       if (clipboard.image case final image?) {
         await insertPastedImage(image.bytes, image.extension, store);
       } else if (clipboard.text case final text?) {
         insertPastedText(text);
       }
     } on Object {
-      if (generation != asyncEditGeneration) return;
+      if (!token.isCurrent || !attached) return;
       rethrow;
     }
   }
@@ -110,17 +72,17 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
     String extension,
     AttachmentStore store,
   ) async {
-    final generation = asyncEditGeneration;
+    final token = session.captureEdit(data.id);
     try {
       validateAttachmentSize(bytes.length, 'Image exceeds 10 MiB');
       final path = 'attachments/${const Uuid().v4()}.$extension';
-      if (generation != asyncEditGeneration) return;
+      if (!token.isCurrent || !attached) return;
       var written = false;
       try {
         await store.write(path, bytes);
         written = true;
       } finally {
-        if (!written || generation != asyncEditGeneration) {
+        if (!written || !token.isCurrent || !attached) {
           try {
             await store.delete(path);
           } on Object {
@@ -128,10 +90,10 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
           }
         }
       }
-      if (generation != asyncEditGeneration) return;
+      if (!token.isCurrent || !attached) return;
       _insertText('![pasted image]($path)');
     } on Object {
-      if (generation != asyncEditGeneration) return;
+      if (!token.isCurrent || !attached) return;
       rethrow;
     }
   }
@@ -153,22 +115,19 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
   }
 
   @override
-  void synchronizeRestoredData(TextElementData previous) {
+  void synchronizeData(TextElementData previous, {required bool restored}) {
     if (controller.text != data.markdown) controller.text = data.markdown;
   }
 
   void _syncMarkdown() {
-    if (node.markdown == controller.text) return;
-    replaceData(data.copyWith(markdown: controller.text), rebuild: false);
-    onContentChanged?.call();
+    if (!attached || node.markdown == controller.text) return;
+    session.setMarkdown(data.id, controller.text);
   }
 
   // ---------- Lifecycle ----------
 
   @override
   void dispose() {
-    _disposed = true;
-    onContentChanged = null;
     controller
       ..removeListener(_syncMarkdown)
       ..dispose();
@@ -176,10 +135,4 @@ class TextBlockModel extends RotatableCanvasElementModel<TextElementData> {
     scrollController.dispose();
     super.dispose();
   }
-}
-
-// ---------- Helpers ----------
-
-bool _sameStyle(TextNodeStyle first, TextNodeStyle second) {
-  return first.fontFamily == second.fontFamily && first.color == second.color && first.background == second.background;
 }

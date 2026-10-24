@@ -5,7 +5,7 @@ part of 'code_tool.dart';
 
 // ---------- Geometry ----------
 
-const _codeTitleHeight = 34.0;
+const codeTitleHeight = 34.0;
 const _codeControlInset = 8.0;
 const _codeEditorPadding = 10.0;
 const _codeControlAnimationDuration = Duration(milliseconds: 220);
@@ -73,13 +73,13 @@ class _CodeTitleTab extends StatelessWidget {
                     selected: model.selected,
                     borderRadius: borderRadius,
                     clipper: _CodeTitleSurfaceClipper(
-                      theme.geo.radiusMedium.toRRect(const Offset(0, _codeTitleHeight) & model.size),
+                      theme.geo.radiusMedium.toRRect(const Offset(0, codeTitleHeight) & model.size),
                     ),
                     child: const SizedBox.expand(),
                   )
                 : ClipPath(
                     clipper: _CodeTitleSurfaceClipper(
-                      theme.geo.radiusMedium.toRRect(const Offset(0, _codeTitleHeight) & model.size),
+                      theme.geo.radiusMedium.toRRect(const Offset(0, codeTitleHeight) & model.size),
                     ),
                     child: Container(
                       key: ValueKey(editing ? 'code-title-input-tab-surface' : 'code-title-tab-surface'),
@@ -93,7 +93,7 @@ class _CodeTitleTab extends StatelessWidget {
           ),
           Container(
             constraints: BoxConstraints(minWidth: 76, maxWidth: model.size.width),
-            height: _codeTitleHeight,
+            height: codeTitleHeight,
             alignment: Alignment.centerLeft,
             padding: EdgeInsets.fromLTRB(12 + border.width, border.width, 12 + border.width, 0),
             child: Semantics(
@@ -200,7 +200,7 @@ class CodeToolSettings extends StatelessWidget {
             ],
             onChanged: (background) {
               onChangeBoundary();
-              model.background = background;
+              model.session.setCodeBackground(model.data.id, background);
               onChangeBoundary();
             },
           ),
@@ -211,7 +211,7 @@ class CodeToolSettings extends StatelessWidget {
 
   void _setShowLineNumbers(bool value) {
     onChangeBoundary();
-    model.showLineNumbers = value;
+    model.session.setLineNumbers(model.data.id, value: value);
     onChangeBoundary();
   }
 }

@@ -3,8 +3,8 @@
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/geometry/pen_geometry.dart';
-import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -26,48 +26,35 @@ const _minimumPointDistanceSquared = 4.0;
 class PenTool extends ChangeNotifier {
   // ---------- Construction ----------
 
-  PenTool({required this.onStroke});
+  PenTool({required this.session, required this.onStroke});
 
+  final EditorSession Function() session;
   final ValueChanged<RawPenStroke> onStroke;
   final _points = <PenPointData>[];
   int? _activePointer;
   Offset? _pointerPosition;
-  Color _color = defaultCanvasColor;
-  double _strokeWidth = 4;
-  double _streamline = penStreamlineDefault;
-  Color? _pendingColor;
-  double? _pendingStrokeWidth;
-  double? _pendingStreamline;
+  DrawingDefaults? _strokeDefaults;
+  Color get _color => (_strokeDefaults ?? session().defaults).color;
+  double get _strokeWidth => (_strokeDefaults ?? session().defaults).width;
+  double get _streamline => (_strokeDefaults ?? session().defaults).streamline;
 
   // ---------- Options ----------
 
   bool get active => _activePointer != null;
 
   void setColor(Color color) {
-    if (active) {
-      _pendingColor = color;
-    } else {
-      _color = color;
-      notifyListeners();
-    }
+    session().setDrawingDefaults(session().defaults.copyWith(color: color));
+    notifyListeners();
   }
 
-  void setStrokeWidth(double strokeWidth) {
-    if (active) {
-      _pendingStrokeWidth = strokeWidth;
-    } else {
-      _strokeWidth = strokeWidth;
-      notifyListeners();
-    }
+  void setStrokeWidth(double width) {
+    session().setDrawingDefaults(session().defaults.copyWith(width: width));
+    notifyListeners();
   }
 
   void setStreamline(double streamline) {
-    if (active) {
-      _pendingStreamline = streamline;
-    } else {
-      _streamline = streamline;
-      notifyListeners();
-    }
+    session().setDrawingDefaults(session().defaults.copyWith(streamline: streamline));
+    notifyListeners();
   }
 
   // ---------- Pointer events ----------
@@ -93,6 +80,7 @@ class PenTool extends ChangeNotifier {
 
   void onPointerDown(PointerDownEvent event) {
     if (active || !_isAllowedPointer(event)) return;
+    _strokeDefaults = session().defaults;
     _activePointer = event.pointer;
     _pointerPosition = event.localPosition;
     _append(event);
@@ -159,14 +147,6 @@ class PenTool extends ChangeNotifier {
   void _clearStroke() {
     _activePointer = null;
     _points.clear();
-    final pendingColor = _pendingColor;
-    final pendingWidth = _pendingStrokeWidth;
-    final pendingStreamline = _pendingStreamline;
-    _pendingColor = null;
-    _pendingStrokeWidth = null;
-    _pendingStreamline = null;
-    if (pendingColor != null) _color = pendingColor;
-    if (pendingWidth != null) _strokeWidth = pendingWidth;
-    if (pendingStreamline != null) _streamline = pendingStreamline;
+    _strokeDefaults = null;
   }
 }

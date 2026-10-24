@@ -8,7 +8,6 @@ import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
-import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
 import 'package:elseplane/canvas/tools/code/code_tool.dart';
 import 'package:elseplane/canvas/tools/media/media_tool.dart';
@@ -111,7 +110,7 @@ void main() {
       },
     );
     for (final model in _models(tester)) {
-      model.selected = true;
+      model.setSelected(value: true);
     }
     await _shortcut(tester, LogicalKeyboardKey.keyC);
     expect(clipboard, isNotNull);
@@ -236,19 +235,18 @@ void main() {
         );
         if (group) {
           for (final model in _models(tester)) {
-            model.selected = true;
+            model.setSelected(value: true);
           }
         }
         await _openMenu(tester, const Offset(310, 310));
+        for (final model in _models(tester)) {
+          model.setSelected(value: model.data.id == 'b');
+        }
         await tester.tap(find.text(action));
         await tester.pump();
         expect(find.text('Arrange'), findsNothing);
         if (action != 'Delete') {
           expect(decodeCanvasClipboard(payload!)!.map((element) => element.id), group ? ['a', 'b'] : ['a']);
-          // Menu dismissal and later selection changes must not retarget Cut.
-          for (final model in _models(tester)) {
-            model.selected = model.data.id == 'b';
-          }
           write.complete();
           await tester.pump();
         }
@@ -319,7 +317,7 @@ void main() {
         final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller
           ..updateScalebyDelta(0.5, focalPoint: Offset.zero);
         await tester.pumpAndSettle();
-        final first = _models(tester).first..selected = true;
+        final first = _models(tester).first..setSelected(value: true);
         final position = emptyCanvas ? const Offset(600, 420) : canvas.getInfo('a').ssPosition + const Offset(5, 5);
         final target = canvas.offset + position / canvas.scale;
         await _openMenu(tester, position);
@@ -416,7 +414,7 @@ void main() {
         );
         await _openMenu(tester, const Offset(310, 310));
         for (final model in _models(tester)) {
-          model.selected = model.data.id == 'b';
+          model.setSelected(value: model.data.id == 'b');
         }
         if (key == LogicalKeyboardKey.delete) {
           await tester.sendKeyEvent(platform == TargetPlatform.macOS ? LogicalKeyboardKey.backspace : key);
@@ -447,7 +445,7 @@ void main() {
         final write = Completer<void>();
         final store = TestLibraryStore(_menuDocument);
         await pumpCanvas(tester, store, readClipboard: () => read.future, writeClipboardText: (_) => write.future);
-        _models(tester).first.selected = true;
+        _models(tester).first.setSelected(value: true);
         await _shortcut(tester, cut ? LogicalKeyboardKey.keyX : LogicalKeyboardKey.keyV);
         await _shortcut(tester, LogicalKeyboardKey.keyA);
         _expectOnlySelected(tester, {'a', 'b'});
@@ -477,6 +475,31 @@ void main() {
       },
     );
   }
+
+  testWidgets('dragging another inactive object cancels delayed Cut', (tester) async {
+    final write = Completer<void>();
+    final store = TestLibraryStore(_menuDocument);
+    await pumpCanvas(tester, store, writeClipboardText: (_) => write.future);
+    final first = _models(tester).firstWhere((model) => model.data.id == 'a');
+    final second = _models(tester).firstWhere((model) => model.data.id == 'b');
+    first.setSelected(value: true);
+    await _shortcut(tester, LogicalKeyboardKey.keyX);
+    final start = second.canvasPosition;
+    final drag = await tester.startGesture(
+      tester.getCenter(find.byWidgetPredicate((widget) => widget is Shape && widget.model == second)),
+      kind: PointerDeviceKind.mouse,
+    );
+    await drag.moveBy(const Offset(30, 20));
+    await drag.up();
+    await tester.pump();
+    expect(second.canvasPosition, start + const Offset(30, 20));
+    write.complete();
+    await tester.pumpAndSettle();
+    expect(_models(tester).map((model) => model.data.id).toSet(), {'a', 'b'});
+    expect(first.selected, isFalse);
+    await _shortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(second.canvasPosition, start);
+  });
 
   testWidgets('Select All preserves pending Cut when every object is already selected', (tester) async {
     final write = Completer<void>();
@@ -530,11 +553,9 @@ void main() {
       await _openMenu(tester, const Offset(310, 310));
       await tester.tap(find.text(cut ? 'Cut' : 'Paste'));
       await tester.pump();
-      final replacement =
-          tester.widget<CanvasPage>(find.byType(CanvasPage)).replacement as ValueNotifier<CanvasReplacement>
-            ..value = (document: _emptyDocument, token: Object());
+      await replaceTestEditor(tester, _emptyDocument);
       await tester.pumpAndSettle();
-      replacement.value = (document: _menuDocument, token: Object());
+      await replaceTestEditor(tester, _menuDocument);
       await tester.pumpAndSettle();
       read.complete((text: encodeCanvasClipboard(_menuDocument.elements), image: null));
       write.complete();

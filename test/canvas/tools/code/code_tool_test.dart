@@ -14,6 +14,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:re_editor/re_editor.dart';
 
+import '../../test_helpers.dart';
+
 void main() {
   for (final intoTitle in [false, true]) {
     for (final cancel in ['none', 'deactivate', 'restore', 'dispose']) {
@@ -21,18 +23,18 @@ void main() {
         final read = Completer<Map<String, Object>>();
         _mockClipboardRead(() => read.future);
         final model = _codeModel(source: 'old tail')
-          ..active = true
-          ..title = 'old tail';
+          ..setActive(value: true)
+          ..setTitle('old tail');
         model.controller.selection = _replacementSelection;
         model.titleController.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
         final paste = model.paste(intoTitle: intoTitle);
         switch (cancel) {
           case 'deactivate':
             model
-              ..active = false
-              ..active = true;
+              ..setActive(value: false)
+              ..setActive(value: true);
           case 'restore':
-            model.restoreData(model.data);
+            model.session.invalidatePendingEdits();
           case 'dispose':
             model.dispose();
         }
@@ -68,16 +70,16 @@ void main() {
       (tester) async {
         final read = Completer<Map<String, Object>>();
         _mockClipboardRead(() => read.future);
-        final model = _codeModel(source: 'old tail')..active = true;
+        final model = _codeModel(source: 'old tail')..setActive(value: true);
         addTearDown(model.dispose);
         final paste = model.paste();
         final checked = canceled ? paste : expectLater(paste, throwsA(isA<PlatformException>()));
-        if (canceled) model.active = false;
+        if (canceled) model.setActive(value: false);
         read.completeError(PlatformException(code: 'clipboard-denied'));
         await tester.pump();
         await checked;
         expect(model.data.source, 'old tail');
-        model.active = true;
+        model.setActive(value: true);
         _mockClipboardRead(() async => {'text': 'NEW'});
         model.controller.selection = _replacementSelection;
         final retry = model.paste();
@@ -92,8 +94,8 @@ void main() {
     final model = _codeModel();
     addTearDown(model.dispose);
     final changes = <(String, String)>[];
-    model.documentChanges.addListener(() => changes.add((model.title, model.titleController.text)));
-    model.title = 'New title';
+    model.session.documentChanges.addListener(() => changes.add((model.title, model.titleController.text)));
+    model.setTitle('New title');
     expect(changes, [('New title', 'New title')]);
   });
 
@@ -103,28 +105,28 @@ void main() {
     var rebuilds = 0;
     var documentChanges = 0;
     model.addListener(() => rebuilds++);
-    model.documentChanges.addListener(() => documentChanges++);
+    model.session.documentChanges.addListener(() => documentChanges++);
 
     model
-      ..selected = true
-      ..active = true;
+      ..setSelected(value: true)
+      ..setActive(value: true);
     expect((rebuilds, documentChanges), (2, 0));
 
     rebuilds = 0;
     model.controller.text = 'void main() {}';
-    expect((rebuilds, documentChanges), (0, 1));
+    expect((rebuilds, documentChanges), (1, 1));
 
-    model.language = CodeLanguage.python;
-    expect((rebuilds, documentChanges), (1, 2));
+    model.setLanguage(CodeLanguage.python);
+    expect((rebuilds, documentChanges), (2, 2));
 
-    model.background = BlockBackgroundKind.glass;
-    expect((rebuilds, documentChanges), (2, 3));
-    model.background = BlockBackgroundKind.glass;
-    expect((rebuilds, documentChanges), (2, 3));
+    model.setBackground(BlockBackgroundKind.glass);
+    expect((rebuilds, documentChanges), (3, 3));
+    model.setBackground(BlockBackgroundKind.glass);
+    expect((rebuilds, documentChanges), (3, 3));
   });
 
   testWidgets('active code selection drag interacts without moving or clearing the editor', (tester) async {
-    final model = _codeModel(source: 'one two three four five')..active = true;
+    final model = _codeModel(source: 'one two three four five')..setActive(value: true);
     addTearDown(model.dispose);
     var interactions = 0;
     await tester.pumpWidget(
@@ -172,8 +174,8 @@ void main() {
   testWidgets('backgrounds cover body, title, and line numbers in every interaction state', (tester) async {
     for (final theme in [starlessLightThemeData, starlessDarkThemeData]) {
       final model = _codeModel(source: 'void main() {}')
-        ..title = 'main.dart'
-        ..showLineNumbers = true;
+        ..setTitle('main.dart')
+        ..setShowLineNumbers(value: true);
       addTearDown(model.dispose);
       await tester.pumpWidget(
         MaterialApp(
@@ -183,7 +185,7 @@ void main() {
               alignment: Alignment.topLeft,
               child: CodeTool(
                 model: model,
-                onEdit: () => model.active = true,
+                onEdit: () => model.setActive(value: true),
                 onMove: model.moveBy,
                 onResize: (_) {},
                 onChangeBoundary: () {},
@@ -216,15 +218,15 @@ void main() {
 
       for (final background in BlockBackgroundKind.values) {
         model
-          ..background = background
-          ..active = false
-          ..selected = false;
+          ..setBackground(background)
+          ..setActive(value: false)
+          ..setSelected(value: false);
         await tester.pumpAndSettle();
         final previewColor = body().color;
         for (final (active, selected) in [(false, false), (true, false), (false, true), (true, true)]) {
           model
-            ..active = active
-            ..selected = selected;
+            ..setActive(value: active)
+            ..setSelected(value: selected);
           await tester.pumpAndSettle();
           final editor = tester.widget<CodeEditor>(find.byType(CodeEditor));
           final gutter = tester.widget<ColoredBox>(find.byKey(const ValueKey('code-line-numbers')));
@@ -274,8 +276,8 @@ void main() {
         }
       }
       model
-        ..active = false
-        ..title = '';
+        ..setActive(value: false)
+        ..setTitle('');
       await tester.pumpAndSettle();
       expect(find.descendant(of: block, matching: find.byType(BackdropFilter)), findsOneWidget);
       expect(tester.getRect(surface), originalBounds);
@@ -288,7 +290,7 @@ void main() {
     testWidgets('inactive ${background.name} code distinguishes editing clicks from drags', (
       tester,
     ) async {
-      final model = _codeModel(source: 'first line\nsecond line')..background = background;
+      final model = _codeModel(source: 'first line\nsecond line')..setBackground(background);
       addTearDown(model.dispose);
       var movement = Offset.zero;
       await tester.pumpWidget(
@@ -300,7 +302,7 @@ void main() {
               child: CodeTool(
                 model: model,
                 onEdit: () {
-                  model.active = true;
+                  model.setActive(value: true);
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!model.active) return;
                     model.focusNode.unfocus();
@@ -344,7 +346,7 @@ void main() {
       );
 
       model
-        ..active = false
+        ..setActive(value: false)
         ..focusNode.unfocus();
       await tester.pump();
       expect(
@@ -392,7 +394,7 @@ void _mockClipboardRead(Future<Map<String, Object>> Function() read) {
   );
 }
 
-CodeBlockModel _codeModel({String source = ''}) => CodeBlockModel(
+CodeBlockModel _codeModel({String source = ''}) => testCodeModel(
   CodeElementData(
     id: 'code',
     position: Offset.zero,

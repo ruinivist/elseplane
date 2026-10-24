@@ -24,7 +24,7 @@ Fix: use parser-provided source ranges to rewrite actual image destinations. Ded
 
 ## 2. Dragging another object leaves delayed Cut alive
 
-Status: open.
+Status: fixed. Editor session context changes invalidate the pending Cut before dragging another object. A delayed-Cut regression covers the completed drag.
 
 Location: `lib/canvas/editor/canvas_page.dart`, `_handleSelectableElementPointerDown`, `_handleCanvasPointerDown`, and `_copySelection`.
 

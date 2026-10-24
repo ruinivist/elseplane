@@ -1,6 +1,9 @@
 // Defines the persisted canvas document schema, element data, and validation.
 // Used by the editor, storage, clipboard, and project import/export flows.
 
+// Immutable values stay independent of Flutter metadata.
+// ignore_for_file: avoid_equals_and_hash_code_on_mutable_classes
+
 import 'dart:ui';
 
 import 'package:json_annotation/json_annotation.dart';
@@ -66,6 +69,14 @@ final class CanvasDocument {
   final int schemaVersion;
   final CanvasBackgroundKind background;
   final List<CanvasElementData> elements;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CanvasDocument && background == other.background && _valuesEqual(elements, other.elements);
+
+  @override
+  int get hashCode => Object.hash(background, Object.hashAll(elements));
 
   // ---------- Serialization ----------
 

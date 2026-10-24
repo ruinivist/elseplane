@@ -250,11 +250,25 @@ void main() {
     }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
   }
 
+  testWidgets('temporary browser blur keeps a code field in one canvas undo group', (tester) async {
+    await pumpCanvas(tester, _Store(_codeDocument()));
+    final model = await _focusCode(tester, intoTitle: false);
+    model.controller.text = 'first';
+    model.focusNode.unfocus();
+    await tester.pump();
+    model.focusNode.requestFocus();
+    await tester.pump();
+    model.controller.text = 'second';
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await _clipboardShortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(model.data.source, 'old source');
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
   testWidgets('canceled Cut leaves its original objects after the clipboard write succeeds', (tester) async {
     final store = _Store(_document());
     final write = Completer<void>();
     await pumpCanvas(tester, store, writeClipboardText: (_) => write.future);
-    tester.widget<TextTool>(find.byType(TextTool)).model.selected = true;
+    tester.widget<TextTool>(find.byType(TextTool)).model.setSelected(value: true);
     await _clipboardShortcut(tester, LogicalKeyboardKey.keyX);
     await tester.tap(find.byType(CanvasTitle));
     await tester.pumpAndSettle();
@@ -316,7 +330,7 @@ CanvasDocument _codeDocument() => CanvasDocument(
     CodeElementData(
       id: 'code',
       position: const Offset(150, 200),
-      size: const Size(280, 200),
+      size: const Size(280, 240),
       language: CodeLanguage.dart,
       source: 'old source',
       title: 'old title',

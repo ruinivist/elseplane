@@ -23,3 +23,21 @@ Future<void> validateCanvasAttachment(String path, Uint8List bytes) async {
     buffer?.dispose();
   }
 }
+
+/// Decodes the first frame to measure an image on every supported platform.
+/// Used when clipboard and device images need dimensions before placement.
+Future<Size> readCanvasImageSize(Uint8List bytes) async {
+  validateAttachmentSize(bytes.length, 'Image exceeds 10 MiB');
+  Codec? codec;
+  FrameInfo? frame;
+  try {
+    codec = await instantiateImageCodec(bytes);
+    frame = await codec.getNextFrame();
+    return Size(frame.image.width.toDouble(), frame.image.height.toDouble());
+  } catch (error) {
+    throw FormatException('Invalid encoded image: $error');
+  } finally {
+    frame?.image.dispose();
+    codec?.dispose();
+  }
+}

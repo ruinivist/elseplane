@@ -1,5 +1,5 @@
-// Adapts persisted pen data to cached render geometry and movement.
-// Used by canvas selection, rendering, hit testing, and persistence.
+// Retains cached pen geometry for accepted stroke values.
+// Used by stroke views while the session owns movement and selection.
 
 part of 'pen_tool.dart';
 
@@ -8,12 +8,17 @@ part of 'pen_tool.dart';
 /// Adapts persisted pen data to a rendered path and canvas movement.
 /// Used by selection, hit testing, and stroke rendering.
 class PenStrokeModel extends CanvasElementModel<PenElementData> {
-  PenStrokeModel(super.data) : path = createPenPath(data.points, data.width, data.streamline);
+  PenStrokeModel(super.session, super.data) : path = createPenPath(data.points, data.width, data.streamline);
 
   Path path;
 
   @override
-  void synchronizeRestoredData(PenElementData previous) {
+  void synchronizeData(PenElementData previous, {required bool restored}) {
+    if (identical(previous.points, data.points) &&
+        previous.width == data.width &&
+        previous.streamline == data.streamline) {
+      return;
+    }
     path = createPenPath(data.points, data.width, data.streamline);
   }
 
@@ -22,10 +27,4 @@ class PenStrokeModel extends CanvasElementModel<PenElementData> {
 
   @override
   Size get canvasSize => data.size;
-
-  @override
-  void moveBy(Offset delta) {
-    if (delta == Offset.zero) return;
-    replaceData(data.copyWith(position: data.position + delta));
-  }
 }

@@ -5,8 +5,8 @@ import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
-import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -26,9 +26,10 @@ part 'arrow_view.dart';
 class ArrowTool extends ChangeNotifier {
   // ---------- Construction ----------
 
-  ArrowTool({required this.onArrow});
+  ArrowTool({required this.session, required this.onArrow});
 
-  final ValueChanged<ArrowModel> onArrow;
+  final EditorSession Function() session;
+  final ValueChanged<ArrowElementData> onArrow;
   final _uuid = const Uuid();
   int? _pointer;
   String? _id;
@@ -36,9 +37,9 @@ class ArrowTool extends ChangeNotifier {
   Offset? _end;
   final _controls = <Offset>[];
   int _buttons = 0;
-  Color _color = defaultCanvasColor;
-  ArrowStrokeStyle _strokeStyle = ArrowStrokeStyle.solid;
-  double _strokeWidth = 2;
+  Color get _color => session().defaults.arrowColor;
+  ArrowStrokeStyle get _strokeStyle => session().defaults.arrowStyle;
+  double get _strokeWidth => session().defaults.arrowWidth;
 
   // ---------- Options and preview ----------
 
@@ -66,19 +67,19 @@ class ArrowTool extends ChangeNotifier {
 
   void setColor(Color color) {
     if (_color == color) return;
-    _color = color;
+    session().setDrawingDefaults(session().defaults.copyWith(arrowColor: color));
     notifyListeners();
   }
 
   void setStrokeStyle(ArrowStrokeStyle strokeStyle) {
     if (_strokeStyle == strokeStyle) return;
-    _strokeStyle = strokeStyle;
+    session().setDrawingDefaults(session().defaults.copyWith(arrowStyle: strokeStyle));
     notifyListeners();
   }
 
   void setStrokeWidth(double strokeWidth) {
     if (_strokeWidth == strokeWidth) return;
-    _strokeWidth = strokeWidth;
+    session().setDrawingDefaults(session().defaults.copyWith(arrowWidth: strokeWidth));
     notifyListeners();
   }
 
@@ -139,18 +140,16 @@ class ArrowTool extends ChangeNotifier {
 
   // ---------- Private helpers ----------
 
-  ArrowModel? _newArrow(String id, Offset start, Offset end) {
+  ArrowElementData? _newArrow(String id, Offset start, Offset end) {
     if ((end - start).distance < arrowMinimumLength) return null;
-    return ArrowModel(
-      ArrowElementData(
-        id: id,
-        start: start,
-        controls: _curveControls(start, end),
-        end: end,
-        color: _color,
-        strokeStyle: _strokeStyle,
-        strokeWidth: _strokeWidth,
-      ),
+    return ArrowElementData(
+      id: id,
+      start: start,
+      controls: _curveControls(start, end),
+      end: end,
+      color: _color,
+      strokeStyle: _strokeStyle,
+      strokeWidth: _strokeWidth,
     );
   }
 

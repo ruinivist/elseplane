@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
 import 'package:elseplane/canvas/tools/code/code_language.dart';
 import 'package:elseplane/theme/theme.dart';
@@ -266,7 +267,7 @@ class _CodeToolState extends State<CodeTool> {
                           showBorder: false,
                           onChanged: (language) {
                             widget.onChangeBoundary();
-                            model.language = language;
+                            model.session.setCodeLanguage(model.data.id, language);
                             widget.onChangeBoundary();
                           },
                         )
@@ -304,7 +305,7 @@ class _CodeToolState extends State<CodeTool> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
-                  height: _codeTitleHeight,
+                  height: codeTitleHeight,
                   child: IgnorePointer(
                     ignoring: !showTitle,
                     child: AnimatedSwitcher(
