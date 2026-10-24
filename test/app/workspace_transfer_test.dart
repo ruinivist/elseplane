@@ -94,7 +94,7 @@ void main() {
           id: 'new',
           name: 'New',
           parentId: 'folder',
-          document: _document(markdown: '![new]($_path0)'),
+          document: _document(markdown: 'Path $_path0\n\n\$![literal]($_path0)\$\n\n![new]($_path0)'),
         ),
       ],
     );
@@ -130,6 +130,10 @@ void main() {
     expect(store.library.path(store.library.currentId).map((file) => file.name), ['Work', 'New']);
     final newPath = canvasAttachmentPaths(store.library.current.document!).single;
     expect(newPath, isNot(_path0));
+    expect(
+      store.library.current.document!.elements.whereType<TextElementData>().single.markdown,
+      'Path $_path0\n\n\$![literal]($_path0)\$\n\n![new]($newPath)',
+    );
     expect(attachments.files[newPath], _newBytes);
     expect(attachments.files[_path0], onePixelPngBytes);
   });
@@ -178,7 +182,7 @@ void main() {
   ) async {
     final oldDocument = _document(markdown: 'old');
     final newDocument = _document(
-      markdown: '![new]($_path0)',
+      markdown: 'Path $_path0\n\n\$![literal]($_path0)\$\n\n![new]($_path0)',
       background: CanvasBackgroundKind.dotGrid,
       idSuffix: '-new',
     );
@@ -217,6 +221,10 @@ void main() {
     expect(find.text('Canvas imported'), findsOneWidget);
     final newPath = canvasAttachmentPaths(libraryStore.persisted!).single;
     expect(newPath, isNot(_path0));
+    expect(
+      libraryStore.persisted!.elements.whereType<TextElementData>().single.markdown,
+      'Path $_path0\n\n\$![literal]($_path0)\$\n\n![new]($newPath)',
+    );
     expect(rebaseCanvasDocumentAttachments(libraryStore.persisted!, {newPath: _path0}).toJson(), newDocument.toJson());
     expect(attachments.files[_path0], onePixelPngBytes);
     expect(attachments.files[newPath], _newBytes);
@@ -238,7 +246,7 @@ void main() {
     await _historyShortcut(tester, redo: true);
     expect(
       tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown,
-      '![new]($newPath)',
+      'Path $_path0\n\n\$![literal]($_path0)\$\n\n![new]($newPath)',
     );
 
     libraryStore.initial = libraryStore.persisted;
@@ -251,7 +259,7 @@ void main() {
     expect(find.byType(TextTool), findsOneWidget);
     expect(
       tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown,
-      '![new]($newPath)',
+      'Path $_path0\n\n\$![literal]($_path0)\$\n\n![new]($newPath)',
     );
   });
 

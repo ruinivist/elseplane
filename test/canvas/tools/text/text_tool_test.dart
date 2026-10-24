@@ -655,7 +655,15 @@ void main() {
 | - | - |
 | 1 | 2 |
 
-Inline $x^2$''';
+Inline $x^2$ and \(y_1\).
+
+$$
+a^2 + b^2 = c^2
+$$
+
+\[
+x+y
+\]''';
 
     await tester.enterText(
       find.byKey(const ValueKey('text-markdown-editor')),
@@ -666,7 +674,14 @@ Inline $x^2$''';
 
     expect(find.text('Heading', findRichText: true), findsOneWidget);
     expect(find.byIcon(Icons.check_box), findsOneWidget);
-    expect(find.byType(Math), findsOneWidget);
+    final equations = tester.widgetList<Math>(find.byType(Math)).toList();
+    expect(equations.map((equation) => equation.mathStyle), [
+      MathStyle.text,
+      MathStyle.text,
+      MathStyle.display,
+      MathStyle.display,
+    ]);
+    expect(equations.every((equation) => equation.parseError == null), isTrue);
 
     final preview = tester.widget<MarkdownBody>(
       find.byKey(const ValueKey('text-markdown-preview')),

@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/image_import.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:flutter_markdown_plus/latex.dart';
 import 'package:markdown/markdown.dart' as md;
 
 // ---------- Limits ----------
@@ -39,8 +40,9 @@ Set<String> canvasAttachmentPaths(CanvasDocument document) {
   final paths = <String>{};
   for (final element in document.elements) {
     if (element case TextElementData(:final markdown)) {
-      for (final node in md.Document().parse(markdown)) {
-        _collectAttachmentPaths(node, paths);
+      for (final image in _markdownImages(markdown)) {
+        final path = image.attributes['src']!;
+        if (attachmentPathPattern.hasMatch(path)) paths.add(path);
       }
     } else if (element case MediaElementData(:final url)) {
       final path = url.trim();
@@ -59,10 +61,7 @@ CanvasDocument rebaseCanvasDocumentAttachments(CanvasDocument source, Map<String
         switch (element) {
           MediaElementData() => element.copyWith(url: replacements[element.url.trim()] ?? element.url),
           TextElementData() => element.copyWith(
-            markdown: replacements.entries.fold<String>(
-              element.markdown,
-              (markdown, entry) => markdown.replaceAll(entry.key, entry.value),
-            ),
+            markdown: _rebaseMarkdownAttachments(element.markdown, replacements),
           ),
           _ => element,
         },
@@ -163,17 +162,40 @@ Future<CanvasProject> decodeCanvasProject(Uint8List bytes) async {
 
 // ---------- Private helpers ----------
 
-void _collectAttachmentPaths(md.Node node, Set<String> paths) {
-  if (node is! md.Element) return;
-  if (node.tag == 'img') {
-    final source = node.attributes['src'];
-    if (source != null && attachmentPathPattern.hasMatch(source)) {
-      paths.add(source);
+Iterable<md.Element> _markdownImages(String source) => _imageNodes(
+  md.Document(
+    extensionSet: md.ExtensionSet(
+      [...md.ExtensionSet.gitHubFlavored.blockSyntaxes, const LatexBlockSyntax()],
+      [...md.ExtensionSet.gitHubFlavored.inlineSyntaxes, LatexInlineSyntax()],
+    ),
+    encodeHtml: false,
+  ).parse(source),
+);
+
+Iterable<md.Element> _imageNodes(List<md.Node> nodes) sync* {
+  for (final node in nodes.whereType<md.Element>()) {
+    if (node.tag == 'img') yield node;
+    if (node.children != null) yield* _imageNodes(node.children!);
+  }
+}
+
+String _rebaseMarkdownAttachments(String source, Map<String, String> replacements) {
+  if (replacements.isEmpty) return source;
+  final edits = <md.SourceRange, String>{};
+  for (final image in _markdownImages(source)) {
+    final path = image.attributes['src']!;
+    final replacement = replacements[path];
+    final range = image.destinationRange;
+    if (attachmentPathPattern.hasMatch(path) && replacement != null && range != null) {
+      edits[range] = replacement;
     }
   }
-  for (final child in node.children ?? const <md.Node>[]) {
-    _collectAttachmentPaths(child, paths);
+  final ranges = edits.keys.toList()..sort((a, b) => b.start.compareTo(a.start));
+  var rebased = source;
+  for (final range in ranges) {
+    rebased = rebased.replaceRange(range.start, range.end, edits[range]!);
   }
+  return rebased;
 }
 
 Map<String, Object?> _jsonObject(

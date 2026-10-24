@@ -13,7 +13,6 @@ import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/re_highlight.dart';
@@ -87,13 +86,7 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
         : MarkdownBody(
             key: const ValueKey('text-markdown-preview'),
             data: widget.source,
-            blockSyntaxes: [LatexBlockSyntax()],
-            inlineSyntaxes: [_TextImageSyntax(), LatexInlineSyntax()],
-            builders: {
-              'latex': LatexElementBuilder(
-                textStyle: _fontStyle(context, widget.style).copyWith(fontSize: BSizes.markdownLatexFontSize),
-              ),
-            },
+            inlineSyntaxes: [_TextImageSyntax()],
             styleSheet: styleSheet,
             syntaxHighlighter: _MarkdownCodeHighlighter(styleSheet.code!, BTheme.of(context).syntaxTheme),
             checkboxBuilder: (checked) => _buildCheckbox(checked, styleSheet),
@@ -232,6 +225,7 @@ MarkdownStyleSheet _styleSheet(BuildContext context, TextNodeStyle style) {
   return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
     a: base.copyWith(color: colors.accent),
     p: base,
+    latex: _fontStyle(context, style).copyWith(fontSize: BSizes.markdownLatexFontSize),
     code: code,
     h1: heading.copyWith(fontSize: BSizes.markdownBodyFontSize + 10, fontWeight: FontWeight.w600, height: 1.2),
     h2: heading.copyWith(fontSize: BSizes.markdownBodyFontSize + 8, fontWeight: FontWeight.w600, height: 1.25),

@@ -312,18 +312,10 @@ packages:
     description:
       path: "."
       ref: main
-      resolved-ref: "31674954b794a7b30795270dfacb2dffb6bc39c2"
+      resolved-ref: "2c90f8e7960ad3f2606eecabe7694038eb4919f9"
       url: "https://github.com/ruinivist/flutter_markdown_plus.git"
     source: git
     version: "1.0.12"
-  flutter_markdown_plus_latex:
-    dependency: "direct main"
-    description:
-      name: flutter_markdown_plus_latex
-      sha256: "2e7698b291f0657ca445efab730bb25a8c5851037e882cb7bf47d16a5c218de7"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.5"
   flutter_math_fork:
     dependency: "direct dev"
     description:
@@ -546,11 +538,12 @@ packages:
   markdown:
     dependency: "direct main"
     description:
-      name: markdown
-      sha256: ee85086ad7698b42522c6ad42fe195f1b9898e4d974a1af4576c1a3a176cada9
-      url: "https://pub.dev"
-    source: hosted
-    version: "7.3.1"
+      path: "pkgs/markdown"
+      ref: main
+      resolved-ref: ca44b085ca8e25b62ce0f8b8b9e172145412a7b0
+      url: "https://github.com/ruinivist/dart-tools.git"
+    source: git
+    version: "7.4.1-wip"
   matcher:
     dependency: transitive
     description:

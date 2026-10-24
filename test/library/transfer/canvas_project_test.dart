@@ -64,6 +64,64 @@ attachments/00000000-0000-4000-8000-000000000000.png
     expect(paths, {_path(0), _path(1)});
   });
 
+  for (final (opening, closing) in [
+    (r'$', r'$'),
+    (r'\(', r'\)'),
+    (r'$$', r'$$'),
+    (r'\[', r'\]'),
+    ('\$\$\n', '\n\$\$'),
+    ('\\[\n', '\n\\]'),
+  ]) {
+    test('attachment transfers preserve literal math between $opening and $closing', () async {
+      final path = _path(0);
+      final contents = opening.contains('\n')
+          ? '![literal](<$path>)\n\n[math]: $path\n\n![math]'
+          : '![literal](<$path>) [math]: $path';
+      final math = '$opening$contents$closing';
+      final source = '$math\n\n![math]';
+      final document = _document(markdown: source);
+
+      expect(canvasAttachmentPaths(document), isEmpty);
+      final literalProject = await decodeCanvasProject(await encodeCanvasProject(document, TestAttachmentStore()));
+      expect(literalProject.attachments, isEmpty);
+      expect(literalProject.document.toJson(), document.toJson());
+      expect(
+        rebaseCanvasDocumentAttachments(document, {path: _path(1)}).toJson(),
+        document.toJson(),
+      );
+
+      String withImage(String destination) => '$source\n\n![real](<$destination>)';
+      final mixed = _document(markdown: withImage(path));
+      expect(canvasAttachmentPaths(mixed), {path});
+      final project = await decodeCanvasProject(
+        await encodeCanvasProject(mixed, TestAttachmentStore({path: onePixelPngBytes})),
+      );
+      final rebased = rebaseCanvasDocumentAttachments(project.document, {path: _path(1)});
+      expect(rebased.elements.whereType<TextElementData>().single.markdown, withImage(_path(1)));
+      expect(canvasAttachmentPaths(rebased), {_path(1)});
+    });
+  }
+
+  for (final (opening, closing) in [
+    (r'\$', r'\$'),
+    (r'\\(', r'\\)'),
+    (r'\\[', r'\\]'),
+    (r'$', ''),
+    (r'\(', ''),
+    (r'$$', ''),
+    (r'\[', ''),
+    ('\$\$\n', ''),
+    ('\\[\n', ''),
+  ]) {
+    test('images remain discoverable with literal delimiters $opening and $closing', () {
+      String source(String path) => '$opening![real]($path)$closing';
+      final document = _document(markdown: source(_path(0)));
+      expect(canvasAttachmentPaths(document), {_path(0)});
+      final rebased = rebaseCanvasDocumentAttachments(document, {_path(0): _path(1)});
+      expect(rebased.elements.whereType<TextElementData>().single.markdown, source(_path(1)));
+    });
+  }
+
   test('repeated references are read and encoded once', () async {
     final document = _document(
       markdown: '![one](${_path(0)})\n![two](${_path(0)})',
@@ -92,6 +150,76 @@ attachments/00000000-0000-4000-8000-000000000000.png
         TestAttachmentStore(),
       ),
       throwsStateError,
+    );
+  });
+
+  test('rebasing changes image destinations while preserving matching source elsewhere', () {
+    final path = _path(0);
+    String markdown(String destination) =>
+        '''
+Prose $path
+
+![alt $path](<$destination> "title $path")
+[ordinary]($path)
+`![inline]($path)`
+
+```markdown
+![fenced]($path)
+```
+
+    ![indented]($path)
+
+\\!\\[escaped\\]($path)
+![malformed]($path
+''';
+    final document = _document(markdown: markdown(path));
+    final rebased = rebaseCanvasDocumentAttachments(document, {path: _path(1)});
+
+    expect(rebased.elements.whereType<TextElementData>().single.markdown, markdown(_path(1)));
+    expect(document.elements.whereType<TextElementData>().single.markdown, markdown(path));
+  });
+
+  test('rebasing deduplicates shared reference definitions and preserves unused definitions', () {
+    String markdown(String destination) =>
+        '''
+![full][shared] ![shared][] ![shared] [ordinary][SHARED]
+
+[shared]: <$destination> "title ${_path(0)}"
+[shared]: ${_path(0)} "ignored duplicate"
+[unused]: ${_path(0)}
+''';
+    final rebased = rebaseCanvasDocumentAttachments(_document(markdown: markdown(_path(0))), {_path(0): _path(1)});
+
+    expect(rebased.elements.whereType<TextElementData>().single.markdown, markdown(_path(1)));
+    expect(canvasAttachmentPaths(rebased), {_path(1)});
+  });
+
+  test('rebasing uses original GFM offsets across Unicode and CRLF', () {
+    String markdown(String destination) =>
+        '😀\r\n\r\n'
+        '> - [x] ![nested](<$destination> "title")\r\n\r\n'
+        '| Image |\r\n| --- |\r\n| ![table]($destination) |\r\n\r\n'
+        'Note[^n]\r\n\r\n[^n]: ![footnote]($destination)\r\n';
+    final destination = _path(1).replaceFirst('.png', '.webp');
+    final document = _document(markdown: markdown(_path(0)));
+    final rebased = rebaseCanvasDocumentAttachments(document, {_path(0): destination});
+
+    expect(canvasAttachmentPaths(document), {_path(0)});
+    expect(rebased.elements.whereType<TextElementData>().single.markdown, markdown(destination));
+    expect(canvasAttachmentPaths(rebased), {destination});
+  });
+
+  test('rebasing matches normalized destinations without cascading replacements', () {
+    final escaped = _path(0).replaceFirst('/', r'\/');
+    final source = '![one]($escaped) ![two](${_path(1)}) ![repeat](${_path(0)})';
+    final rebased = rebaseCanvasDocumentAttachments(_document(markdown: source), {
+      _path(0): _path(1),
+      _path(1): _path(2),
+    });
+
+    expect(
+      rebased.elements.whereType<TextElementData>().single.markdown,
+      '![one](${_path(1)}) ![two](${_path(2)}) ![repeat](${_path(1)})',
     );
   });
 
