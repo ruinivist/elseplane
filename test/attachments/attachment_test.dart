@@ -6,7 +6,9 @@ import 'dart:async';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/attachment_store_web.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/tools/text/text_block_model.dart';
+import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_markdown_editor.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -225,7 +227,7 @@ void main() {
   });
 }
 
-TextBlockModel _model(String markdown) => testTextModel(
+TextEditorResources _model(String markdown) => testTextModel(
   TextElementData(
     id: 'text',
     position: Offset.zero,

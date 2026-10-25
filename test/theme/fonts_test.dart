@@ -5,9 +5,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/tools/text/text_block_model.dart';
-import 'package:elseplane/canvas/tools/text/text_markdown_preview.dart';
-import 'package:elseplane/canvas/tools/text/text_tool_settings.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_markdown_preview.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_tool_settings.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/ui/common/select.dart';
@@ -359,7 +359,8 @@ void main() {
               SizedBox(
                 width: 280,
                 child: TextToolSettings(
-                  model: previewModel,
+                  session: previewModel.session,
+                  id: previewModel.data.id,
                   onChangeBoundary: () => boundaries++,
                   colorPickerExpanded: false,
                   onColorPickerExpandedChanged: (_) {},
@@ -426,7 +427,7 @@ void main() {
 
 // ---------- Helpers ----------
 
-TextBlockModel _model() => testTextModel(
+TextEditorResources _model() => testTextModel(
   TextElementData(
     id: 'text',
     position: Offset.zero,
@@ -439,7 +440,7 @@ TextBlockModel _model() => testTextModel(
 
 Future<void> _pumpSettings(
   WidgetTester tester,
-  TextBlockModel model,
+  TextEditorResources model,
   Future<void> Function(String) loader, {
   VoidCallback? boundary,
 }) => tester.pumpWidget(
@@ -449,7 +450,8 @@ Future<void> _pumpSettings(
       body: SizedBox(
         width: 280,
         child: TextToolSettings(
-          model: model,
+          session: model.session,
+          id: model.data.id,
           onChangeBoundary: boundary ?? () {},
           colorPickerExpanded: false,
           onColorPickerExpandedChanged: (_) {},

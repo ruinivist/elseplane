@@ -3,8 +3,8 @@
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_page.dart';
-import 'package:elseplane/canvas/tools/code/code_tool.dart';
-import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/feature_flags.dart';
 import 'package:elseplane/main.dart';
 import 'package:elseplane/settings/settings_dialog.dart';
@@ -150,7 +150,7 @@ void main() {
     await tester.pumpAndSettle();
     final canvasState = tester.state(find.byType(CanvasPage));
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
-    final models = tester.widgetList<TextTool>(find.byType(TextTool)).map((widget) => widget.model);
+    final models = tester.widgetList<TextElementView>(find.byType(TextElementView)).map((widget) => widget.resources);
     final text = models.singleWhere((model) => model.node.id == 'fixed-color');
     final themedText = models.singleWhere((model) => model.node.id == 'theme-color');
     final originalContent = text.node.toJson();
@@ -219,7 +219,7 @@ void main() {
     await tester.pumpAndSettle();
     final state = tester.state(find.byType(CanvasPage));
     final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model..setSelected(value: true);
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources..setSelected(value: true);
     final original = model.data.toJson();
     await _openAppearance(tester);
     expect(_surfaceStyle(tester), SurfaceStyle.solid);
@@ -229,7 +229,7 @@ void main() {
     expect(await preferences.getString(surfaceStylePreferenceKey), 'glass');
     expect(tester.state(find.byType(CanvasPage)), same(state));
     expect(tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller, same(canvas));
-    expect(tester.widget<TextTool>(find.byType(TextTool)).model, same(model));
+    expect(tester.widget<TextElementView>(find.byType(TextElementView)).resources, same(model));
     expect(model.data.toJson(), original);
     expect(model.selected, isTrue);
     expect(store.persisted, isNull);
@@ -273,8 +273,14 @@ void main() {
       }
 
       List<BlockBackgroundKind> backgrounds() => tool == 'text'
-          ? tester.widgetList<TextTool>(find.byType(TextTool)).map((widget) => widget.model.style.background).toList()
-          : tester.widgetList<CodeTool>(find.byType(CodeTool)).map((widget) => widget.model.background).toList();
+          ? tester
+                .widgetList<TextElementView>(find.byType(TextElementView))
+                .map((widget) => widget.resources.style.background)
+                .toList()
+          : tester
+                .widgetList<CodeElementView>(find.byType(CodeElementView))
+                .map((widget) => widget.resources.background)
+                .toList();
 
       await place(const Offset(100, 200));
       expect(backgrounds(), [BlockBackgroundKind.glass]);

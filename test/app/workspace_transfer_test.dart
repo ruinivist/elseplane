@@ -5,10 +5,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
-import 'package:elseplane/canvas/tools/code/code_tool.dart';
-import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
-import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/transfer/canvas_library_archive.dart';
 import 'package:elseplane/library/transfer/canvas_project.dart';
@@ -69,7 +69,7 @@ void main() {
       ],
     );
     await pumpElseplaneApp(tester, libraryStore: store, attachmentStore: _FakeAttachmentStore(), projectFiles: files);
-    tester.widget<TextTool>(find.byType(TextTool)).model.insertPastedText(' changed');
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText(' changed');
     await tester.pump();
     await _openCanvasSettings(tester);
     await tester.tap(find.byKey(const ValueKey('library-backup-button')));
@@ -173,7 +173,7 @@ void main() {
     expect(find.text('Replace canvas?'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
-    expect(tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown, 'original');
+    expect(tester.widget<TextElementView>(find.byType(TextElementView)).resources.node.markdown, 'original');
     expect(store.persisted, isNull);
   });
 
@@ -200,11 +200,11 @@ void main() {
       attachmentStore: attachments,
       projectFiles: files,
     );
-    tester.widget<TextTool>(find.byType(TextTool)).model.setSelected(value: true);
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.setSelected(value: true);
     await tester.sendKeyEvent(LogicalKeyboardKey.delete);
     await tester.pump();
     await _historyShortcut(tester);
-    expect(find.byType(TextTool), findsOneWidget);
+    expect(find.byType(TextElementView), findsOneWidget);
 
     final controller = _canvasController(tester)
       ..scrollBy(const Offset(90, 60))
@@ -230,22 +230,22 @@ void main() {
     expect(attachments.files[newPath], _newBytes);
     expect(_canvasController(tester).offset, offset);
     expect(_canvasController(tester).scale, scale);
-    expect(find.byType(TextTool), findsOneWidget);
-    expect(find.byType(CodeTool), findsOneWidget);
-    expect(find.byType(PenStroke), findsOneWidget);
-    expect(find.byType(Arrow), findsOneWidget);
+    expect(find.byType(TextElementView), findsOneWidget);
+    expect(find.byType(CodeElementView), findsOneWidget);
+    expect(find.byType(PenElementView), findsOneWidget);
+    expect(find.byType(ArrowElementView), findsOneWidget);
     expect(
-      tester.widget<TextTool>(find.byType(TextTool)).model.selected,
+      tester.widget<TextElementView>(find.byType(TextElementView)).resources.selected,
       isFalse,
     );
     expect(
-      tester.widget<TextTool>(find.byType(TextTool)).model.focusNode.hasFocus,
+      tester.widget<TextElementView>(find.byType(TextElementView)).resources.focusNode.hasFocus,
       isFalse,
     );
 
     await _historyShortcut(tester, redo: true);
     expect(
-      tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown,
+      tester.widget<TextElementView>(find.byType(TextElementView)).resources.node.markdown,
       'Path $_path0\n\n\$![literal]($_path0)\$\n\n![new]($newPath)',
     );
 
@@ -256,9 +256,9 @@ void main() {
       attachmentStore: attachments,
       projectFiles: files,
     );
-    expect(find.byType(TextTool), findsOneWidget);
+    expect(find.byType(TextElementView), findsOneWidget);
     expect(
-      tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown,
+      tester.widget<TextElementView>(find.byType(TextElementView)).resources.node.markdown,
       'Path $_path0\n\n\$![literal]($_path0)\$\n\n![new]($newPath)',
     );
   });
@@ -291,7 +291,7 @@ void main() {
         projectFiles: files,
       );
       await _openCanvasSettings(tester);
-      tester.widget<TextTool>(find.byType(TextTool)).model.setSelected(value: true);
+      tester.widget<TextElementView>(find.byType(TextElementView)).resources.setSelected(value: true);
       await pumpPastSave(tester);
 
       final writeGate = Completer<void>();
@@ -316,13 +316,13 @@ void main() {
       writeGate.complete();
       await tester.pumpAndSettle();
 
-      expect(find.byType(TextTool), findsOneWidget);
+      expect(find.byType(TextElementView), findsOneWidget);
       expect(
-        tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown,
+        tester.widget<TextElementView>(find.byType(TextElementView)).resources.node.markdown,
         oldDocument.elements.whereType<TextElementData>().single.markdown,
       );
       expect(
-        tester.widget<TextTool>(find.byType(TextTool)).model.selected,
+        tester.widget<TextElementView>(find.byType(TextElementView)).resources.selected,
         isTrue,
       );
 
@@ -356,7 +356,7 @@ void main() {
         projectFiles: files,
       );
       await _openCanvasSettings(tester);
-      tester.widget<TextTool>(find.byType(TextTool)).model.insertPastedText(' dirty');
+      tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText(' dirty');
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('canvas-import-button')));
       await _confirmCanvasImport(tester);
@@ -366,7 +366,7 @@ void main() {
       expect(libraryStore.saveCalls, greaterThan(0));
       expect(libraryStore.persisted, isNull);
       expect(
-        tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown,
+        tester.widget<TextElementView>(find.byType(TextElementView)).resources.node.markdown,
         'old dirty',
       );
 
@@ -384,7 +384,7 @@ void main() {
         projectFiles: files,
       );
       expect(
-        tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown,
+        tester.widget<TextElementView>(find.byType(TextElementView)).resources.node.markdown,
         'old dirty',
       );
     },
@@ -421,7 +421,7 @@ void main() {
     expect(attachments.files[_path0], onePixelPngBytes);
     expect(libraryStore.persisted, isNull);
     expect(
-      tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown,
+      tester.widget<TextElementView>(find.byType(TextElementView)).resources.node.markdown,
       oldDocument.elements.whereType<TextElementData>().single.markdown,
     );
 
@@ -436,7 +436,7 @@ void main() {
     libraryStore.failSaves = false;
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
-    tester.widget<TextTool>(find.byType(TextTool)).model.insertPastedText(' changed');
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText(' changed');
     await pumpPastSave(tester);
     expect(libraryStore.saveCalls, greaterThan(1));
   });

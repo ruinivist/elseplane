@@ -6,10 +6,11 @@ import 'dart:math' as math;
 import 'package:elseplane/app/workspace.dart';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_markdown_preview.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
-import 'package:elseplane/canvas/tools/code/code_tool.dart';
-import 'package:elseplane/canvas/tools/text/text_markdown_preview.dart';
-import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/main.dart';
 import 'package:elseplane/theme/fonts.dart';
@@ -57,8 +58,8 @@ void main() {
 
   testWidgets('renderer owns initial and live rotation with rotated pointer targets', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_rendererDocument(rotation: math.pi / 2)));
-    final block = find.byType(TextTool);
-    final model = tester.widget<TextTool>(block).model;
+    final block = find.byType(TextElementView);
+    final model = tester.widget<TextElementView>(block).resources;
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
     expect(controller.getInfo(model.data.id).rotation, math.pi / 2);
     expect(controller.getInfo(model.data.id).gsPosition, model.canvasPosition);
@@ -90,9 +91,9 @@ void main() {
 
   testWidgets('auto-height measurements survive transient changes, rotation, and culling', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_rendererDocument(autoHeight: true)));
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
-    final measured = tester.getSize(find.byType(TextTool));
+    final measured = tester.getSize(find.byType(TextElementView));
     expect(measured.height, greaterThan(model.canvasSize.height));
     expect(controller.getInfo(model.data.id).childSize, measured);
 
@@ -107,7 +108,7 @@ void main() {
     await tester.pump();
     controller.scrollBy(const Offset(10000, 10000));
     await tester.pumpAndSettle();
-    expect(find.byType(TextTool), findsNothing);
+    expect(find.byType(TextElementView), findsNothing);
     model
       ..setSelected(value: false)
       ..rotate(math.pi / 2)
@@ -117,19 +118,19 @@ void main() {
     expect(controller.getInfo(model.data.id).rotation, math.pi / 2);
     controller.scrollBy(const Offset(-10000, -10000));
     await tester.pumpAndSettle();
-    expect(find.byType(TextTool), findsOneWidget);
+    expect(find.byType(TextElementView), findsOneWidget);
     expect(controller.getInfo(model.data.id).childSize, measured);
 
     model.resize(measured, const Offset(20, 30));
     expect(controller.getInfo(model.data.id).childSize, model.canvasSize);
     await tester.pump();
-    expect(tester.getSize(find.byType(TextTool)), model.canvasSize);
+    expect(tester.getSize(find.byType(TextElementView)), model.canvasSize);
   });
 
   testWidgets('text places one focused source editor', (tester) async {
     await _addTextBlock(tester, const Offset(120, 200));
     await tester.pumpAndSettle();
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     final editor = find.byKey(const ValueKey('text-markdown-editor'));
 
     expect(find.byType(TextField), findsOneWidget);
@@ -195,7 +196,7 @@ void main() {
   testWidgets('text editor forwards arrow keys to native editing', (tester) async {
     await _addTextBlock(tester, const Offset(120, 200));
     await tester.pumpAndSettle();
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     await tester.enterText(
       find.byKey(const ValueKey('text-markdown-editor')),
       'first line\nsecond line',
@@ -225,14 +226,14 @@ void main() {
     await tester.pump();
     await tester.pump();
     await _placeCodeBlock(tester, const Offset(300, 200));
-    final code = tester.widget<CodeTool>(find.byType(CodeTool)).model..setSelected(value: true);
+    final code = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources..setSelected(value: true);
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
     await tester.tapAt(const Offset(120, 200));
     await tester.pump();
     await tester.pump();
-    final text = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     final editor = find.byKey(const ValueKey('text-markdown-editor'));
     await tester.enterText(editor, 'native text');
     text.controller.selection = TextSelection(
@@ -244,8 +245,8 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.delete);
     await tester.pump();
-    expect(find.byType(TextTool), findsOneWidget);
-    expect(find.byType(CodeTool), findsOneWidget);
+    expect(find.byType(TextElementView), findsOneWidget);
+    expect(find.byType(CodeElementView), findsOneWidget);
     expect(code.selected, isTrue);
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump(const Duration(milliseconds: 100));
@@ -258,7 +259,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     await _placeCodeBlock(tester, const Offset(300, 200));
-    final code = tester.widget<CodeTool>(find.byType(CodeTool)).model..setSelected(value: true);
+    final code = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources..setSelected(value: true);
     code.controller.text = 'native code';
     code.focusNode.requestFocus();
     await tester.pump();
@@ -268,7 +269,7 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.delete);
     await tester.pump();
-    expect(find.byType(CodeTool), findsOneWidget);
+    expect(find.byType(CodeElementView), findsOneWidget);
     expect(code.selected, isTrue);
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump(const Duration(milliseconds: 100));
@@ -281,14 +282,14 @@ void main() {
     await tester.pump();
     await tester.pump();
     await _placeCodeBlock(tester, const Offset(300, 200));
-    final code = tester.widget<CodeTool>(find.byType(CodeTool)).model..setSelected(value: true);
+    final code = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources..setSelected(value: true);
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
     await tester.tapAt(const Offset(120, 200));
     await tester.pump();
     await tester.pump();
-    final text = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     expect(text.editing, isTrue);
     expect(find.byKey(const ValueKey('text-block-handle')), findsOneWidget);
 
@@ -298,8 +299,8 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.byType(CodeTool), findsNothing);
-    expect(find.byType(TextTool), findsOneWidget);
+    expect(find.byType(CodeElementView), findsNothing);
+    expect(find.byType(TextElementView), findsOneWidget);
     expect(text.editing, isTrue);
     expect(find.byKey(const ValueKey('text-block-handle')), findsOneWidget);
     expect(code.session.selectedIds, isNot(contains(code.data.id)));
@@ -310,9 +311,9 @@ void main() {
   testWidgets('text blocks move from their handle', (tester) async {
     await _addTextBlock(tester, const Offset(120, 200));
 
-    final textBlock = find.byType(TextTool);
+    final textBlock = find.byType(TextElementView);
     final handle = find.byKey(const ValueKey('text-block-handle'));
-    final model = tester.widget<TextTool>(textBlock).model;
+    final model = tester.widget<TextElementView>(textBlock).resources;
     final originalTopLeft = tester.getTopLeft(textBlock);
     final originalWidth = model.node.width;
     const delta = Offset(80, 60);
@@ -336,13 +337,13 @@ void main() {
 
   testWidgets('text blocks delete from their controls', (tester) async {
     await _addTextBlock(tester, const Offset(120, 200));
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
 
     await tester.tap(find.byKey(const ValueKey('text-block-delete-control')));
     await tester.pump();
 
     expect(model.editing, isFalse);
-    expect(find.byType(TextTool), findsNothing);
+    expect(find.byType(TextElementView), findsNothing);
   });
 
   testWidgets('inactive text blocks move without activating when zoomed', (
@@ -356,8 +357,8 @@ void main() {
     canvas.controller.updateScalebyDelta(1, focalPoint: Offset.zero);
     await tester.pump();
 
-    final block = find.byType(TextTool);
-    final model = tester.widget<TextTool>(block).model;
+    final block = find.byType(TextElementView);
+    final model = tester.widget<TextElementView>(block).resources;
     final originalPosition = model.node.position;
     const delta = Offset(80, 60);
 
@@ -397,8 +398,8 @@ void main() {
   ) async {
     await _addTextBlock(tester, const Offset(120, 200));
 
-    final block = find.byType(TextTool);
-    final model = tester.widget<TextTool>(block).model..rotate(math.pi / 2);
+    final block = find.byType(TextElementView);
+    final model = tester.widget<TextElementView>(block).resources..rotate(math.pi / 2);
     await tester.pump();
     await tester.tapAt(const Offset(700, 500));
     await tester.pump();
@@ -428,8 +429,8 @@ void main() {
     ) async {
       await _addTextBlock(tester, const Offset(120, 200));
 
-      final block = find.byType(TextTool);
-      final model = tester.widget<TextTool>(block).model;
+      final block = find.byType(TextElementView);
+      final model = tester.widget<TextElementView>(block).resources;
       final rotate = find.byKey(const ValueKey('text-block-rotate-control'));
       final center = tester.getCenter(block);
       final start = tester.getCenter(rotate);
@@ -473,8 +474,8 @@ void main() {
         const Offset(120, 200),
         platform: TargetPlatform.linux,
       );
-      final block = find.byType(TextTool);
-      final model = tester.widget<TextTool>(block).model;
+      final block = find.byType(TextElementView);
+      final model = tester.widget<TextElementView>(block).resources;
       final scrollbars = find.descendant(
         of: block,
         matching: find.byType(Scrollbar),
@@ -561,7 +562,7 @@ void main() {
     tester,
   ) async {
     await _addTextBlock(tester, const Offset(120, 200));
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump();
 
@@ -569,9 +570,9 @@ void main() {
     canvas.controller.updateScalebyDelta(1);
     await tester.pump();
 
-    final originalSize = tester.getSize(find.byType(TextTool));
+    final originalSize = tester.getSize(find.byType(TextElementView));
     final child = canvas.controller.widgetsWithScreenPositions().single;
-    final blockSize = tester.getSize(find.byType(TextTool));
+    final blockSize = tester.getSize(find.byType(TextElementView));
     final handleSize = tester.getSize(
       find.byKey(const ValueKey('text-block-resize-handle')),
     );
@@ -597,7 +598,7 @@ void main() {
       find.byKey(const ValueKey('text-markdown-editor')),
       source,
     );
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     expect(model.node.markdown, source);
 
     await tester.tapAt(const Offset(700, 500));
@@ -1036,7 +1037,7 @@ x+y
     await tester.tapAt(const Offset(700, 500));
     await tester.pump();
 
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     final links = find.byWidgetPredicate(
       (widget) => widget is Text && widget.textSpan?.toPlainText() == 'safe unsafe',
     );
@@ -1078,7 +1079,7 @@ x+y
     await tester.tapAt(const Offset(700, 500));
     await tester.pump();
 
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     final image = find.byType(Image);
     expect(image, findsOneWidget);
     final imageLink = tester.widget<GestureDetector>(
@@ -1101,7 +1102,7 @@ x+y
     await tester.tapAt(const Offset(700, 500));
     await tester.pump();
 
-    final block = find.byType(TextTool);
+    final block = find.byType(TextElementView);
     expect(tester.getSize(block).height, greaterThanOrEqualTo(52));
 
     await tester.tap(
@@ -1124,7 +1125,7 @@ x+y
       );
       await tester.pumpAndSettle();
 
-      final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+      final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
       expect(find.byType(ElementTransformControls), findsOneWidget);
       expect(
         find.byKey(const ValueKey('text-settings-panel')).hitTestable(),
@@ -1201,7 +1202,7 @@ x+y
   ) async {
     await _addTextBlock(tester, const Offset(120, 200));
     await tester.pumpAndSettle();
-    final first = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final first = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     final panel = find.byKey(const ValueKey('text-settings-panel'));
     final collapsedSize = tester.getSize(panel);
 
@@ -1259,7 +1260,7 @@ x+y
   testWidgets('transparent background keeps editing and selection borders', (tester) async {
     await _addTextBlock(tester, const Offset(120, 200));
     await tester.pumpAndSettle();
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     final surface = find.byKey(const ValueKey('text-block-surface'));
 
     BorderSide border() => (tester.widget<Material>(surface).shape! as RoundedRectangleBorder).side;
@@ -1314,8 +1315,8 @@ x+y
         ),
       );
       await tester.pumpAndSettle();
-      final block = find.byType(TextTool);
-      final model = tester.widget<TextTool>(block).model;
+      final block = find.byType(TextElementView);
+      final model = tester.widget<TextElementView>(block).resources;
       final bounds = find.byKey(const ValueKey('text-block-surface'));
       final surface = find.descendant(of: bounds, matching: find.byType(Material)).first;
       final filter = find.descendant(of: block, matching: find.byType(BackdropFilter));
@@ -1368,7 +1369,7 @@ x+y
     tester,
   ) async {
     await _addTextBlock(tester, const Offset(120, 200));
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     expect(model.editing, isTrue);
     expect(find.byType(ElementTransformControls), findsOneWidget);
 
@@ -1389,7 +1390,7 @@ x+y
       await pumpCanvas(tester, TestLibraryStore(_rendererDocument()));
       await tester.tap(find.byKey(const ValueKey('text-markdown-preview-surface')));
       await tester.pumpAndSettle();
-      final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+      final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
       expect(model.active, isTrue);
       await tester.tap(_selectTrigger(picker));
       await tester.pumpAndSettle();
@@ -1530,16 +1531,16 @@ x+y
     await tester.pump();
     await tester.pump();
 
-    final restoredBlocks = tester.widgetList<TextTool>(find.byType(TextTool));
-    final restoredNodes = restoredBlocks.map((block) => block.model.node);
+    final restoredBlocks = tester.widgetList<TextElementView>(find.byType(TextElementView));
+    final restoredNodes = restoredBlocks.map((block) => block.resources.node);
     expect(restoredNodes.map((node) => node.toJson()), savedNodes.map((node) => node.toJson()));
     expect(
       tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller.childOrder,
       [second.node.id, first.node.id],
     );
     for (final block in restoredBlocks) {
-      expect(block.model.editing, isFalse);
-      expect(block.model.focusNode.hasFocus, isFalse);
+      expect(block.resources.editing, isFalse);
+      expect(block.resources.focusNode.hasFocus, isFalse);
     }
     expect(find.byType(ElementTransformControls), findsNothing);
     await tester.pump(const Duration(milliseconds: 100));
@@ -1556,7 +1557,7 @@ x+y
     await tester.pump();
     await tester.pump();
 
-    expect(find.byType(TextTool), findsNothing);
+    expect(find.byType(TextElementView), findsNothing);
     expect(find.text('Could not load saved canvas'), findsOneWidget);
     expect(await preferences.getString(PreferencesLibraryStore.libraryKey), invalid);
 
@@ -1564,7 +1565,7 @@ x+y
     await tester.pump();
     await tester.tapAt(const Offset(120, 200));
     await pumpPastSave(tester);
-    expect(find.byType(TextTool), findsNothing);
+    expect(find.byType(TextElementView), findsNothing);
     expect(await preferences.getString(PreferencesLibraryStore.libraryKey), invalid);
   });
 }
@@ -1608,7 +1609,7 @@ Future<void> _addTextBlock(
   await _placeTextBlock(tester, position);
 }
 
-Future<TextBlockModel> _placeTextBlock(
+Future<TextEditorResources> _placeTextBlock(
   WidgetTester tester,
   Offset position,
 ) async {
@@ -1617,7 +1618,7 @@ Future<TextBlockModel> _placeTextBlock(
   await tester.tapAt(position);
   await tester.pump();
   await tester.pump();
-  return tester.widget<TextTool>(find.byType(TextTool).last).model;
+  return tester.widget<TextElementView>(find.byType(TextElementView).last).resources;
 }
 
 Future<void> _placeCodeBlock(WidgetTester tester, Offset position) async {

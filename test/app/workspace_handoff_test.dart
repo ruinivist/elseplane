@@ -5,9 +5,11 @@ import 'dart:async';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
-import 'package:elseplane/canvas/tools/code/code_tool.dart';
-import 'package:elseplane/canvas/tools/media/media_tool.dart';
-import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_editor_resources.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_markdown_editor.dart';
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/transfer/canvas_project.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
@@ -37,10 +39,13 @@ void main() {
           late Future<void> upload;
           await tester.runAsync(() async {
             upload = media
-                ? tester.widget<MediaTool>(find.byType(MediaTool)).model.setDeviceImage(onePixelPngBytes, 'png')
+                ? tester
+                      .widget<MediaElementView>(find.byType(MediaElementView))
+                      .resources
+                      .setDeviceImage(onePixelPngBytes, 'png')
                 : tester
-                      .widget<TextTool>(find.byType(TextTool))
-                      .model
+                      .widget<TextElementView>(find.byType(TextElementView))
+                      .resources
                       .insertPastedImage(onePixelPngBytes, 'png', attachments);
             await attachments.started.future;
           });
@@ -76,7 +81,7 @@ void main() {
     await pumpCanvas(tester, store, attachmentStore: attachments);
     await tester.tap(find.byKey(const ValueKey('media-url-field')));
     await tester.pumpAndSettle();
-    final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     late Future<void> upload;
     await tester.runAsync(() async {
       upload = model.setDeviceImage(onePixelPngBytes, 'png');
@@ -100,7 +105,7 @@ void main() {
     final store = _Store(_document());
     final attachments = TestAttachmentStore();
     await pumpCanvas(tester, store, attachmentStore: attachments);
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     await tester.runAsync(() => model.insertPastedImage(onePixelPngBytes, 'png', attachments));
     store.fail = true;
     await tester.tap(find.byType(CanvasTitle));
@@ -124,7 +129,7 @@ void main() {
       final attachments = TestAttachmentStore();
       final read = Completer<CanvasClipboardSnapshot>();
       await pumpCanvas(tester, store, attachmentStore: attachments, readClipboard: () => read.future);
-      tester.widget<TextTool>(find.byType(TextTool)).model.insertPastedText(' dirty');
+      tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText(' dirty');
       await _clipboardShortcut(tester, LogicalKeyboardKey.keyV);
       store.fail = failedSave;
       await tester.tap(find.byType(CanvasTitle));
@@ -137,7 +142,7 @@ void main() {
       read.complete((text: null, image: (bytes: onePixelPngBytes, extension: 'png')));
       await tester.pumpAndSettle();
       expect(attachments.files, isEmpty);
-      expect(tester.widget<TextTool>(find.byType(TextTool)).model.data.markdown, 'Original dirty');
+      expect(tester.widget<TextElementView>(find.byType(TextElementView)).resources.data.markdown, 'Original dirty');
       store.fail = false;
       await tester.tap(find.byType(CanvasTitle));
       await tester.pumpAndSettle();
@@ -228,7 +233,7 @@ void main() {
       await pumpCanvas(tester, _Store(_codeDocument()));
       final model = await _focusCode(tester, intoTitle: intoTitle);
       await _pasteCode(tester, intoTitle: intoTitle);
-      tester.widget<CodeTool>(find.byType(CodeTool)).onMove(const Offset(20, 10));
+      tester.widget<CodeElementView>(find.byType(CodeElementView)).onMove(const Offset(20, 10));
       final node = (intoTitle ? model.titleFocusNode : model.focusNode)..unfocus();
       await tester.pump();
       node.requestFocus();
@@ -268,7 +273,7 @@ void main() {
     final store = _Store(_document());
     final write = Completer<void>();
     await pumpCanvas(tester, store, writeClipboardText: (_) => write.future);
-    tester.widget<TextTool>(find.byType(TextTool)).model.setSelected(value: true);
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.setSelected(value: true);
     await _clipboardShortcut(tester, LogicalKeyboardKey.keyX);
     await tester.tap(find.byType(CanvasTitle));
     await tester.pumpAndSettle();
@@ -300,7 +305,7 @@ void main() {
     expect(reads, 1);
     read.complete((text: 'https://example.com/image.png', image: null));
     await tester.pumpAndSettle();
-    expect(find.byType(MediaTool), findsNothing);
+    expect(find.byType(MediaElementView), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 }
@@ -339,11 +344,11 @@ CanvasDocument _codeDocument() => CanvasDocument(
   ],
 );
 
-Future<CodeBlockModel> _focusCode(WidgetTester tester, {required bool intoTitle}) async {
-  final tool = tester.widget<CodeTool>(find.byType(CodeTool));
+Future<CodeEditorResources> _focusCode(WidgetTester tester, {required bool intoTitle}) async {
+  final tool = tester.widget<CodeElementView>(find.byType(CodeElementView));
   tool.onEdit();
   await tester.pumpAndSettle();
-  final model = tool.model;
+  final model = tool.resources;
   if (intoTitle) {
     model.titleFocusNode.requestFocus();
     await tester.pump();

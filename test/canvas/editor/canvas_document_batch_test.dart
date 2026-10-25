@@ -3,7 +3,7 @@
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_page.dart';
-import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
+import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -23,8 +23,8 @@ void main() {
         await _pumpEditor(tester, document, snapshots.add);
         await _selectGroup(tester);
         final stroke = tester
-            .widgetList<PenStroke>(find.byType(PenStroke))
-            .firstWhere((stroke) => stroke.model.data.id == 'p0');
+            .widgetList<PenElementView>(find.byType(PenElementView))
+            .firstWhere((stroke) => stroke.resources.data.id == 'p0');
         for (var update = 1; update <= 3; update++) {
           stroke.onMove(const Offset(4, 3));
           expect(snapshots, hasLength(update));
@@ -139,9 +139,9 @@ Future<void> _pumpEditor(WidgetTester tester, CanvasDocument document, ValueChan
 Future<void> _selectGroup(WidgetTester tester) async {
   await _shortcut(tester, LogicalKeyboardKey.keyA);
   final sentinel = tester
-      .widgetList<PenStroke>(find.byType(PenStroke))
-      .firstWhere((stroke) => stroke.model.data.id == 'sentinel');
-  sentinel.model.setSelected(value: false);
+      .widgetList<PenElementView>(find.byType(PenElementView))
+      .firstWhere((stroke) => stroke.resources.data.id == 'sentinel');
+  sentinel.resources.setSelected(value: false);
 }
 
 Future<void> _shortcut(WidgetTester tester, LogicalKeyboardKey key, {bool shift = false}) async {

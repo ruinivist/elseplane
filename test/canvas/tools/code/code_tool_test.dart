@@ -1,10 +1,11 @@
 // Verifies code block backgrounds and distinguishes clicks from movement drags.
-// Exercises CodeTool rendering and editing without the persistence boundary.
+// Exercises CodeElementView rendering and editing without the persistence boundary.
 
 import 'dart:async';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/tools/code/code_tool.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_editor_resources.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -135,13 +136,19 @@ void main() {
         home: Scaffold(
           body: Align(
             alignment: Alignment.topLeft,
-            child: CodeTool(
-              model: model,
-              onEdit: () => fail('Active code must not be reactivated'),
-              onInteract: () => interactions++,
-              onMove: (_) => fail('Editor selection must not move the block'),
-              onResize: (_) {},
-              onChangeBoundary: () {},
+            child: ListenableBuilder(
+              listenable: model.session,
+              builder: (context, _) => CodeElementView(
+                resources: model,
+                data: model.data,
+                selected: model.selected,
+                active: model.active,
+                onEdit: () => fail('Active code must not be reactivated'),
+                onInteract: () => interactions++,
+                onMove: (_) => fail('Editor selection must not move the block'),
+                onResize: (_) {},
+                onChangeBoundary: () {},
+              ),
             ),
           ),
         ),
@@ -183,19 +190,25 @@ void main() {
           home: Scaffold(
             body: Align(
               alignment: Alignment.topLeft,
-              child: CodeTool(
-                model: model,
-                onEdit: () => model.setActive(value: true),
-                onMove: model.moveBy,
-                onResize: (_) {},
-                onChangeBoundary: () {},
+              child: ListenableBuilder(
+                listenable: model.session,
+                builder: (context, _) => CodeElementView(
+                  resources: model,
+                  data: model.data,
+                  selected: model.selected,
+                  active: model.active,
+                  onEdit: () => model.setActive(value: true),
+                  onMove: model.moveBy,
+                  onResize: (_) {},
+                  onChangeBoundary: () {},
+                ),
               ),
             ),
           ),
         ),
       );
       await tester.pumpAndSettle();
-      final block = find.byType(CodeTool);
+      final block = find.byType(CodeElementView);
       final surface = find.byKey(const ValueKey('code-block-surface'));
       final originalBounds = tester.getRect(surface);
 
@@ -299,20 +312,26 @@ void main() {
           home: Scaffold(
             body: Align(
               alignment: Alignment.topLeft,
-              child: CodeTool(
-                model: model,
-                onEdit: () {
-                  model.setActive(value: true);
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (!model.active) return;
-                    model.focusNode.unfocus();
-                    FocusManager.instance.applyFocusChangesIfNeeded();
-                    model.focusNode.requestFocus();
-                  });
-                },
-                onMove: (delta) => movement += delta,
-                onResize: (_) {},
-                onChangeBoundary: () {},
+              child: ListenableBuilder(
+                listenable: model.session,
+                builder: (context, _) => CodeElementView(
+                  resources: model,
+                  data: model.data,
+                  selected: model.selected,
+                  active: model.active,
+                  onEdit: () {
+                    model.setActive(value: true);
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!model.active) return;
+                      model.focusNode.unfocus();
+                      FocusManager.instance.applyFocusChangesIfNeeded();
+                      model.focusNode.requestFocus();
+                    });
+                  },
+                  onMove: (delta) => movement += delta,
+                  onResize: (_) {},
+                  onChangeBoundary: () {},
+                ),
               ),
             ),
           ),
@@ -394,7 +413,7 @@ void _mockClipboardRead(Future<Map<String, Object>> Function() read) {
   );
 }
 
-CodeBlockModel _codeModel({String source = ''}) => testCodeModel(
+CodeEditorResources _codeModel({String source = ''}) => testCodeModel(
   CodeElementData(
     id: 'code',
     position: Offset.zero,

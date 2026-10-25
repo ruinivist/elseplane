@@ -4,6 +4,7 @@
 import 'dart:ui';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
+
 import 'package:elseplane/canvas/geometry/hit_test.dart';
 
 // ---------- Geometry ----------
@@ -109,4 +110,21 @@ Offset minimumLengthArrowPoint(Offset requested, Offset fixed, Offset current) {
   final fallback = current - fixed;
   final direction = vector == Offset.zero ? fallback / fallback.distance : vector / vector.distance;
   return fixed + direction * (arrowMinimumLength + 1e-6);
+}
+
+// ---------- Saved arrow access ----------
+
+extension ArrowElementGeometry on ArrowElementData {
+  ArrowGeometry get geometry => ArrowGeometry(start: start, controls: controls, end: end);
+  Rect get bounds => geometry.bounds;
+  ArrowGeometry get localGeometry => geometry.shift(-bounds.topLeft);
+  int get pointCount => controls.length + 2;
+  Offset point(int index) {
+    RangeError.checkValidIndex(index, this, 'index', pointCount);
+    return index == 0
+        ? start
+        : index == pointCount - 1
+        ? end
+        : controls[index - 1];
+  }
 }

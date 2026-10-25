@@ -2,8 +2,9 @@
 // Exercises the arrow tool through model and canvas widget flows.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
+import 'package:elseplane/canvas/editor/tools/arrow_tool.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
-import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/ui/common/menu_surface.dart';
@@ -98,11 +99,11 @@ void main() {
     expect(committed.single.color, const Color(0xffd85b5b));
     expect(committed.single.strokeStyle, ArrowStrokeStyle.dashed);
     expect(committed.single.strokeWidth, 3);
-    final resource = testArrowModel(committed.single);
+    final resource = testArrowFixture(committed.single);
     final bounds = resource.bounds;
     resource.setStrokeWidth(arrowStrokeWidthMaximum);
     expect(resource.bounds, bounds);
-    resource.dispose();
+
     expect(tool.preview, isNull);
 
     final tinyPointer = TestPointer(2, PointerDeviceKind.mouse);
@@ -179,7 +180,7 @@ void main() {
   });
 
   test('arrow points edit independently and preserve minimum length', () {
-    final model = testArrowModel(
+    final model = testArrowFixture(
       ArrowElementData(
         id: 'arrow',
         start: const Offset(10, 20),
@@ -209,13 +210,12 @@ void main() {
       () => ArrowElementData.fromJson(model.data.toJson()),
       returnsNormally,
     );
-    model.dispose();
   });
 
   testWidgets('active arrows expose zoom-aware editable points with one-step undo', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_arrowDocument()));
-    final arrowFinder = find.byType(Arrow);
-    var model = tester.widget<Arrow>(arrowFinder).model;
+    final arrowFinder = find.byType(ArrowElementView);
+    var model = canvasElement(tester, tester.widget<ArrowElementView>(arrowFinder).data);
 
     expect(find.byKey(const ValueKey('arrow-start-handle')), findsNothing);
     final curvePoint = model.start * 0.25 + model.controls.single * 0.5 + model.end * 0.25;
@@ -250,7 +250,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    model = tester.widget<Arrow>(arrowFinder).model;
+    model = canvasElement(tester, tester.widget<ArrowElementView>(arrowFinder).data);
     expect(model.end, originalEnd);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -280,20 +280,20 @@ void main() {
     await tester.pump();
     expect(controller.offset, Offset.zero);
     expect(find.byKey(const ValueKey('arrow-preview')), findsNothing);
-    expect(find.byType(Arrow), findsOneWidget);
+    expect(find.byType(ArrowElementView), findsOneWidget);
     expect(tester.widget<ToolbarButton>(find.byKey(const ValueKey('toolbar-arrow'))).selected, isFalse);
-    var model = tester.widget<Arrow>(find.byType(Arrow)).model;
+    var model = canvasElement(tester, tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data);
     expect(model.active, isTrue);
     expect(model.controls, const [Offset(100, 150), Offset(180, 110)]);
     expect(model.end, const Offset(260, 170));
     await tester.sendEventToBinding(pointer.up());
     await tester.pump();
-    expect(find.byType(Arrow), findsOneWidget);
+    expect(find.byType(ArrowElementView), findsOneWidget);
     expect(find.byKey(const ValueKey('arrow-control-0-handle')), findsOneWidget);
     expect(find.byKey(const ValueKey('arrow-control-1-handle')), findsOneWidget);
 
     final paint = tester
-        .widget<CustomPaint>(find.descendant(of: find.byType(Arrow), matching: find.byType(CustomPaint)))
+        .widget<CustomPaint>(find.descendant(of: find.byType(ArrowElementView), matching: find.byType(CustomPaint)))
         .foregroundPainter!;
     final metric = model.localGeometry.shaftPath.computeMetrics().single;
     for (final fraction in [0.25, 0.5, 0.75]) {
@@ -314,7 +314,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    model = tester.widget<Arrow>(find.byType(Arrow)).model;
+    model = canvasElement(tester, tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data);
     expect(model.controls, original);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
@@ -322,7 +322,7 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    model = tester.widget<Arrow>(find.byType(Arrow)).model;
+    model = canvasElement(tester, tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data);
     expect(model.controls, [original[0], original[1] + const Offset(20, 10)]);
 
     final pan = await tester.startGesture(
@@ -338,7 +338,7 @@ void main() {
   testWidgets('inactive arrow dragging preserves layers and activation requires a click', (tester) async {
     final store = TestLibraryStore(_arrowDocument());
     await pumpCanvas(tester, store);
-    final model = tester.widget<Arrow>(find.byType(Arrow)).model;
+    final model = canvasElement(tester, tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data);
     final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
     final order = canvas.childOrder;
     const delta = Offset(50, 30);
@@ -378,7 +378,10 @@ void main() {
         ),
       );
       await pumpCanvas(tester, TestLibraryStore(document), platform: platform);
-      final models = tester.widgetList<Arrow>(find.byType(Arrow)).map((arrow) => arrow.model).toList();
+      final models = tester
+          .widgetList<ArrowElementView>(find.byType(ArrowElementView))
+          .map((arrow) => canvasElement(tester, arrow.data))
+          .toList();
       final first = models.first;
       final second = models.last;
       first.setSelected(value: true);
@@ -447,28 +450,28 @@ void main() {
     await firstDrag.moveTo(const Offset(300, 260));
     await tester.pump();
     expect(find.byKey(const ValueKey('arrow-preview')), findsOneWidget);
-    expect(find.byType(Arrow), findsNothing);
+    expect(find.byType(ArrowElementView), findsNothing);
     await firstDrag.up();
     await tester.pump();
 
-    expect(find.byType(Arrow), findsOneWidget);
-    final first = tester.widget<Arrow>(find.byType(Arrow)).model;
+    expect(find.byType(ArrowElementView), findsOneWidget);
+    final first = canvasElement(tester, tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data);
     expect(first.start, const Offset(120, 200));
     expect(first.end, const Offset(300, 260));
-    expect(first.strokeStyle, ArrowStrokeStyle.dashed);
+    expect(first.data.strokeStyle, ArrowStrokeStyle.dashed);
     expect(
-      first.color.toARGB32(),
+      first.data.color.toARGB32(),
       presetColors.firstWhere((swatch) => swatch.label == 'Red').color.toARGB32(),
     );
-    expect(first.strokeWidth, arrowStrokeWidthMinimum);
+    expect(first.data.strokeWidth, arrowStrokeWidthMinimum);
     expect(find.byKey(const ValueKey('arrow-settings-panel')), findsOneWidget);
     widthSlider().onChanged!(widthSlider().max);
     await tester.pump();
     expect(widthSlider().label, '20');
-    expect(first.strokeWidth, arrowStrokeWidthMaximum);
+    expect(first.data.strokeWidth, arrowStrokeWidthMaximum);
     await tester.tap(find.byKey(const ValueKey('arrow-style-solid')));
     await tester.pump();
-    expect(first.strokeStyle, ArrowStrokeStyle.solid);
+    expect(first.data.strokeStyle, ArrowStrokeStyle.solid);
     final toolbar = find.byKey(const ValueKey('toolbar-arrow'));
     expect(tester.widget<ToolbarButton>(toolbar).selected, isFalse);
 
@@ -479,9 +482,9 @@ void main() {
     await secondDrag.moveTo(const Offset(560, 260));
     await secondDrag.up();
     await tester.pump();
-    expect(find.byType(Arrow), findsOneWidget);
+    expect(find.byType(ArrowElementView), findsOneWidget);
 
-    final arrowFinder = find.byType(Arrow).first;
+    final arrowFinder = find.byType(ArrowElementView).first;
     final arrowTopLeft = tester.getTopLeft(arrowFinder);
     final startPoint =
         arrowTopLeft +

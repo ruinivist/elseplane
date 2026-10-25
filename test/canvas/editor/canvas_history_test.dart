@@ -5,14 +5,18 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/canvas/editor/element_resources.dart';
+import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_editor_resources.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/pen/pen_resources.dart';
+import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_markdown_editor.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
-import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
-import 'package:elseplane/canvas/tools/code/code_tool.dart';
-import 'package:elseplane/canvas/tools/media/media_tool.dart';
-import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
-import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
-import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/ui/common/select.dart';
@@ -59,9 +63,9 @@ void main() {
             const existingPath = 'attachments/11111111-1111-4111-8111-111111111111.png';
             attachments.files[existingPath] = onePixelPngBytes;
             await pumpCanvas(tester, store, attachmentStore: attachments);
-            final text = media ? null : tester.widget<TextTool>(find.byType(TextTool)).model;
-            final image = media ? tester.widget<MediaTool>(find.byType(MediaTool)).model : null;
-            final target = (media ? image! : text!) as CanvasElementModel;
+            final text = media ? null : tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+            final image = media ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources : null;
+            final target = (media ? image! : text!) as ElementResources;
             final moved = unchanged ? _stroke(tester) : target;
             final start = moved.canvasPosition;
             moved.moveBy(const Offset(20, 10));
@@ -87,8 +91,8 @@ void main() {
             expect(media ? image!.data.url : text!.data.markdown, 'original');
             expect(
               media
-                  ? tester.widget<MediaTool>(find.byType(MediaTool)).model
-                  : tester.widget<TextTool>(find.byType(TextTool)).model,
+                  ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources
+                  : tester.widget<TextElementView>(find.byType(TextElementView)).resources,
               same(target),
             );
             await pumpPastSave(tester);
@@ -125,8 +129,8 @@ void main() {
             );
           }
           await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
-          final text = media ? null : tester.widget<TextTool>(find.byType(TextTool)).model;
-          final image = media ? tester.widget<MediaTool>(find.byType(MediaTool)).model : null;
+          final text = media ? null : tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+          final image = media ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources : null;
           late Future<void> pending;
           await tester.runAsync(() async {
             pending = media
@@ -151,7 +155,7 @@ void main() {
       final attachments = (await tester.runAsync(() async => _PausedWrite()))!;
       final store = TestLibraryStore(_textDocument());
       await pumpCanvas(tester, store, attachmentStore: attachments);
-      final text = tester.widget<TextTool>(find.byType(TextTool)).model;
+      final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
       late Future<void> pending;
       await tester.runAsync(() async {
         pending = text.insertPastedImage(onePixelPngBytes, 'png', attachments);
@@ -191,8 +195,8 @@ void main() {
         );
       }
       await pumpCanvas(tester, TestLibraryStore(document));
-      final text = media ? null : tester.widget<TextTool>(find.byType(TextTool)).model;
-      final image = media ? tester.widget<MediaTool>(find.byType(MediaTool)).model : null;
+      final text = media ? null : tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+      final image = media ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources : null;
       await tester.tap(find.byKey(ValueKey(media ? 'media-url-field' : 'text-markdown-preview')));
       await tester.pump();
       (media ? image!.controller : text!.controller).selection = const TextSelection.collapsed(offset: 8);
@@ -217,8 +221,8 @@ void main() {
     );
     await _cacheAttachmentImage();
     await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
-    final media = tester.widget<MediaTool>(find.byType(MediaTool)).model;
-    tester.widget<TextTool>(find.byType(TextTool)).model.moveBy(const Offset(20, 10));
+    final media = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.moveBy(const Offset(20, 10));
     await pumpPastSave(tester);
     await _shortcut(tester);
     attachments.bytes.complete(onePixelPngBytes);
@@ -261,13 +265,13 @@ void main() {
     await _cacheAttachmentImage();
     await pumpCanvas(tester, store, attachmentStore: attachments);
     await tester.pumpAndSettle();
-    final text = tester.widget<TextTool>(find.byType(TextTool)).model;
-    final codeFinder = find.byType(CodeTool);
-    final code = tester.widget<CodeTool>(codeFinder).model;
+    final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+    final codeFinder = find.byType(CodeElementView);
+    final code = tester.widget<CodeElementView>(codeFinder).resources;
     final codeState = tester.state(codeFinder);
     final imageFinder = find.byKey(const ValueKey('media-image'));
     final imageState = tester.state(imageFinder);
-    final media = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final media = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     final image = media.image;
     final pen = _stroke(tester);
     code.scrollController.verticalScroller.jumpTo(120);
@@ -280,8 +284,8 @@ void main() {
     expect(text.controller.text, 'original');
     for (final redo in [true, false, true]) {
       await _shortcut(tester, redo: redo);
-      expect(tester.widget<TextTool>(find.byType(TextTool)).model, same(text));
-      expect(tester.widget<CodeTool>(codeFinder).model, same(code));
+      expect(tester.widget<TextElementView>(find.byType(TextElementView)).resources, same(text));
+      expect(tester.widget<CodeElementView>(codeFinder).resources, same(code));
       expect(tester.state(codeFinder), same(codeState));
       expect(tester.state(imageFinder), same(imageState));
       expect(media.image, same(image));
@@ -303,7 +307,7 @@ void main() {
   testWidgets('code restore synchronizes source and visible title without extra history', (tester) async {
     final store = TestLibraryStore(_codeDocument().withElements((elements) => elements.removeLast()));
     await pumpCanvas(tester, store);
-    final code = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+    final code = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
     final controller = code.controller;
     final titleController = code.titleController;
     controller.runRevocableOp(() => controller.text = 'changed source');
@@ -313,7 +317,7 @@ void main() {
       ..rotate(0.2)
       ..setSize(const Size(300, 260));
     await _shortcut(tester);
-    expect(tester.widget<CodeTool>(find.byType(CodeTool)).model, same(code));
+    expect(tester.widget<CodeElementView>(find.byType(CodeElementView)).resources, same(code));
     expect(code.controller, same(controller));
     expect(code.titleController, same(titleController));
     expect(controller.text, 'void main() {}');
@@ -357,7 +361,7 @@ void main() {
     await _cacheAttachmentImage();
     await pumpCanvas(tester, store, attachmentStore: attachments);
     await tester.pumpAndSettle();
-    final media = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final media = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     final image = media.image;
     expect(media.hasImage, isTrue);
     media
@@ -421,7 +425,7 @@ void main() {
   testWidgets('detached resource disposal preserves edits started after removal', (tester) async {
     final document = _textDocument().withElements((elements) => elements.add(_penDocument(1).elements.single));
     await pumpCanvas(tester, TestLibraryStore(document));
-    final text = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     final removed = _stroke(tester);
     text.session.remove([removed.data.id]);
     final pending = text.session.captureEdit(text.data.id);
@@ -468,18 +472,18 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
     await tester.pump();
     await _draw(tester);
-    expect(find.byType(PenStroke), findsOneWidget);
+    expect(find.byType(PenElementView), findsOneWidget);
 
     await _shortcut(tester);
-    expect(find.byType(PenStroke), findsNothing);
+    expect(find.byType(PenElementView), findsNothing);
     expect(_toolSelected(tester, 'draw'), isTrue);
     await _shortcut(tester);
     expect(_toolSelected(tester, 'draw'), isFalse);
     await _shortcut(tester, redo: true);
     expect(_toolSelected(tester, 'draw'), isTrue);
-    expect(find.byType(PenStroke), findsNothing);
+    expect(find.byType(PenElementView), findsNothing);
     await _shortcut(tester, redo: true);
-    expect(find.byType(PenStroke), findsOneWidget);
+    expect(find.byType(PenElementView), findsOneWidget);
     expect(_toolSelected(tester, 'draw'), isTrue);
 
     await _shortcut(tester);
@@ -543,11 +547,11 @@ void main() {
   }
 
   for (final (tool, type) in const [
-    ('text', TextTool),
-    ('code', CodeTool),
-    ('media', MediaTool),
-    ('shape', Shape),
-    ('arrow', Arrow),
+    ('text', TextElementView),
+    ('code', CodeElementView),
+    ('media', MediaElementView),
+    ('shape', ShapeElementView),
+    ('arrow', ArrowElementView),
   ]) {
     testWidgets('$tool placement undo restores its tool and redo returns to Select', (tester) async {
       final store = TestLibraryStore(_penDocument(0));
@@ -640,22 +644,25 @@ void main() {
     await tester.pump();
     await tester.tap(select);
     await tester.pump();
-    final model = tester.widget<Arrow>(find.byType(Arrow)).model;
+    final model = canvasElement(tester, tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data);
     final original = model.start;
-    final gesture = await tester.startGesture(tester.getCenter(find.byType(Arrow)), kind: PointerDeviceKind.mouse);
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(ArrowElementView)),
+      kind: PointerDeviceKind.mouse,
+    );
     await _shortcut(tester);
     expect(_toolSelected(tester, 'select'), isTrue);
     await gesture.moveBy(const Offset(60, 30));
     await gesture.up();
     await tester.pump();
     expect(model.start, original);
-    expect(tester.widget<Arrow>(find.byType(Arrow)).model, same(model));
+    expect(canvasElement(tester, tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data), equals(model));
     await _shortcut(tester, redo: true);
     expect(_toolSelected(tester, 'select'), isFalse);
     await pumpPastSave(tester);
     expect(store.persisted, isNull);
 
-    await tester.drag(find.byType(Arrow), const Offset(60, 30), kind: PointerDeviceKind.mouse);
+    await tester.drag(find.byType(ArrowElementView), const Offset(60, 30), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(model.start, original + const Offset(60, 30));
   });
@@ -673,10 +680,10 @@ void main() {
     removed.moveBy(const Offset(10, 10));
     expect(controller.childOrder, isEmpty);
     await tester.pump();
-    expect(find.byType(PenStroke), findsNothing);
+    expect(find.byType(PenElementView), findsNothing);
 
     await _shortcut(tester);
-    expect(find.byType(PenStroke), findsOneWidget);
+    expect(find.byType(PenElementView), findsOneWidget);
     final restored = _stroke(tester);
     expect(restored, isNot(same(removed)));
     expect(controller.getInfo(restored.data.id).gsPosition, restored.canvasPosition);
@@ -685,7 +692,7 @@ void main() {
     expect(store.persisted!.elements, hasLength(1));
 
     await _shortcut(tester, redo: true);
-    expect(find.byType(PenStroke), findsNothing);
+    expect(find.byType(PenElementView), findsNothing);
     await pumpPastSave(tester);
     expect(store.persisted!.elements, isEmpty);
     await _shortcut(tester);
@@ -702,7 +709,7 @@ void main() {
     final start = _stroke(tester).data.position;
 
     final gesture = await tester.startGesture(
-      tester.getCenter(find.byType(PenStroke)),
+      tester.getCenter(find.byType(PenElementView)),
     );
     await gesture.moveBy(const Offset(30, 10));
     await gesture.moveBy(const Offset(40, 20));
@@ -721,14 +728,14 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.delete);
     await tester.pump();
     await _shortcut(tester, redo: true);
-    expect(find.byType(PenStroke), findsNothing);
+    expect(find.byType(PenElementView), findsNothing);
   });
 
   testWidgets('focused editors keep ownership of undo shortcuts', (
     tester,
   ) async {
     await pumpCanvas(tester, TestLibraryStore(_textDocument()));
-    final original = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final original = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
 
     await tester.tap(find.byKey(const ValueKey('text-markdown-preview')));
     await tester.pump();
@@ -737,17 +744,17 @@ void main() {
     await _shortcut(tester);
 
     expect(
-      tester.widget<TextTool>(find.byType(TextTool)).model,
+      tester.widget<TextElementView>(find.byType(TextElementView)).resources,
       same(original),
     );
   });
 
   testWidgets('typing before and after a code resize forms three canvas operations', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_codeDocument()));
-    final tool = tester.widgetList<CodeTool>(find.byType(CodeTool)).first;
+    final tool = tester.widgetList<CodeElementView>(find.byType(CodeElementView)).first;
     tool.onEdit();
     await tester.pumpAndSettle();
-    final code = tool.model;
+    final code = tool.resources;
     final originalSource = code.data.source;
     final originalSize = code.size;
     code.session.setSelection([code.data.id]);
@@ -775,10 +782,10 @@ void main() {
 
   testWidgets('viewport navigation preserves the current content history group', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_codeDocument()));
-    final tool = tester.widgetList<CodeTool>(find.byType(CodeTool)).first;
+    final tool = tester.widgetList<CodeElementView>(find.byType(CodeElementView)).first;
     tool.onEdit();
     await tester.pumpAndSettle();
-    final code = tool.model;
+    final code = tool.resources;
     final original = code.data.source;
     code.controller.text = 'before navigation';
     final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas));
@@ -794,7 +801,7 @@ void main() {
   testWidgets('font choice is one undo step and restores the saved family', (tester) async {
     final store = TestLibraryStore(_textDocument());
     await pumpCanvas(tester, store);
-    TextBlockModel model() => tester.widget<TextTool>(find.byType(TextTool)).model;
+    TextEditorResources model() => tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     final savedFamily = model().style.fontFamily;
     await tester.tap(find.byKey(const ValueKey('text-markdown-preview')));
     await tester.pumpAndSettle();
@@ -819,7 +826,7 @@ void main() {
   testWidgets('text background choices persist as individual undo steps', (tester) async {
     final store = TestLibraryStore(_textDocument());
     await pumpCanvas(tester, store);
-    TextBlockModel model() => tester.widget<TextTool>(find.byType(TextTool)).model;
+    TextEditorResources model() => tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     Future<void> choose(String label) async {
       await tester.tap(
         find.descendant(
@@ -874,10 +881,10 @@ void main() {
       _codeDocument().withElements((elements) => elements[0] = elements[0].copyWith(autoArrange: false)),
     );
     await pumpCanvas(tester, store);
-    CodeBlockModel model() => tester
-        .widgetList<CodeTool>(find.byType(CodeTool))
-        .firstWhere((widget) => widget.model.data.id == 'code-0')
-        .model;
+    CodeEditorResources model() => tester
+        .widgetList<CodeElementView>(find.byType(CodeElementView))
+        .firstWhere((widget) => widget.resources.data.id == 'code-0')
+        .resources;
     Future<void> choose(String label) async {
       await tester.tap(
         find.descendant(
@@ -932,21 +939,21 @@ void main() {
 
     for (var index = 0; index < 51; index++) {
       tester
-          .widgetList<PenStroke>(find.byType(PenStroke))
-          .map((widget) => widget.model)
+          .widgetList<PenElementView>(find.byType(PenElementView))
+          .map((widget) => widget.resources)
           .firstWhere((model) => model.data.id == 'pen-$index')
           .setSelected(value: true);
       await tester.sendKeyEvent(LogicalKeyboardKey.delete);
       await tester.pump();
     }
-    expect(find.byType(PenStroke), findsNothing);
+    expect(find.byType(PenElementView), findsNothing);
 
     for (var index = 0; index < 51; index++) {
       await _shortcut(tester);
     }
-    expect(find.byType(PenStroke), findsNWidgets(50));
+    expect(find.byType(PenElementView), findsNWidgets(50));
     expect(
-      tester.widgetList<PenStroke>(find.byType(PenStroke)).map((widget) => widget.model.data.id),
+      tester.widgetList<PenElementView>(find.byType(PenElementView)).map((widget) => widget.resources.data.id),
       isNot(contains('pen-0')),
     );
   });
@@ -962,7 +969,7 @@ Future<void> _shortcut(WidgetTester tester, {bool redo = false}) async {
   await tester.pump();
 }
 
-PenStrokeModel _stroke(WidgetTester tester) => tester.widget<PenStroke>(find.byType(PenStroke)).model;
+PenResources _stroke(WidgetTester tester) => tester.widget<PenElementView>(find.byType(PenElementView)).resources;
 
 bool _toolSelected(WidgetTester tester, String tool) =>
     tester.widget<ToolbarButton>(find.byKey(ValueKey('toolbar-$tool'))).selected;

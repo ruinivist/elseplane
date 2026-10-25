@@ -2,7 +2,7 @@
 // Exercises search, selection, and dismissal through the full canvas.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/tools/code/code_tool.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -38,7 +38,7 @@ void main() {
           ),
         ),
       );
-      final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+      final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
       final trigger = find.byKey(const ValueKey('searchable-select-trigger'));
       final search = find.byKey(const ValueKey('searchable-select-search'));
 
@@ -51,7 +51,7 @@ void main() {
       Offset outsideBlock(Finder target) {
         final bounds = tester.getRect(target);
         final position = Offset(bounds.right - 12, bounds.center.dy);
-        expect(tester.getRect(find.byType(CodeTool)).contains(position), isFalse);
+        expect(tester.getRect(find.byType(CodeElementView)).contains(position), isFalse);
         return position;
       }
 

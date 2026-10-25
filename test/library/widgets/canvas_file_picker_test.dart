@@ -4,8 +4,8 @@
 import 'dart:async';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
-import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/debug/demo_canvas.dart';
 import 'package:elseplane/library/library_controller.dart';
@@ -58,9 +58,9 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('file-tree-close')), kind: PointerDeviceKind.mouse);
         await tester.pumpAndSettle();
         expect(find.byType(CanvasFilePicker), findsNothing);
-        await tester.tapAt(tester.getCenter(find.byType(TextTool)), kind: PointerDeviceKind.mouse);
+        await tester.tapAt(tester.getCenter(find.byType(TextElementView)), kind: PointerDeviceKind.mouse);
         await tester.pumpAndSettle();
-        final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+        final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
         expect(model.editing, releaseModifier);
         expect(model.selected, !releaseModifier);
         if (!releaseModifier) await tester.sendKeyUpEvent(modifier);
@@ -92,11 +92,11 @@ void main() {
         currentId: originalId,
       );
       await pumpCanvas(tester, store, platform: platform);
-      final text = tester.widget<TextTool>(find.byType(TextTool));
+      final text = tester.widget<TextElementView>(find.byType(TextElementView));
       text.onEdit();
       await tester.pumpAndSettle();
-      expect(text.model.focusNode.hasFocus, isTrue);
-      text.model.insertPastedText(' edited');
+      expect(text.resources.focusNode.hasFocus, isTrue);
+      text.resources.insertPastedText(' edited');
       final modifier = platform == TargetPlatform.macOS ? LogicalKeyboardKey.metaLeft : LogicalKeyboardKey.controlLeft;
       await tester.sendKeyDownEvent(modifier);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.keyP);
@@ -109,7 +109,7 @@ void main() {
         store.library.file(originalId).document!.elements.whereType<TextElementData>().single.markdown,
         contains('edited'),
       );
-      expect(text.model.editing, isFalse);
+      expect(text.resources.editing, isFalse);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pumpAndSettle();
       expect(store.library.currentId, originalId);
@@ -117,7 +117,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.library.currentId, 'next');
       expect(find.byType(CanvasFilePicker), findsNothing);
-      expect(find.byType(TextTool), findsNothing);
+      expect(find.byType(TextElementView), findsNothing);
       expect(tester.takeException(), isNull);
     });
   }
@@ -155,12 +155,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.tapAt(const Offset(100, 180));
     await tester.pumpAndSettle();
-    tester.widget<TextTool>(find.byType(TextTool)).model.insertPastedText('Unsaved');
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText('Unsaved');
     store.fail = true;
     await _open(tester);
     expect(find.byType(CanvasFilePicker), findsNothing);
     expect(find.text('Could not open canvas. Your current canvas is still open.'), findsOneWidget);
-    expect(tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown, 'Unsaved');
+    expect(tester.widget<TextElementView>(find.byType(TextElementView)).resources.node.markdown, 'Unsaved');
     store.fail = false;
     await _open(tester);
     expect(find.byType(CanvasFilePicker), findsOneWidget);
@@ -272,7 +272,7 @@ void main() {
       currentId: current.id,
     );
     await pumpCanvas(tester, store, attachmentStore: attachments);
-    tester.widget<TextTool>(find.byType(TextTool)).model.insertPastedText(' edited');
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText(' edited');
     await _open(tester);
     final originalSaved = store.library.current.document!.toJson();
     await tester.tap(find.byTooltip('Demo'));
@@ -290,7 +290,7 @@ void main() {
     expect(attachments.files[firstPath], demo.attachments[imagePath]);
     expect(tester.widget<CanvasTitle>(find.byType(CanvasTitle)).path, ['Demo 3']);
 
-    tester.widgetList<TextTool>(find.byType(TextTool)).first.model.insertPastedText(' changed');
+    tester.widgetList<TextElementView>(find.byType(TextElementView)).first.resources.insertPastedText(' changed');
     await _open(tester);
     final firstSaved = store.library.current.document!.toJson();
     await tester.tap(find.byTooltip('Demo'));
@@ -386,7 +386,7 @@ void main() {
     );
     await pumpCanvas(tester, store);
     final originalId = store.library.currentId;
-    tester.widget<TextTool>(find.byType(TextTool)).model.insertPastedText(' edited');
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText(' edited');
     await _open(tester);
     expect(store.library.current.document!.elements.whereType<TextElementData>().single.markdown, contains('edited'));
 
@@ -401,7 +401,7 @@ void main() {
     await tester.tap(find.text('New canvas'));
     await _name(tester, 'Brainstorm');
     expect(find.byType(CanvasFilePicker), findsNothing);
-    expect(find.byType(TextTool), findsNothing);
+    expect(find.byType(TextElementView), findsNothing);
     expect(store.library.current.parentId, folder.id);
     expect(tester.widget<CanvasTitle>(find.byType(CanvasTitle)).path, ['Notes', 'Brainstorm']);
 
@@ -409,7 +409,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    expect(find.byType(TextTool), findsNothing);
+    expect(find.byType(TextElementView), findsNothing);
 
     await _open(tester);
     final canvasId = store.library.currentId;
@@ -422,7 +422,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(store.library.file(canvasId).name, 'Ideas');
     expect(store.library.currentId, originalId);
-    expect(tester.widget<TextTool>(find.byType(TextTool)).model.node.markdown, contains('edited'));
+    expect(tester.widget<TextElementView>(find.byType(TextElementView)).resources.node.markdown, contains('edited'));
     expect(tester.takeException(), isNull);
   });
 

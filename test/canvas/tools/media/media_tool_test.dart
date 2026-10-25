@@ -8,8 +8,8 @@ import 'dart:ui' as ui;
 
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/tools/media/media_tool.dart';
-import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -70,8 +70,8 @@ void main() {
             );
           }
           await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
-          final text = media ? null : tester.widget<TextTool>(find.byType(TextTool)).model;
-          final image = media ? tester.widget<MediaTool>(find.byType(MediaTool)).model : null;
+          final text = media ? null : tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+          final image = media ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources : null;
           await tester.tap(find.byKey(ValueKey(media ? 'media-url-field' : 'text-markdown-preview')));
           await tester.pump();
           await tester.runAsync(() async {
@@ -134,7 +134,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     expect(model.data.position, const Offset(120, 180));
     expect(model.data.width, mediaNodeDefaultWidth);
     expect(model.hasImage, isFalse);
@@ -178,7 +178,7 @@ void main() {
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    await tester.tapAt(tester.getCenter(find.byType(MediaTool)));
+    await tester.tapAt(tester.getCenter(find.byType(MediaElementView)));
     await tester.pump();
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     expect(model.selected, isTrue);
@@ -194,7 +194,7 @@ void main() {
         _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: 'original')),
       ),
     );
-    final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     final field = find.byKey(const ValueKey('media-url-field'));
     await tester.enterText(field, url);
     await tester.pump();
@@ -244,7 +244,7 @@ void main() {
       ),
     );
 
-    final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     await tester.tap(find.byKey(const ValueKey('media-image')));
     await tester.pumpAndSettle();
     final field = find.byKey(const ValueKey('media-url-field'));
@@ -294,7 +294,7 @@ void main() {
         _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
       );
       await pumpCanvas(tester, store);
-      final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+      final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
       final image = model.image;
       final size = model.canvasSize;
       var changes = 0;
@@ -350,7 +350,7 @@ void main() {
           _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
         ),
       );
-      final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+      final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
       await tester.tap(find.byKey(const ValueKey('media-image')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('media-url-field')), draft);
@@ -376,7 +376,7 @@ void main() {
         _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
       ),
     );
-    final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     final image = model.image;
     await tester.tap(find.byKey(const ValueKey('media-image')));
     await tester.pumpAndSettle();
@@ -409,7 +409,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
     final urlPanelSize = controller.getInfo(model.data.id).childSize;
     final bytes = onePixelPngBytes;
@@ -448,7 +448,7 @@ void main() {
     );
 
     final field = find.byKey(const ValueKey('media-url-field'));
-    final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     await tester.tap(field);
     model.controller.selection = const TextSelection(baseOffset: 0, extentOffset: 7);
 
@@ -466,7 +466,7 @@ void main() {
     });
     await tester.pumpAndSettle();
 
-    expect(find.byType(MediaTool), findsOneWidget);
+    expect(find.byType(MediaElementView), findsOneWidget);
     expect(model.data.url, matches(attachmentPathPattern));
     expect(attachments.files[model.data.url], onePixelPngBytes);
     expect(model.image, isA<MemoryImage>());
@@ -491,7 +491,7 @@ void main() {
     await tester.tapAt(const Offset(120, 180));
     await tester.pump();
 
-    final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     model.focusNode.unfocus();
     await tester.pump();
     expect(model.active, isTrue);
@@ -503,7 +503,7 @@ void main() {
     });
     await tester.pumpAndSettle();
 
-    expect(find.byType(MediaTool), findsNWidgets(2));
+    expect(find.byType(MediaElementView), findsNWidgets(2));
   });
 
   testWidgets('loaded media activates, moves, and resizes to its ratio', (
@@ -523,8 +523,8 @@ void main() {
     );
     await pumpCanvas(tester, store);
 
-    final node = find.byType(MediaTool);
-    final model = tester.widget<MediaTool>(node).model;
+    final node = find.byType(MediaElementView);
+    final model = tester.widget<MediaElementView>(node).resources;
     expect(model.hasImage, isTrue);
     expect(model.canvasSize, const Size(400, 200));
     expect(find.byKey(const ValueKey('media-url-field')), findsNothing);
@@ -661,10 +661,10 @@ void main() {
     await tester.tapAt(const Offset(120, 180));
     await tester.pump();
 
-    expect(find.byType(MediaTool), findsOneWidget);
+    expect(find.byType(MediaElementView), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('media-block-delete-control')));
     await tester.pump();
-    expect(find.byType(MediaTool), findsNothing);
+    expect(find.byType(MediaElementView), findsNothing);
   });
 }
 

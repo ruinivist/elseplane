@@ -7,13 +7,12 @@ import 'dart:convert';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
-import 'package:elseplane/canvas/editor/canvas_element_model.dart';
-import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
-import 'package:elseplane/canvas/tools/code/code_tool.dart';
-import 'package:elseplane/canvas/tools/media/media_tool.dart';
-import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
-import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
-import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -94,6 +93,45 @@ void main() {
     expect(restored.toJson(), shape.toJson());
   });
 
+  for (final cut in [false, true]) {
+    for (final explicitTargets in [false, true]) {
+      test(
+        '${cut ? 'Cut' : 'Copy'} preserves stack order with reversed ${explicitTargets ? 'targets' : 'selection'}',
+        () async {
+          final session = testSession(_menuDocument)..setSelection(explicitTargets ? ['a'] : ['b', 'a']);
+          String? payload;
+          final clipboard = CanvasClipboard(
+            session: session,
+            attachments: TestAttachmentStore(),
+            enabled: () => true,
+            menuOpen: () => false,
+            editing: () => false,
+            pointerPosition: () => null,
+            scale: () => 1,
+            screenToCanvas: (position) => position,
+            viewportSize: () => const Size(800, 600),
+            boundsOf: (_) => Rect.zero,
+            mediaWidth: 100,
+            clearEditing: () {},
+            onError: fail,
+            writeClipboardText: (text) async => payload = text,
+            readClipboard: () async => (text: payload, image: null),
+          );
+
+          await clipboard.copy(null, cut: cut, targets: explicitTargets ? ['b', 'a'] : null);
+          expect(decodeCanvasClipboard(payload!)!.map((value) => value.id), ['a', 'b']);
+          expect(session.document.elements, cut ? isEmpty : _menuDocument.elements);
+          await clipboard.paste(null);
+          final pasted = session.document.elements.skip(cut ? 0 : 2).toList();
+          expect(pasted, hasLength(2));
+          for (var index = 0; index < 2; index++) {
+            _expectShifted(_menuDocument.elements[index], pasted[index], cut ? Offset.zero : const Offset(24, 24));
+          }
+        },
+      );
+    }
+  }
+
   testWidgets('copies, pastes, cuts, restores, and persists mixed elements', (
     tester,
   ) async {
@@ -109,7 +147,7 @@ void main() {
         clipboard = text;
       },
     );
-    for (final model in _models(tester)) {
+    for (final model in _models(tester).reversed) {
       model.setSelected(value: true);
     }
     await _shortcut(tester, LogicalKeyboardKey.keyC);
@@ -386,7 +424,7 @@ void main() {
         }).timeout(const Duration(seconds: 5));
       });
       await tester.pumpAndSettle();
-      final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+      final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
       expect((model.canvasPosition & model.canvasSize).center, target);
       expect(model.selected, isTrue);
       await pumpPastSave(tester);
@@ -486,7 +524,9 @@ void main() {
     await _shortcut(tester, LogicalKeyboardKey.keyX);
     final start = second.canvasPosition;
     final drag = await tester.startGesture(
-      tester.getCenter(find.byWidgetPredicate((widget) => widget is Shape && widget.model == second)),
+      tester.getCenter(
+        find.byWidgetPredicate((widget) => widget is ShapeElementView && widget.data.id == second.data.id),
+      ),
       kind: PointerDeviceKind.mouse,
     );
     await drag.moveBy(const Offset(30, 20));
@@ -523,7 +563,10 @@ void main() {
       final write = Completer<void>();
       final store = TestLibraryStore(_menuDocument);
       await pumpCanvas(tester, store, readClipboard: () => read.future, writeClipboardText: (_) => write.future);
-      final model = tester.widgetList<Shape>(find.byType(Shape)).first.model;
+      final model = canvasElement(
+        tester,
+        tester.widgetList<ShapeElementView>(find.byType(ShapeElementView)).first.data,
+      );
       final position = model.data.position;
       model.moveBy(const Offset(10, 10));
       await tester.pump();
@@ -536,7 +579,10 @@ void main() {
       write.complete();
       await tester.pumpAndSettle();
       expect(tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller.childOrder, ['a', 'b']);
-      expect(tester.widgetList<Shape>(find.byType(Shape)).first.model, same(model));
+      expect(
+        canvasElement(tester, tester.widgetList<ShapeElementView>(find.byType(ShapeElementView)).first.data),
+        equals(model),
+      );
       await pumpPastSave(tester);
       expect(store.persisted!.toJson(), _menuDocument.toJson());
     });
@@ -577,7 +623,10 @@ void main() {
           attachmentStore: attachments,
           readClipboard: () async => (text: null, image: (bytes: onePixelPngBytes, extension: 'png')),
         );
-        final model = tester.widgetList<Shape>(find.byType(Shape)).first.model;
+        final model = canvasElement(
+          tester,
+          tester.widgetList<ShapeElementView>(find.byType(ShapeElementView)).first.data,
+        );
         final position = model.canvasPosition;
         model.moveBy(const Offset(10, 10));
         await pumpPastSave(tester);
@@ -593,7 +642,7 @@ void main() {
           await Future<void>.delayed(Duration.zero);
         });
         await tester.pumpAndSettle();
-        expect(find.byType(MediaTool), findsNothing);
+        expect(find.byType(MediaElementView), findsNothing);
         expect(attachments.files, hasLength(failDelete ? 1 : 0));
         expect(find.text('Could not paste canvas elements'), findsNothing);
         await pumpPastSave(tester);
@@ -620,13 +669,13 @@ void main() {
     await _shortcut(tester, LogicalKeyboardKey.keyV);
     await tester.pump();
     expect(
-      tester.widget<MediaTool>(find.byType(MediaTool)).model.data.url,
+      tester.widget<MediaElementView>(find.byType(MediaElementView)).resources.data.url,
       'https://example.com/image.png',
     );
 
     clipboard = (text: 'ordinary text', image: null);
     await _shortcut(tester, LogicalKeyboardKey.keyV);
-    expect(find.byType(MediaTool), findsOneWidget);
+    expect(find.byType(MediaElementView), findsOneWidget);
 
     clipboard = (
       text: 'https://example.com/ignored.png',
@@ -640,7 +689,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final pasted = tester.widgetList<MediaTool>(find.byType(MediaTool)).last.model;
+    final pasted = tester.widgetList<MediaElementView>(find.byType(MediaElementView)).last.resources;
     expect(pasted.data.url, matches(attachmentPathPattern));
     expect(attachments.files[pasted.data.url], onePixelPngBytes);
   });
@@ -667,13 +716,23 @@ Future<void> _shortcut(
   await tester.pump();
 }
 
-List<CanvasElementModel> _models(WidgetTester tester) => <CanvasElementModel>[
-  ...tester.widgetList<TextTool>(find.byType(TextTool)).map((widget) => widget.model),
-  ...tester.widgetList<CodeTool>(find.byType(CodeTool)).map((widget) => widget.model),
-  ...tester.widgetList<PenStroke>(find.byType(PenStroke)).map((widget) => widget.model),
-  ...tester.widgetList<Arrow>(find.byType(Arrow)).map((widget) => widget.model),
-  ...tester.widgetList<Shape>(find.byType(Shape)).map((widget) => widget.model),
-  ...tester.widgetList<MediaTool>(find.byType(MediaTool)).map((widget) => widget.model),
+List<ElementFixture> _models(WidgetTester tester) => <ElementFixture>[
+  ...tester
+      .widgetList<TextElementView>(find.byType(TextElementView))
+      .map((widget) => canvasElement(tester, widget.data)),
+  ...tester
+      .widgetList<CodeElementView>(find.byType(CodeElementView))
+      .map((widget) => canvasElement(tester, widget.data)),
+  ...tester.widgetList<PenElementView>(find.byType(PenElementView)).map((widget) => canvasElement(tester, widget.data)),
+  ...tester
+      .widgetList<ArrowElementView>(find.byType(ArrowElementView))
+      .map((widget) => canvasElement(tester, widget.data)),
+  ...tester
+      .widgetList<ShapeElementView>(find.byType(ShapeElementView))
+      .map((widget) => canvasElement(tester, widget.data)),
+  ...tester
+      .widgetList<MediaElementView>(find.byType(MediaElementView))
+      .map((widget) => canvasElement(tester, widget.data)),
 ];
 
 void _expectOnlySelected(WidgetTester tester, Set<String> ids) {
@@ -713,6 +772,11 @@ void _expectShifted(
       expect(result.toJson()['points'], source.toJson()['points']);
       expect(result.color, source.color);
       expect(result.width, source.width);
+    case (final ShapeElementData source, final ShapeElementData result):
+      expect(
+        result.toJson(),
+        source.copyWith(id: result.id, position: source.position + delta).toJson(),
+      );
     case (final ArrowElementData source, final ArrowElementData result):
       expect(result.start, source.start + delta);
       expect(result.controls, source.controls.map((point) => point + delta).toList());

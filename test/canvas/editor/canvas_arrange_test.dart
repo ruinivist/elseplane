@@ -5,14 +5,15 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/canvas_element_model.dart';
+import 'package:elseplane/canvas/editor/element_resources.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_markdown_editor.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
-import 'package:elseplane/canvas/tools/code/code_tool.dart';
-import 'package:elseplane/canvas/tools/media/media_tool.dart';
-import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
-import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
-import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
 import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/theme/theme.dart';
@@ -44,8 +45,8 @@ void main() {
         await pumpCanvas(tester, store);
         await tester.tapAt(_autoHitPoint(tester, kind));
         await tester.pumpAndSettle();
-        final text = kind == 'text' ? tester.widget<TextTool>(find.byType(TextTool)).model : null;
-        final code = kind == 'text' ? null : tester.widget<CodeTool>(find.byType(CodeTool)).model;
+        final text = kind == 'text' ? tester.widget<TextElementView>(find.byType(TextElementView)).resources : null;
+        final code = kind == 'text' ? null : tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
         final focus = text?.focusNode ?? code!.focusNode;
         await _promoteOther(tester);
         var focusLosses = 0;
@@ -87,8 +88,8 @@ void main() {
       await pumpCanvas(tester, TestLibraryStore(document));
       await tester.tapAt(_autoHitPoint(tester, kind));
       await tester.pumpAndSettle();
-      final text = kind == 'text' ? tester.widget<TextTool>(find.byType(TextTool)).model : null;
-      final code = kind == 'text' ? null : tester.widget<CodeTool>(find.byType(CodeTool)).model;
+      final text = kind == 'text' ? tester.widget<TextElementView>(find.byType(TextElementView)).resources : null;
+      final code = kind == 'text' ? null : tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
       await _promoteOther(tester);
       if (text != null) {
         text.controller.selection = const TextSelection.collapsed(offset: 0);
@@ -157,7 +158,7 @@ void main() {
     await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
     await tester.tapAt(_autoHitPoint(tester, 'text'));
     await tester.pumpAndSettle();
-    final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     model.controller.selection = const TextSelection.collapsed(offset: 0);
     final paste = model.insertPastedImage(onePixelPngBytes, 'png', attachments);
     await _promoteOther(tester);
@@ -213,7 +214,7 @@ void main() {
           await tester.tapAt(point);
           await tester.pumpAndSettle();
           expect(_canvas(tester).childOrder, auto ? ['other', 'editor'] : ['editor', 'other']);
-          final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+          final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
           expect((model.active, model.editing), (false, false));
           expect(find.text('Could not open link'), findsOneWidget);
           if (auto) {
@@ -237,7 +238,7 @@ void main() {
         final expected = [...document.elements.skip(1).map((element) => element.id), target];
         expect(_canvas(tester).childOrder, expected);
         if (kind == 'pen') {
-          expect(tester.widget<PenStroke>(find.byType(PenStroke)).model.active, isFalse);
+          expect(tester.widget<PenElementView>(find.byType(PenElementView)).resources.active, isFalse);
         }
         await tester.tapAt(const Offset(790, 590), kind: device);
         await tester.pumpAndSettle();
@@ -520,9 +521,9 @@ void main() {
       await tester.tapAt(tester.getCenter(surface));
       await tester.pumpAndSettle();
       final focus = switch (editor) {
-        'text' => tester.widget<TextTool>(find.byType(TextTool)).model.focusNode,
-        'code' || 'title' => tester.widget<CodeTool>(find.byType(CodeTool)).model.focusNode,
-        _ => tester.widget<MediaTool>(find.byType(MediaTool)).model.focusNode,
+        'text' => tester.widget<TextElementView>(find.byType(TextElementView)).resources.focusNode,
+        'code' || 'title' => tester.widget<CodeElementView>(find.byType(CodeElementView)).resources.focusNode,
+        _ => tester.widget<MediaElementView>(find.byType(MediaElementView)).resources.focusNode,
       };
       await tester.tap(find.byTooltip('Arrange'));
       await tester.pumpAndSettle();
@@ -530,11 +531,11 @@ void main() {
       expect(find.byType(ElementTransformControls), findsNothing);
       expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).focusNode!.hasFocus, isTrue);
       if (editor == 'text') {
-        final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+        final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
         expect(model.editing, isFalse);
         expect(model.controller.text, 'contents');
       } else if (editor == 'code' || editor == 'title') {
-        final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+        final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
         expect(model.controller.text, 'contents');
         expect(model.title, 'Title');
       }
@@ -660,7 +661,7 @@ void main() {
           expect(canvas.childOrder, expected);
           final after = _models(tester);
           for (final id in before.keys) {
-            expect(after[id], same(before[id]));
+            expect(after[id], equals(before[id]));
             expect(after[id]!.data.toJson(), original[id]);
           }
           expect(after[target]!.selected, isTrue);
@@ -670,7 +671,7 @@ void main() {
           await _shortcut(tester, LogicalKeyboardKey.keyZ);
           expect(canvas.childOrder, ['a', 'b', 'c', 'd']);
           for (final id in before.keys) {
-            expect(_models(tester)[id], same(before[id]));
+            expect(_models(tester)[id], equals(before[id]));
           }
           await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
           expect(canvas.childOrder, expected);
@@ -678,7 +679,7 @@ void main() {
           await _shortcut(tester, LogicalKeyboardKey.keyZ);
           expect(canvas.childOrder, ['a', 'b', 'c', 'd']);
           for (final id in before.keys) {
-            expect(_models(tester)[id], same(before[id]));
+            expect(_models(tester)[id], equals(before[id]));
           }
           await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
           await pumpPastSave(tester);
@@ -698,7 +699,7 @@ void main() {
         attachmentStore: TestAttachmentStore(),
       );
       if (tool == 'media') {
-        final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+        final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
         await tester.runAsync(() => model.setDeviceImage(onePixelPngBytes, 'png'));
       }
       await tester.pumpAndSettle();
@@ -707,9 +708,9 @@ void main() {
       await tester.pumpAndSettle();
       final model =
           (tool == 'media'
-                  ? tester.widget<MediaTool>(find.byType(MediaTool)).model
-                  : tester.widget<CodeTool>(find.byType(CodeTool)).model)
-              as CanvasElementModel;
+                  ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources
+                  : tester.widget<CodeElementView>(find.byType(CodeElementView)).resources)
+              as ElementResources;
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: const Offset(790, 590));
 
@@ -775,8 +776,8 @@ void main() {
     await pumpCanvas(tester, store);
     await tester.pumpAndSettle();
     final canvas = _canvas(tester);
-    final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
-    final editorState = tester.state(find.byType(CodeTool));
+    final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
+    final editorState = tester.state(find.byType(CodeElementView));
     final title = tester.getCenter(find.byKey(const ValueKey('code-title-text')));
     const body = Offset(180, 280);
 
@@ -804,7 +805,7 @@ void main() {
         expect(pixel.toARGB32() == Colors.red.toARGB32(), covered, reason: 'at $point, pixel $pixel');
       }
       expect(canvas.childOrder, ['editor', 'other']);
-      expect(tester.state(find.byType(CodeTool)), same(editorState));
+      expect(tester.state(find.byType(CodeElementView)), same(editorState));
     }
 
     await expectCovered(covered: true);
@@ -859,7 +860,7 @@ void main() {
       await pumpCanvas(tester, TestLibraryStore(document));
       final canvas = _canvas(tester)..updateScalebyDelta(scale - 1, focalPoint: Offset.zero);
       await tester.pumpAndSettle();
-      final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+      final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
       RenderBox body() => tester.renderObject<RenderBox>(find.byKey(const ValueKey('code-block-surface')));
       void expectGeometry() {
         final center = (model.data.position + model.size.center(Offset.zero) - canvas.offset) * scale;
@@ -971,8 +972,8 @@ void main() {
             await pumpCanvas(tester, TestLibraryStore(_editorDocument(kind)));
             final point = _autoHitPoint(tester, kind);
             final model = kind == 'text'
-                ? tester.widget<TextTool>(find.byType(TextTool)).model as CanvasElementModel
-                : tester.widget<CodeTool>(find.byType(CodeTool)).model;
+                ? tester.widget<TextElementView>(find.byType(TextElementView)).resources as ElementResources
+                : tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
             final other = _models(tester)['other']!;
             model.setSelected(value: sameObject || multiple);
             other.setSelected(value: !sameObject || multiple);
@@ -984,12 +985,12 @@ void main() {
             expect(model.selected, isFalse);
             expect(other.selected, isFalse);
             if (kind == 'text') {
-              final text = tester.widget<TextTool>(find.byType(TextTool)).model;
+              final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
               expect(text.editing, isTrue);
               expect(text.focusNode.hasFocus, isTrue);
               expect(text.controller.text, 'contents');
             } else {
-              final code = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+              final code = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
               expect(code.focusNode.hasFocus, isTrue);
               expect(code.controller.text, 'contents');
               expect(code.title, 'Title');
@@ -1071,7 +1072,7 @@ void main() {
     expect(tester.getRect(find.byType(MenuSurface)).contains(outside), isFalse);
     await tester.tapAt(outside);
     await tester.pumpAndSettle();
-    final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+    final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
     expect(find.byType(MenuSurface), findsNothing);
     expect(model.selected, isFalse);
     expect(model.active, isTrue);
@@ -1289,7 +1290,7 @@ void main() {
       expect(canvas.childOrder, ['a', 'b', 'c', 'd']);
       await _shortcut(tester, LogicalKeyboardKey.bracketRight, platform: platform, shift: true);
       expect(canvas.childOrder, ['b', 'c', 'd', 'a']);
-      expect(_models(tester)['a'], same(model));
+      expect(_models(tester)['a'], equals(model));
       expect(model.active, isFalse);
       expect(model.selected, isTrue);
       await _shortcut(tester, LogicalKeyboardKey.braceLeft, platform: platform, shift: true);
@@ -1334,9 +1335,9 @@ void main() {
       await tester.tapAt(tester.getCenter(surface));
       await tester.pumpAndSettle();
       final focus = switch (editor) {
-        'text' => tester.widget<TextTool>(find.byType(TextTool)).model.focusNode,
-        'code' || 'title' => tester.widget<CodeTool>(find.byType(CodeTool)).model.focusNode,
-        _ => tester.widget<MediaTool>(find.byType(MediaTool)).model.focusNode,
+        'text' => tester.widget<TextElementView>(find.byType(TextElementView)).resources.focusNode,
+        'code' || 'title' => tester.widget<CodeElementView>(find.byType(CodeElementView)).resources.focusNode,
+        _ => tester.widget<MediaElementView>(find.byType(MediaElementView)).resources.focusNode,
       };
       final editingSurface = switch (editor) {
         'text' => find.byKey(const ValueKey('text-markdown-editor')),
@@ -1355,17 +1356,17 @@ void main() {
       expect(focus.hasFocus, isFalse);
       expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
       if (editor == 'text') {
-        final model = tester.widget<TextTool>(find.byType(TextTool)).model;
+        final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
         expect(model.active, isFalse);
         expect(model.editing, isFalse);
         expect(model.controller.text, 'contents');
       } else if (editor == 'code' || editor == 'title') {
-        final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+        final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
         expect(model.active, isFalse);
         expect(model.controller.text, 'contents');
         expect(model.title, 'Title');
       } else {
-        expect(tester.widget<MediaTool>(find.byType(MediaTool)).model.active, isFalse);
+        expect(tester.widget<MediaElementView>(find.byType(MediaElementView)).resources.active, isFalse);
       }
       await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
       expect(_canvas(tester).childOrder, ['other', 'editor']);
@@ -1379,7 +1380,7 @@ void main() {
 
   testWidgets('image Arrange ends activation and reopening captures the inactive image', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_editorDocument('media')), attachmentStore: TestAttachmentStore());
-    final model = tester.widget<MediaTool>(find.byType(MediaTool)).model;
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     await tester.runAsync(() => model.setDeviceImage(onePixelPngBytes, 'png'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('media-image')));
@@ -1603,7 +1604,7 @@ CanvasDocument _autoDocument(String kind) {
 
 Offset _autoHitPoint(WidgetTester tester, String kind) => switch (kind) {
   'shape' => const Offset(305, 305),
-  'pen' => tester.getCenter(find.byType(PenStroke)),
+  'pen' => tester.getCenter(find.byType(PenElementView)),
   'arrow' => const Offset(150, 250),
   _ => tester.getCenter(
     find.byKey(
@@ -1619,8 +1620,9 @@ Offset _autoHitPoint(WidgetTester tester, String kind) => switch (kind) {
 
 LazyCanvasController _canvas(WidgetTester tester) => tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
 
-Map<String, ShapeModel> _models(WidgetTester tester) => {
-  for (final widget in tester.widgetList<Shape>(find.byType(Shape))) widget.model.data.id: widget.model,
+Map<String, ElementFixture<ShapeElementData>> _models(WidgetTester tester) => {
+  for (final widget in tester.widgetList<ShapeElementView>(find.byType(ShapeElementView)))
+    widget.data.id: canvasElement(tester, widget.data),
 };
 
 List<String> _order(CanvasDocument document) => document.elements.map((element) => element.id).toList();

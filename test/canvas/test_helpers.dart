@@ -5,15 +5,16 @@ import 'package:elseplane/app/workspace.dart';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
-import 'package:elseplane/canvas/editor/canvas_element_model.dart';
 import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
-import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
-import 'package:elseplane/canvas/tools/code/code_tool.dart';
-import 'package:elseplane/canvas/tools/media/media_tool.dart';
-import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
-import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
-import 'package:elseplane/canvas/tools/text/text_tool.dart';
+import 'package:elseplane/canvas/editor/element_resources.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_editor_resources.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_layout.dart';
+import 'package:elseplane/canvas/editor/elements/media/media_resources.dart';
+import 'package:elseplane/canvas/editor/elements/pen/pen_resources.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
+import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
+import 'package:elseplane/canvas/geometry/element_geometry.dart';
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_project_files.dart';
@@ -151,17 +152,19 @@ EditorSession testSession(CanvasDocument document) {
 EditorSession _elementSession(CanvasElementData data) =>
     testSession(CanvasDocument(background: CanvasBackgroundKind.plain, elements: [data]));
 
-TextBlockModel testTextModel(TextElementData data) => TextBlockModel(_elementSession(data), data);
-CodeBlockModel testCodeModel(CodeElementData data) => CodeBlockModel(_elementSession(data), data);
-MediaModel testMediaModel(MediaElementData data, AttachmentStore store) =>
-    MediaModel(_elementSession(data), data, store);
-ShapeModel testShapeModel(ShapeElementData data) => ShapeModel(_elementSession(data), data);
-PenStrokeModel testPenModel(PenElementData data) => PenStrokeModel(_elementSession(data), data);
-ArrowModel testArrowModel(ArrowElementData data) => ArrowModel(_elementSession(data), data);
+TextEditorResources testTextModel(TextElementData data) => TextEditorResources(_elementSession(data), data);
+CodeEditorResources testCodeModel(CodeElementData data) => CodeEditorResources(_elementSession(data), data);
+MediaResources testMediaModel(MediaElementData data, AttachmentStore store) =>
+    MediaResources(_elementSession(data), data, store);
+ElementFixture<ShapeElementData> testShapeFixture(ShapeElementData data) =>
+    ElementFixture(_elementSession(data), data.id);
+PenResources testPenModel(PenElementData data) => PenResources(_elementSession(data), data);
+ElementFixture<ArrowElementData> testArrowFixture(ArrowElementData data) =>
+    ElementFixture(_elementSession(data), data.id);
 
 /// Sets up editor fixtures through the same operations used by presentation.
 /// Keeps tests from writing presentation snapshots directly.
-extension CanvasModelFixture on CanvasElementModel {
+extension CanvasModelFixture on ElementResources {
   void setSelected({required bool value}) =>
       session.setSelection(value ? {...session.selectedIds, data.id} : ({...session.selectedIds}..remove(data.id)));
   void setActive({required bool value}) => session.setActive(value ? data.id : null);
@@ -188,7 +191,7 @@ extension CanvasModelFixture on CanvasElementModel {
   }
 
   void resizeBy(Offset delta) {
-    final model = this as MediaModel;
+    final model = this as MediaResources;
     session.resizeMedia(data.id, delta, model.aspectRatio!);
   }
 }
@@ -218,4 +221,48 @@ Future<void> replaceTestEditor(WidgetTester tester, CanvasDocument document) asy
 EditorSession Function() testSessionProvider() {
   final session = testSession(CanvasLibrary.emptyDocument);
   return () => session;
+}
+
+// ---------- Value-only element fixtures ----------
+
+ElementFixture<T> canvasElement<T extends CanvasElementData>(WidgetTester tester, T value) =>
+    ElementFixture(tester.widget<CanvasPage>(find.byType(CanvasPage)).session!, value.id);
+
+@immutable
+class ElementFixture<T extends CanvasElementData> {
+  const ElementFixture(this.session, this.id);
+  final EditorSession session;
+  final String id;
+  T get data => session.element(id)! as T;
+  bool get selected => session.isSelected(id);
+  bool get active => session.activeId == id;
+  bool get autoArrange => data.autoArrange;
+  Offset get canvasPosition => elementBounds(data, codeTitleHeight: codeTitleHeight, mediaSize: Size.zero).topLeft;
+  Size get canvasSize => elementBounds(data, codeTitleHeight: codeTitleHeight, mediaSize: Size.zero).size;
+  void setSelected({required bool value}) =>
+      session.setSelection(value ? {...session.selectedIds, id} : session.selectedIds.difference({id}));
+  void setActive({required bool value}) => session.setActive(value ? id : null);
+  @override
+  bool operator ==(Object other) => other is ElementFixture && identical(session, other.session) && id == other.id;
+  @override
+  int get hashCode => Object.hash(session, id);
+  void setAutoArrange({required bool value}) => session.setAutoArrange([id], value: value);
+  void moveBy(Offset delta) => session.move([id], delta);
+}
+
+extension ArrowFixtureGeometry on ElementFixture<ArrowElementData> {
+  void setStrokeWidth(double width) => session.setArrowOptions(id, strokeWidth: width);
+  ArrowGeometry get geometry => data.geometry;
+  ArrowGeometry get localGeometry => data.localGeometry;
+  Rect get bounds => data.bounds;
+  Offset get start => data.start;
+  Offset get end => data.end;
+  List<Offset> get controls => data.controls;
+  int get pointCount => data.pointCount;
+  Offset point(int index) => data.point(index);
+  bool setPoint(int index, Offset point) {
+    final previous = data;
+    session.setArrowPoint(id, index, point);
+    return previous != data;
+  }
 }

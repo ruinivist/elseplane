@@ -2,9 +2,10 @@
 // Exercises the shape tool through model and canvas widget flows.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
+import 'package:elseplane/canvas/editor/tools/shape_tool.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
-import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
-import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
@@ -66,7 +67,7 @@ void main() {
   });
 
   testWidgets('hollow shapes hit their full geometric area', (tester) async {
-    final model = testShapeModel(
+    final model = testShapeFixture(
       ShapeElementData(
         id: 'ellipse',
         kind: ShapeKind.ellipse,
@@ -99,8 +100,10 @@ void main() {
                 size: model.canvasSize,
                 child: Listener(
                   onPointerDown: (_) => shapeTaps++,
-                  child: Shape(
-                    model: model,
+                  child: ShapeElementView(
+                    data: model.data,
+                    selected: model.selected,
+                    active: model.active,
                     onActivate: () {},
                     onMove: (_) {},
                     onResize: (_) {},
@@ -124,7 +127,7 @@ void main() {
       ),
     );
 
-    final rect = tester.getRect(find.byType(Shape));
+    final rect = tester.getRect(find.byType(ShapeElementView));
     await tester.tapAt(rect.center + const Offset(60, 0));
     await tester.pump();
     expect(shapeTaps, 1);
@@ -139,8 +142,6 @@ void main() {
     await tester.pump();
     expect(shapeTaps, 1);
     expect(backgroundTaps, 1);
-
-    model.dispose();
   });
 
   testWidgets('drawing tools receive drags started over text blocks', (
@@ -180,7 +181,7 @@ void main() {
     expect(find.byKey(const ValueKey('arrow-preview')), findsOneWidget);
     await arrowDrag.up();
     await tester.pump();
-    expect(find.byType(Arrow), findsOneWidget);
+    expect(find.byType(ArrowElementView), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('toolbar-shape')));
     await tester.pump();
@@ -193,7 +194,7 @@ void main() {
     expect(find.byKey(const ValueKey('shape-preview')), findsOneWidget);
     await shapeDrag.up();
     await tester.pump();
-    expect(find.byType(Shape), findsOneWidget);
+    expect(find.byType(ShapeElementView), findsOneWidget);
   });
 
   testWidgets('shape options fit four per row at desktop and narrow widths', (tester) async {
@@ -280,14 +281,15 @@ void main() {
 
     await tester.dragFrom(const Offset(100, 180), const Offset(140, 100));
     await tester.pumpAndSettle();
-    ShapeModel model() => tester.widget<Shape>(find.byType(Shape)).model;
-    expect(model().fillColor, blue);
+    ElementFixture<ShapeElementData> model() =>
+        canvasElement(tester, tester.widget<ShapeElementView>(find.byType(ShapeElementView)).data);
+    expect(model().data.fillColor, blue);
     tester.widget<ColorControl>(fill).onChanged(custom);
     await tester.pump();
-    expect(model().fillColor, custom);
+    expect(model().data.fillColor, custom);
     await tester.tap(find.byKey(const ValueKey('shape-fill-none')));
     await tester.pumpAndSettle();
-    expect(model().fillColor, isNull);
+    expect(model().data.fillColor, isNull);
     expect(tester.widget<ColorControl>(fill).color, isNull);
     await pumpPastSave(tester);
     expect((store.persisted!.elements.single as ShapeElementData).fillColor, isNull);
@@ -296,7 +298,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
-    expect(model().fillColor, custom);
+    expect(model().data.fillColor, custom);
     await pumpPastSave(tester);
     expect((store.persisted!.elements.single as ShapeElementData).fillColor, custom);
   });
@@ -336,16 +338,16 @@ void main() {
     expect(find.byKey(const ValueKey('shape-preview')), findsOneWidget);
     await firstDrag.up();
     await tester.pump();
-    expect(find.byType(Shape), findsOneWidget);
+    expect(find.byType(ShapeElementView), findsOneWidget);
     expect(
-      tester.widget<Shape>(find.byType(Shape)).model.data.kind,
+      canvasElement(tester, tester.widget<ShapeElementView>(find.byType(ShapeElementView)).data).data.kind,
       ShapeKind.roundedRectangle,
     );
     expect(
-      tester.widget<Shape>(find.byType(Shape)).model.data.strokeColor,
+      canvasElement(tester, tester.widget<ShapeElementView>(find.byType(ShapeElementView)).data).data.strokeColor,
       blue,
     );
-    final first = tester.widget<Shape>(find.byType(Shape)).model;
+    final first = canvasElement(tester, tester.widget<ShapeElementView>(find.byType(ShapeElementView)).data);
     expect(first.active, isTrue);
     expect(first.selected, isFalse);
     expect(tester.widget<ToolbarButton>(toolbar).selected, isFalse);
@@ -362,7 +364,7 @@ void main() {
     await secondDrag.moveTo(const Offset(440, 260));
     await secondDrag.up();
     await tester.pump();
-    expect(find.byType(Shape), findsOneWidget);
+    expect(find.byType(ShapeElementView), findsOneWidget);
 
     await tester.tap(toolbar);
     await tester.pump();
@@ -389,15 +391,15 @@ void main() {
     await thirdDrag.moveTo(const Offset(620, 260));
     await thirdDrag.up();
     await tester.pump();
-    expect(find.byType(Shape), findsNWidgets(2));
+    expect(find.byType(ShapeElementView), findsNWidgets(2));
     expect(
-      tester.widget<Shape>(find.byType(Shape).last).model.data.kind,
+      canvasElement(tester, tester.widget<ShapeElementView>(find.byType(ShapeElementView).last).data).data.kind,
       ShapeKind.roundedRectangle,
     );
     expect(tester.widget<ToolbarButton>(toolbar).selected, isFalse);
 
     final firstFinder = find.byWidgetPredicate(
-      (widget) => widget is Shape && identical(widget.model, first),
+      (widget) => widget is ShapeElementView && widget.data.id == first.id,
     );
     final originalPosition = first.data.position;
     final originalSize = first.data.size;
@@ -462,17 +464,18 @@ void main() {
     );
     await pumpCanvas(tester, store);
 
-    ShapeModel model() => tester.widget<Shape>(find.byType(Shape)).model;
+    ElementFixture<ShapeElementData> model() =>
+        canvasElement(tester, tester.widget<ShapeElementView>(find.byType(ShapeElementView)).data);
 
     final originalPosition = model().data.position;
-    await tester.drag(find.byType(Shape), const Offset(60, 40));
+    await tester.drag(find.byType(ShapeElementView), const Offset(60, 40));
     await tester.pump();
     expect(model().data.position, isNot(originalPosition));
     expect(model().active, isFalse);
     expect(model().selected, isFalse);
     expect(find.byKey(const ValueKey('shape-settings-panel')), findsNothing);
 
-    await tester.tap(find.byType(Shape));
+    await tester.tap(find.byType(ShapeElementView));
     await tester.pump();
     expect(model().active, isTrue);
     expect(model().selected, isFalse);
@@ -498,10 +501,10 @@ void main() {
     await tester.pump();
 
     final edited = model();
-    expect(edited.kind, ShapeKind.ellipse);
-    expect(edited.strokeColor, green);
-    expect(edited.fillColor, red);
-    expect(edited.strokeWidth, 4);
+    expect(edited.data.kind, ShapeKind.ellipse);
+    expect(edited.data.strokeColor, green);
+    expect(edited.data.fillColor, red);
+    expect(edited.data.strokeWidth, 4);
     expect(
       tester.widget<ToolbarButton>(find.byKey(const ValueKey('shape-option-ellipse'))).selected,
       isTrue,
@@ -510,7 +513,7 @@ void main() {
     expect(store.persisted!.elements.single.toJson(), edited.data.toJson());
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.tap(find.byType(Shape));
+    await tester.tap(find.byType(ShapeElementView));
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
     expect(model().active, isTrue);
@@ -518,7 +521,7 @@ void main() {
     expect(find.byKey(const ValueKey('shape-settings-panel')), findsOneWidget);
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.tap(find.byType(Shape));
+    await tester.tap(find.byType(ShapeElementView));
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
     expect(model().active, isTrue);
@@ -545,7 +548,7 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.keyZ);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    expect(model().strokeWidth, 2);
-    expect(model().kind, ShapeKind.ellipse);
+    expect(model().data.strokeWidth, 2);
+    expect(model().data.kind, ShapeKind.ellipse);
   });
 }

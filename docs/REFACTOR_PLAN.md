@@ -70,6 +70,8 @@ Workspace owns `EditorSession`, which publishes immutable documents through name
 
 ## 5. Separate rendering resources and input
 
+**Status:** in progress. Ownership extraction is implemented. Completion is blocked by re_editor 0.10.0 changing scroll positions in wrapped code after culling.
+
 - Introduce `CanvasView` as the document-to-grid projection and owner of the grid controller. Retain element resources by ID/type outside lazily culled widgets.
 - Split existing models into immutable values, required resource owners, and views. Preserve controllers, scroll positions, loaded images, and measured layout when identity survives restoration.
 - Move pointer arbitration into `CanvasInput` and focus-aware keyboard handling into `CanvasShortcuts`. Use explicit gesture transitions and preserve native browser clipboard-event access.
@@ -79,6 +81,8 @@ Workspace owns `EditorSession`, which publishes immutable documents through name
 - Remove old shared-private tool libraries and model wrappers as their callers migrate.
 
 **Exit:** document geometry/order has one authority. Undo and culling preserve surviving resources. Two-finger takeover and cancellation cannot restart interrupted gestures or apply stale edits.
+
+CanvasView now owns document projection, the grid controller, and resources retained by element ID/type. Text, code, media, and pen retain only their required resources; shape and arrow views read immutable values directly. CanvasInput owns pointer arbitration and explicit gesture transitions, CanvasShortcuts handles focus-aware commands, and CanvasClipboard owns canvas clipboard edits. Element clipboard and device-image workflows live with their editors. Controllers and loaded images survive culling, removal invalidates image loads before deferred disposal, and session replacement preserves the viewport while starting fresh resource and input lifetimes. The [resource culling regression test](../test/canvas/editor/element_resources_test.dart) reproduces the remaining re_editor 0.10.0 defect: a wrapped code editor returns at scroll offset 260 after leaving at 120. Its public API does not provide a scroll snapshot/restore contract. Stage 5 remains open pending a library fix; the re_editor dependency is unchanged. Creation tools and element presentation use ordinary imports under the editor; the old tool parts and model wrappers are removed. The grid now exposes the read-only `overlappingChildren` query for measured, rotated layout rectangles. CanvasView converts marquee bounds into canvas coordinates and delegates overlap calculations to the grid; selection policy remains in CanvasInput. CanvasClipboard serializes captured targets in document stacking order for both Copy and Cut.
 
 ## 6. Consolidate presentation and guidance
 

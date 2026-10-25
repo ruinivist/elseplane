@@ -4,13 +4,13 @@
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
-import 'package:elseplane/canvas/tools/arrow/arrow_tool.dart';
-import 'package:elseplane/canvas/tools/code/code_tool.dart';
-import 'package:elseplane/canvas/tools/media/media_tool.dart';
-import 'package:elseplane/canvas/tools/pen/pen_tool.dart';
-import 'package:elseplane/canvas/tools/shape/shape_tool.dart';
-import 'package:elseplane/canvas/tools/text/text_tool.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,7 +28,7 @@ void main() {
 
   testWidgets('empty touch pans after slop, preserves selection, and converts zoom', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
-    final model = tester.widget<PenStroke>(find.byType(PenStroke)).model..setSelected(value: true);
+    final model = tester.widget<PenElementView>(find.byType(PenElementView)).resources..setSelected(value: true);
     final controller = _canvas(tester)..updateScalebyDelta(1);
     final before = controller.offset;
     final first = await tester.startGesture(const Offset(550, 400));
@@ -46,7 +46,7 @@ void main() {
 
   testWidgets('empty touch tap clears activation and selection only on release', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document([_code()])));
-    final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+    final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
     await tester.tapAt(const Offset(220, 300));
     await tester.pumpAndSettle();
     model.setSelected(value: true);
@@ -65,7 +65,7 @@ void main() {
   for (final displacement in [Offset.zero, const Offset(60, 30)]) {
     testWidgets('canceling empty touch at $displacement preserves selection without inertia', (tester) async {
       await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
-      final model = tester.widget<PenStroke>(find.byType(PenStroke)).model..setSelected(value: true);
+      final model = tester.widget<PenElementView>(find.byType(PenElementView)).resources..setSelected(value: true);
       final controller = _canvas(tester);
       final touch = await tester.startGesture(const Offset(550, 400));
       await touch.moveBy(displacement, timeStamp: const Duration(milliseconds: 16));
@@ -101,7 +101,7 @@ void main() {
   for (final displacement in [Offset.zero, const Offset(60, 30)]) {
     testWidgets('two fingers take over empty touch at $displacement without a jump or fling', (tester) async {
       await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
-      final model = tester.widget<PenStroke>(find.byType(PenStroke)).model..setSelected(value: true);
+      final model = tester.widget<PenElementView>(find.byType(PenElementView)).resources..setSelected(value: true);
       final controller = _canvas(tester);
       final first = await tester.startGesture(const Offset(200, 400), pointer: 1);
       await first.moveBy(displacement, timeStamp: const Duration(milliseconds: 16));
@@ -136,7 +136,7 @@ void main() {
     await touch.up();
     await tester.pump(const Duration(milliseconds: 200));
     expect(controller.offset, frozen);
-    expect(find.byType(PenStroke), findsNothing);
+    expect(find.byType(PenElementView), findsNothing);
   });
 
   testWidgets('document replacement cancels an empty touch pan', (tester) async {
@@ -152,14 +152,14 @@ void main() {
     await touch.up();
     await tester.pump(const Duration(milliseconds: 200));
     expect(controller.offset, frozen);
-    expect(tester.widget<PenStroke>(find.byType(PenStroke)).model.data.position, const Offset(100, 250));
+    expect(tester.widget<PenElementView>(find.byType(PenElementView)).resources.data.position, const Offset(100, 250));
   });
 
   for (final select in [false, true]) {
     testWidgets('touch object movement with Select $select leaves the viewport fixed', (tester) async {
       await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])), platform: TargetPlatform.android);
       if (select) await _chooseTool(tester, 'select');
-      final model = tester.widget<PenStroke>(find.byType(PenStroke)).model;
+      final model = tester.widget<PenElementView>(find.byType(PenElementView)).resources;
       await tester.dragFrom(const Offset(150, 300), const Offset(60, 30));
       expect(model.data.position, isNot(const Offset(100, 250)));
       expect((_canvas(tester).offset, _canvas(tester).scale), (Offset.zero, 1));
@@ -258,7 +258,10 @@ void main() {
       platform: TargetPlatform.android,
     );
     await _chooseTool(tester, 'select');
-    final models = tester.widgetList<PenStroke>(find.byType(PenStroke)).map((stroke) => stroke.model).toList();
+    final models = tester
+        .widgetList<PenElementView>(find.byType(PenElementView))
+        .map((stroke) => stroke.resources)
+        .toList();
     models[1].setSelected(value: true);
     final touch = await tester.startGesture(const Offset(60, 200));
     await touch.moveBy(const Offset(5, 0));
@@ -286,7 +289,7 @@ void main() {
   testWidgets('Select empty tap clears activation and selection on release', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document([_code()])), platform: TargetPlatform.android);
     await _chooseTool(tester, 'select');
-    final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+    final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
     await tester.tapAt(const Offset(220, 300));
     await tester.pumpAndSettle();
     model.setSelected(value: true);
@@ -308,7 +311,10 @@ void main() {
         platform: TargetPlatform.android,
       );
       await _chooseTool(tester, 'select');
-      final models = tester.widgetList<PenStroke>(find.byType(PenStroke)).map((stroke) => stroke.model).toList();
+      final models = tester
+          .widgetList<PenElementView>(find.byType(PenElementView))
+          .map((stroke) => stroke.resources)
+          .toList();
       models[1].setSelected(value: true);
       final touch = await tester.startGesture(const Offset(60, 200), pointer: 1);
       await touch.moveTo(const Offset(250, 350));
@@ -346,13 +352,13 @@ void main() {
     await drawing.moveBy(const Offset(40, 20));
     await drawing.up();
     await tester.pump();
-    expect(find.byType(PenStroke), findsNothing);
+    expect(find.byType(PenElementView), findsNothing);
     expect(_selectEnabled(tester), isTrue);
     await _chooseTool(tester, 'shape');
     expect(_selectEnabled(tester), isFalse);
     await tester.dragFrom(const Offset(200, 300), const Offset(80, 60));
     await tester.pump();
-    expect(find.byType(Shape), findsOneWidget);
+    expect(find.byType(ShapeElementView), findsOneWidget);
     expect(_selectEnabled(tester), isFalse);
   });
 
@@ -365,7 +371,10 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pump();
-      final models = tester.widgetList<PenStroke>(find.byType(PenStroke)).map((stroke) => stroke.model).toList();
+      final models = tester
+          .widgetList<PenElementView>(find.byType(PenElementView))
+          .map((stroke) => stroke.resources)
+          .toList();
       expect(models.every((model) => model.selected && !model.active), isTrue);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -384,7 +393,7 @@ void main() {
     await _chooseTool(tester, 'select');
     await tester.tapAt(const Offset(220, 300));
     await tester.pumpAndSettle();
-    final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+    final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
     expect(model.active, isTrue);
     model.setSelected(value: true);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -427,16 +436,22 @@ void main() {
       platform: TargetPlatform.android,
     );
     List<Offset> positions() => [
-      tester.widget<PenStroke>(find.byType(PenStroke)).model.data.position,
-      tester.widget<Shape>(find.byType(Shape)).model.data.position,
-      tester.widget<Arrow>(find.byType(Arrow)).model.data.start,
+      tester.widget<PenElementView>(find.byType(PenElementView)).resources.data.position,
+      canvasElement(tester, tester.widget<ShapeElementView>(find.byType(ShapeElementView)).data).data.position,
+      canvasElement(tester, tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data).data.start,
     ];
     final before = positions();
     for (final select in [false, true]) {
       if (select) await _chooseTool(tester, 'select');
-      tester.widget<PenStroke>(find.byType(PenStroke)).model.setSelected(value: true);
-      tester.widget<Shape>(find.byType(Shape)).model.setSelected(value: true);
-      tester.widget<Arrow>(find.byType(Arrow)).model.setSelected(value: true);
+      tester.widget<PenElementView>(find.byType(PenElementView)).resources.setSelected(value: true);
+      canvasElement(
+        tester,
+        tester.widget<ShapeElementView>(find.byType(ShapeElementView)).data,
+      ).setSelected(value: true);
+      canvasElement(
+        tester,
+        tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data,
+      ).setSelected(value: true);
       final move = await tester.startGesture(before[0] + const Offset(50, 50));
       await move.moveBy(const Offset(40, 20));
       await move.moveBy(const Offset(30, 10));
@@ -455,19 +470,23 @@ void main() {
     }
   });
 
-  testWidgets('touch marquee overlaps rotated bounds at non-default zoom', (tester) async {
+  testWidgets('touch marquee overlaps rotated bounds after pan and non-default zoom', (tester) async {
     final code = _code().copyWith(position: const Offset(160, 140), rotation: math.pi / 2, title: '');
     await pumpCanvas(tester, TestLibraryStore(_document([code])), platform: TargetPlatform.android);
     await _chooseTool(tester, 'select');
-    final controller = _canvas(tester)..updateScalebyDelta(0.5, focalPoint: Offset.zero);
+    const panDelta = Offset(-80, 60);
+    final controller = _canvas(tester)
+      ..updateScalebyDelta(0.5, focalPoint: Offset.zero)
+      ..onScaleStart(ScaleStartDetails())
+      ..onScaleUpdate(ScaleUpdateDetails(focalPointDelta: panDelta));
     await tester.pump();
     final before = controller.offset;
     // This box hits the rotated top edge, above the unrotated screen bounds.
-    final touch = await tester.startGesture(const Offset(415, 175));
-    await touch.moveTo(const Offset(475, 205));
+    final touch = await tester.startGesture(const Offset(415, 175) + panDelta);
+    await touch.moveTo(const Offset(475, 205) + panDelta);
     await touch.up();
     await tester.pump();
-    final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+    final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
     expect(model.selected, isTrue);
     expect(model.active, isFalse);
     expect(controller.offset, before);
@@ -480,7 +499,10 @@ void main() {
       TestLibraryStore(_document([_pen('a'), _pen('b', const Offset(350, 250))])),
       platform: TargetPlatform.linux,
     );
-    final models = tester.widgetList<PenStroke>(find.byType(PenStroke)).map((stroke) => stroke.model).toList();
+    final models = tester
+        .widgetList<PenElementView>(find.byType(PenElementView))
+        .map((stroke) => stroke.resources)
+        .toList();
     Future<void> marquee(Offset end) async {
       final mouse = await tester.startGesture(const Offset(60, 200), kind: PointerDeviceKind.mouse);
       await mouse.moveTo(end);
@@ -509,7 +531,7 @@ void main() {
     expect(_canvas(tester).offset, Offset.zero);
   });
 
-  for (final (tool, type) in [('draw', PenStroke), ('arrow', Arrow), ('shape', Shape)]) {
+  for (final (tool, type) in [('draw', PenElementView), ('arrow', ArrowElementView), ('shape', ShapeElementView)]) {
     testWidgets('$tool draws with one finger and discards on navigation takeover', (tester) async {
       await pumpCanvas(tester, TestLibraryStore(_document()));
       await _chooseTool(tester, tool);
@@ -536,7 +558,7 @@ void main() {
     });
   }
 
-  for (final (tool, type) in [('text', TextTool), ('code', CodeTool), ('media', MediaTool)]) {
+  for (final (tool, type) in [('text', TextElementView), ('code', CodeElementView), ('media', MediaElementView)]) {
     testWidgets('$tool touch placement waits for release and cancels for pinch', (tester) async {
       await pumpCanvas(tester, TestLibraryStore(_document()));
       await _chooseTool(tester, tool);
@@ -583,20 +605,23 @@ void main() {
     await stylus.moveBy(const Offset(30, 20));
     await stylus.up();
     await tester.pump();
-    expect(find.byType(PenStroke), findsNothing);
+    expect(find.byType(PenElementView), findsNothing);
     final canceled = await tester.startGesture(const Offset(200, 300));
     await canceled.moveBy(const Offset(50, 20));
     await canceled.cancel();
     await tester.pump();
-    expect(find.byType(PenStroke), findsNothing);
+    expect(find.byType(PenElementView), findsNothing);
     await tester.dragFrom(const Offset(200, 300), const Offset(120, 90));
     await tester.pump();
-    expect(find.byType(PenStroke), findsOneWidget);
+    expect(find.byType(PenElementView), findsOneWidget);
   });
 
   testWidgets('group movement stops on takeover and remains one undo step', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document([_pen('a'), _pen('b', const Offset(350, 250))])));
-    final models = tester.widgetList<PenStroke>(find.byType(PenStroke)).map((stroke) => stroke.model).toList();
+    final models = tester
+        .widgetList<PenElementView>(find.byType(PenElementView))
+        .map((stroke) => stroke.resources)
+        .toList();
     for (final model in models) {
       model.setSelected(value: true);
     }
@@ -613,7 +638,10 @@ void main() {
     await second.up();
     await first.up();
     await _undo(tester);
-    expect(tester.widgetList<PenStroke>(find.byType(PenStroke)).map((stroke) => stroke.model.data.position), before);
+    expect(
+      tester.widgetList<PenElementView>(find.byType(PenElementView)).map((stroke) => stroke.resources.data.position),
+      before,
+    );
   });
 
   testWidgets('eraser keeps prior deletions and stops erasing during navigation', (tester) async {
@@ -622,24 +650,24 @@ void main() {
     await _chooseTool(tester, 'erase');
     final first = await tester.startGesture(const Offset(150, 300), pointer: 1);
     await tester.pump();
-    expect(find.byType(PenStroke), findsOneWidget);
+    expect(find.byType(PenElementView), findsOneWidget);
     final second = await tester.startGesture(const Offset(500, 450), pointer: 2);
     await first.moveTo(const Offset(400, 300));
     await second.up();
     await first.moveTo(const Offset(400, 300));
     await first.up();
     await tester.pump();
-    expect(find.byType(PenStroke), findsOneWidget);
+    expect(find.byType(PenElementView), findsOneWidget);
     await pumpPastSave(tester);
     expect(store.persisted!.elements.map((element) => element.id), ['b']);
     await _undo(tester);
-    expect(find.byType(PenStroke), findsNWidgets(2));
+    expect(find.byType(PenElementView), findsNWidgets(2));
   });
 
   for (final control in ['code-block-handle', 'code-block-rotate-control', 'code-block-resize-handle']) {
     testWidgets('$control hands off without further object changes', (tester) async {
       await pumpCanvas(tester, TestLibraryStore(_document([_code()])));
-      final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+      final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
       await tester.tapAt(const Offset(220, 300));
       await tester.pumpAndSettle();
       final first = await tester.startGesture(tester.getCenter(find.byKey(ValueKey(control))), pointer: 1);
@@ -658,7 +686,7 @@ void main() {
       expect((model.data.position, model.size, model.rotation), edited);
       FocusManager.instance.primaryFocus?.unfocus();
       await _undo(tester);
-      final restored = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+      final restored = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
       expect(
         (restored.data.position, restored.size, restored.rotation),
         (const Offset(180, 220), const Size(280, 240), 0),
@@ -669,7 +697,7 @@ void main() {
 
   testWidgets('pinch from a code title does not activate on final release', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document([_code()])));
-    final model = tester.widget<CodeTool>(find.byType(CodeTool)).model;
+    final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
     final title = find.text('title');
     final first = await tester.startGesture(tester.getCenter(title), pointer: 1);
     final second = await tester.startGesture(const Offset(600, 450), pointer: 2);
@@ -703,7 +731,7 @@ void main() {
         ]),
       ),
     );
-    final model = tester.widget<Arrow>(find.byType(Arrow)).model;
+    final model = canvasElement(tester, tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data);
     await tester.tapAt(const Offset(350, 300));
     await tester.pumpAndSettle();
     final first = await tester.startGesture(
@@ -721,7 +749,10 @@ void main() {
     await second.up();
     await first.up();
     await _undo(tester);
-    expect(tester.widget<Arrow>(find.byType(Arrow)).model.data.end, const Offset(500, 300));
+    expect(
+      canvasElement(tester, tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data).data.end,
+      const Offset(500, 300),
+    );
   });
 }
 

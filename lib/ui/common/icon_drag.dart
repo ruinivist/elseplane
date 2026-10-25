@@ -17,12 +17,17 @@ GestureRecognizerFactoryWithHandlers<ImmediateMultiDragGestureRecognizer> immedi
 }
 
 class CallbackDrag extends Drag {
-  CallbackDrag(this.onUpdate);
+  CallbackDrag(this.onUpdate, {this.onEnd});
 
   final ValueChanged<Offset> onUpdate;
+  final VoidCallback? onEnd;
 
   @override
   void update(DragUpdateDetails details) => onUpdate(details.delta);
+  @override
+  void end(DragEndDetails details) => onEnd?.call();
+  @override
+  void cancel() => onEnd?.call();
 }
 
 // ---------- Widgets ----------
