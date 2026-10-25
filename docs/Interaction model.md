@@ -38,6 +38,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 ## Code blocks
 
+- Code lines never wrap; long lines scroll horizontally. Wrapping is fixed off and has no user option.
 - Clicking the read-only code surface or title activates the block and makes its source and title editable.
 - Dragging the inactive surface or title moves the block without activating it or leaving a code selection behind.
 - The active state exposes the editable source and title, language picker, resize handle, and move, rotate, arrange, and delete controls.

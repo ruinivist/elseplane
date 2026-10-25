@@ -198,6 +198,8 @@ class _CodeElementViewState extends State<CodeElementView> {
                     scrollController: model.scrollController,
                     focusNode: model.focusNode,
                     autofocus: false,
+                    // Enabling wrapping reintroduces re_editor 0.10.0's scroll jump after culling.
+                    wordWrap: false,
                     readOnly: !editing,
                     shortcutOverrideActions: editing
                         ? {

@@ -43,19 +43,19 @@ Fix: invalidate pending canvas clipboard work when pressing a different object c
 
 ## 3. Wrapped code scroll position changes after culling
 
-Status: open. Blocks completion of refactor stage 5.
+Status: avoided by design. Code blocks hardcode wrapping off and scroll long lines horizontally, so this no longer blocks refactor stage 5. The upstream defect remains relevant if wrapping is ever enabled.
 
 Location: `re_editor` 0.10.0 wrapped-line layout when a code editor remounts.
 
 To reproduce:
 
-1. Create a code element with long, wrapped lines.
+1. Enable code wrapping in the implementation and create a code element with long, wrapped lines.
 2. Scroll vertically within the code editor.
 3. Pan the canvas until the element is culled, then pan back.
 
-Expected: the editor returns to the same content and scroll position. Actual: wrapped-line layout changes the restored position; the enabled, isolated `known re_editor defect: wrapped code retains its scroll offset after culling` [regression test](../test/canvas/editor/element_resources_test.dart) reproduces an offset changing from 120 to 260 even though the scroll controller retains its offset.
+Expected: the editor returns to the same content and scroll position. Actual: wrapped-line layout changes the restored position. The former wrapped-code regression reproduced an offset changing from 120 to 260 even though the scroll controller retained its offset; that test was removed because wrapping is no longer supported.
 
-Fix: add correct wrapped-code scroll restoration in `re_editor`. Its public API does not provide a scroll snapshot/restore contract. Leave stage 5 pending until a library fix is available; the dependency remains unchanged.
+Before enabling wrapping, fix wrapped-code scroll restoration in `re_editor`. Its public API does not provide a scroll snapshot/restore contract. A comment beside `wordWrap: false` records this constraint; the dependency remains unchanged.
 
 ## 4. Corrupt image bytes pass validation on web
 

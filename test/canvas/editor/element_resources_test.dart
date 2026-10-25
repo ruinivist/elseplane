@@ -87,39 +87,6 @@ void main() {
     expect(code.scrollController.verticalScroller.offset, codeOffset);
   });
 
-  // Keep enabled until re_editor supplies correct wrapped-line restoration.
-  // This is the deferred defect in docs/BUGS.md #3, isolated from app contracts.
-  testWidgets('known re_editor defect: wrapped code retains its scroll offset after culling', (tester) async {
-    await pumpCanvas(
-      tester,
-      TestLibraryStore(
-        CanvasDocument(
-          background: CanvasBackgroundKind.plain,
-          elements: [
-            CodeElementData(
-              id: 'code',
-              position: const ui.Offset(400, 80),
-              size: const ui.Size(300, 240),
-              language: CodeLanguage.dart,
-              source: List.generate(80, (i) => 'line $i ${'x' * 120}').join('\n'),
-              title: 'Code',
-              showLineNumbers: true,
-            ),
-          ],
-        ),
-      ),
-    );
-    final code = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
-    code.scrollController.verticalScroller.jumpTo(120);
-    await tester.pumpAndSettle();
-    final offset = code.scrollController.verticalScroller.offset;
-    await _pan(tester, -20000);
-    expect(find.byType(CodeElementView), findsNothing);
-    await _pan(tester, 20000);
-    expect(tester.widget<CodeElementView>(find.byType(CodeElementView)).resources, same(code));
-    expect(code.scrollController.verticalScroller.offset, offset);
-  });
-
   for (final delayed in [false, true]) {
     testWidgets('Markdown images survive culling and editing with delayed load $delayed', (tester) async {
       await _cacheImage(tester);
