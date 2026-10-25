@@ -7,6 +7,7 @@ import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/ui/common/surface.dart';
+import 'package:elseplane/ui/common/surface_icon_button.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,13 +40,11 @@ void main() {
             child: const Icon(Icons.edit, size: 20),
           ),
       ];
-      Widget settings() => Surface(
+      Widget settings() => SurfaceIconButton(
         key: const ValueKey('settings'),
-        child: IconButton(
-          onPressed: () => settingsClicks++,
-          style: const ButtonStyle(padding: WidgetStatePropertyAll(EdgeInsets.all(8))),
-          icon: const Icon(Icons.settings),
-        ),
+        tooltip: 'Settings',
+        onPressed: () => settingsClicks++,
+        icon: const Icon(Icons.settings),
       );
       CanvasTitle title() => CanvasTitle(
         path: ['Folder', if (longTitle) 'A very long canvas title that needs horizontal scrolling' else 'Untitled'],

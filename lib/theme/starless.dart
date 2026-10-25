@@ -149,6 +149,7 @@ ThemeData _starlessThemeData(BColors colors, Brightness brightness, Map<String, 
     geo: _starlessGeo,
     syntaxTheme: syntaxTheme,
   );
+  final actionStyle = _actionButtonStyle(theme);
   final colorScheme = ColorScheme(
     brightness: brightness,
     primary: colors.accent,
@@ -222,7 +223,22 @@ ThemeData _starlessThemeData(BColors colors, Brightness brightness, Map<String, 
       labelMedium: typo.label,
       labelSmall: typo.label,
     ),
-    iconTheme: IconThemeData(color: colors.textSecondary),
+    iconTheme: IconThemeData(color: colors.textSecondary, size: BSizes.defaultIconSize),
+    textButtonTheme: TextButtonThemeData(
+      style: actionStyle.copyWith(
+        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16, vertical: 6)),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: actionStyle.copyWith(
+        foregroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.disabled) ? colors.textMuted : colors.textSecondary,
+        ),
+        iconSize: const WidgetStatePropertyAll(BSizes.defaultIconSize),
+        minimumSize: const WidgetStatePropertyAll(BSizes.defaultIconButtonSize),
+        padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+      ),
+    ),
     dividerTheme: DividerThemeData(color: colors.borderSubtle, thickness: 1),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: colors.accent,
@@ -252,3 +268,26 @@ ThemeData _starlessThemeData(BColors colors, Brightness brightness, Map<String, 
     ),
   );
 }
+
+// Shared action states; feature widgets only add their own layout or selection.
+ButtonStyle _actionButtonStyle(BTheme theme) => ButtonStyle(
+  foregroundColor: WidgetStateProperty.resolveWith(
+    (states) => states.contains(WidgetState.disabled) ? theme.colors.textMuted : theme.colors.textPrimary,
+  ),
+  backgroundColor: WidgetStateProperty.resolveWith((states) {
+    if (states.contains(WidgetState.disabled)) return Colors.transparent;
+    if (states.contains(WidgetState.pressed)) return theme.colors.surfacePressed;
+    if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) {
+      return theme.colors.surfaceHover;
+    }
+    return Colors.transparent;
+  }),
+  overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+  side: WidgetStateProperty.resolveWith(
+    (states) =>
+        states.contains(WidgetState.focused) ? BorderSide(color: theme.colors.focusRing, width: 2) : BorderSide.none,
+  ),
+  shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: theme.geo.radiusMedium)),
+  textStyle: WidgetStatePropertyAll(theme.typo.body),
+  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+);

@@ -10,7 +10,6 @@ import 'package:elseplane/ui/common/labeled_switch.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:elseplane/ui/common/surface_icon_button.dart';
-import 'package:elseplane/ui/common/surface_text_button.dart';
 import 'package:elseplane/ui/previews/theme_preview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -50,25 +49,12 @@ Widget surfaceIconButtonPreview() => _surface(
     children: [
       SurfaceIconButton(icon: const Icon(Icons.add), tooltip: 'Add', onPressed: () {}),
       const SizedBox(width: 12),
-      SurfaceIconButton(
-        icon: const Icon(Icons.check),
+      const SurfaceIconButton(
+        icon: Icon(Icons.check),
         tooltip: 'Done',
-        onPressed: () {},
+        onPressed: null,
       ),
     ],
-  ),
-);
-
-@Preview(
-  name: 'SurfaceTextButton',
-  size: Size(400, 240),
-  theme: previewTheme,
-  brightness: Brightness.light,
-)
-Widget surfaceTextButtonPreview() => _surface(
-  SurfaceTextButton(
-    label: 'New page',
-    onPressed: () {},
   ),
 );
 

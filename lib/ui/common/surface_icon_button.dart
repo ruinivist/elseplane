@@ -1,7 +1,6 @@
 // Provides elseplane's pressable icon control.
 // Used by canvas controls that expose a click action.
 
-import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:flutter/material.dart';
 
@@ -19,47 +18,16 @@ class SurfaceIconButton extends StatelessWidget {
 
   final Widget icon;
   final String tooltip;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   // ---------- Rendering ----------
 
   @override
-  Widget build(BuildContext context) {
-    final theme = BTheme.of(context);
-    return Tooltip(
-      message: tooltip,
-      child: Surface(
-        child: IconButton(
-          onPressed: onPressed,
-          icon: icon,
-          iconSize: BSizes.defaultIconSize,
-          style: ButtonStyle(
-            foregroundColor: WidgetStatePropertyAll(
-              theme.colors.textPrimary,
-            ),
-            backgroundColor: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.pressed)) {
-                return theme.colors.surfacePressed;
-              }
-              if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) {
-                return theme.colors.surfaceHover;
-              }
-              return Colors.transparent;
-            }),
-            side: WidgetStateProperty.resolveWith(
-              (states) => states.contains(WidgetState.focused)
-                  ? BorderSide(color: theme.colors.focusRing, width: 2)
-                  : BorderSide.none,
-            ),
-            shape: WidgetStatePropertyAll(
-              RoundedRectangleBorder(borderRadius: theme.geo.radiusMedium),
-            ),
-            fixedSize: const WidgetStatePropertyAll(BSizes.defaultIconButtonSize),
-            padding: const WidgetStatePropertyAll(EdgeInsets.zero),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Surface(
+    child: IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: icon,
+    ),
+  );
 }

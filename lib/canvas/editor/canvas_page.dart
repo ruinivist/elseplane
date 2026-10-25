@@ -11,19 +11,18 @@ import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/canvas_input.dart';
 import 'package:elseplane/canvas/editor/canvas_view.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
-import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
-import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/arrow/arrow_tool_settings.dart';
+import 'package:elseplane/canvas/editor/elements/code/code_tool_settings.dart';
+import 'package:elseplane/canvas/editor/elements/pen/pen_tool_settings.dart';
+import 'package:elseplane/canvas/editor/elements/shape/shape_tool_settings.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_tool_settings.dart';
-import 'package:elseplane/canvas/editor/widgets/arrow_stroke_style_icon.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_chrome.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_toolbar.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/settings/settings_dialog.dart';
 import 'package:elseplane/theme/theme.dart';
-import 'package:elseplane/ui/common/color_picker.dart';
-import 'package:elseplane/ui/common/discrete_slider.dart';
-import 'package:elseplane/ui/common/surface.dart';
+import 'package:elseplane/ui/common/surface_icon_button.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -229,7 +228,6 @@ class _CanvasPageState extends State<CanvasPage> {
   }
 
   Widget _buildChrome(BuildContext context, CanvasInput? input) {
-    final theme = BTheme.of(context);
     return CanvasChrome(
       title: CanvasTitle(
         path: widget.libraryPath,
@@ -238,18 +236,11 @@ class _CanvasPageState extends State<CanvasPage> {
       toolbar: CanvasToolbar(
         buttonsBuilder: ({required compact}) => _buildToolbarButtons(input, compact: compact),
       ),
-      settingsButton: Surface(
-        key: const ValueKey('settings-button-surface'),
-        child: IconButton(
-          key: const ValueKey('settings-button'),
-          tooltip: 'Settings',
-          onPressed: input == null ? null : () => _showSettingsDialog(input),
-          style: _toolbarButtonStyle(
-            theme.colors,
-            theme.geo,
-          ).copyWith(padding: const WidgetStatePropertyAll(EdgeInsets.all(8))),
-          icon: const Icon(LucideIcons.settings),
-        ),
+      settingsButton: SurfaceIconButton(
+        key: const ValueKey('settings-button'),
+        tooltip: 'Settings',
+        onPressed: input == null ? null : () => _showSettingsDialog(input),
+        icon: const Icon(LucideIcons.settings),
       ),
       toolOptions: input == null ? null : _buildToolOptions(input),
     );
@@ -274,7 +265,7 @@ class _CanvasPageState extends State<CanvasPage> {
           key: ValueKey('toolbar-$key'),
           selected: _activeTool == tool,
           onPressed: input == null ? null : () => input.toggleTool(tool),
-          child: Icon(icon, size: 20, semanticLabel: label),
+          child: Icon(icon, semanticLabel: label),
         ),
       ),
     if (_touchControlsVisible)
@@ -287,7 +278,7 @@ class _CanvasPageState extends State<CanvasPage> {
           onPressed: input == null
               ? null
               : () => input.chooseTool(CanvasTool.select, touchSelectionEnabled: !_touchSelectionEnabled),
-          child: const Icon(LucideIcons.squareDashed, size: 20, semanticLabel: 'Select'),
+          child: const Icon(LucideIcons.squareDashed, semanticLabel: 'Select'),
         ),
       ),
   ];
@@ -326,7 +317,7 @@ class _CanvasPageState extends State<CanvasPage> {
         ? ListenableBuilder(
             key: const ValueKey('shape-settings-panel'),
             listenable: _session,
-            builder: (context, _) => _ShapeSettings(
+            builder: (context, _) => ShapeToolSettings(
               kind: activeShape.kind,
               strokeColor: activeShape.strokeColor,
               fillColor: activeShape.fillColor,
@@ -355,7 +346,7 @@ class _CanvasPageState extends State<CanvasPage> {
         ? ListenableBuilder(
             key: const ValueKey('arrow-settings-panel'),
             listenable: _session,
-            builder: (context, _) => _ArrowSettings(
+            builder: (context, _) => ArrowToolSettings(
               color: activeArrow.color,
               strokeStyle: activeArrow.strokeStyle,
               strokeWidth: activeArrow.strokeWidth,
@@ -370,7 +361,7 @@ class _CanvasPageState extends State<CanvasPage> {
             ),
           )
         : _penEnabled
-        ? _StrokeSettings(
+        ? PenToolSettings(
             key: const ValueKey('draw-settings-panel'),
             color: _penColor,
             width: _penWidth,
@@ -387,7 +378,7 @@ class _CanvasPageState extends State<CanvasPage> {
         ? ListenableBuilder(
             key: const ValueKey('shape-settings-panel'),
             listenable: input.shape,
-            builder: (context, _) => _ShapeSettings(
+            builder: (context, _) => ShapeToolSettings(
               kind: input.shape.kind,
               strokeColor: input.shape.strokeColor,
               fillColor: input.shape.fillColor,
@@ -410,7 +401,7 @@ class _CanvasPageState extends State<CanvasPage> {
         ? ListenableBuilder(
             key: const ValueKey('arrow-settings-panel'),
             listenable: input.arrow,
-            builder: (context, _) => _ArrowSettings(
+            builder: (context, _) => ArrowToolSettings(
               color: input.arrow.color,
               strokeStyle: input.arrow.strokeStyle,
               strokeWidth: input.arrow.strokeWidth,
@@ -423,274 +414,4 @@ class _CanvasPageState extends State<CanvasPage> {
           )
         : null;
   }
-}
-
-// ---------- Tool settings ----------
-
-class _ArrowSettings extends StatelessWidget {
-  const _ArrowSettings({
-    required this.color,
-    required this.strokeStyle,
-    required this.strokeWidth,
-    required this.colorPickerExpanded,
-    required this.onColorChanged,
-    required this.onStrokeStyleChanged,
-    required this.onStrokeWidthChanged,
-    required this.onColorPickerExpandedChanged,
-  });
-
-  final Color color;
-  final ArrowStrokeStyle strokeStyle;
-  final double strokeWidth;
-  final bool colorPickerExpanded;
-  final ValueChanged<Color> onColorChanged;
-  final ValueChanged<ArrowStrokeStyle> onStrokeStyleChanged;
-  final ValueChanged<double> onStrokeWidthChanged;
-  final ValueChanged<bool> onColorPickerExpandedChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = BTheme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('Style', style: theme.typo.label),
-        const SizedBox(height: 6),
-        Wrap(
-          children: [
-            for (final option in ArrowStrokeStyle.values)
-              Tooltip(
-                message: option == ArrowStrokeStyle.solid ? 'Solid' : 'Dashed',
-                child: ToolbarButton(
-                  key: ValueKey('arrow-style-${option.name}'),
-                  selected: option == strokeStyle,
-                  onPressed: () => onStrokeStyleChanged(option),
-                  child: ArrowStrokeStyleIcon(style: option),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _StrokeSettings(
-          color: color,
-          width: strokeWidth,
-          widthMinimum: arrowStrokeWidthMinimum,
-          widthMaximum: arrowStrokeWidthMaximum,
-          widthLabelOffset: -3,
-          colorPickerExpanded: colorPickerExpanded,
-          onColorChanged: onColorChanged,
-          onColorPickerExpandedChanged: onColorPickerExpandedChanged,
-          onWidthChanged: onStrokeWidthChanged,
-        ),
-      ],
-    );
-  }
-}
-
-class _ShapeSettings extends StatelessWidget {
-  const _ShapeSettings({
-    required this.kind,
-    required this.strokeColor,
-    required this.fillColor,
-    required this.strokeWidth,
-    required this.outlineColorPickerExpanded,
-    required this.fillColorPickerExpanded,
-    required this.onKindChanged,
-    required this.onStrokeColorChanged,
-    required this.onFillColorChanged,
-    required this.onStrokeWidthChanged,
-    required this.onOutlineColorPickerExpandedChanged,
-    required this.onFillColorPickerExpandedChanged,
-  });
-
-  final ShapeKind kind;
-  final Color strokeColor;
-  final Color? fillColor;
-  final double strokeWidth;
-  final bool outlineColorPickerExpanded;
-  final bool fillColorPickerExpanded;
-  final ValueChanged<ShapeKind> onKindChanged;
-  final ValueChanged<Color> onStrokeColorChanged;
-  final ValueChanged<Color?> onFillColorChanged;
-  final ValueChanged<double> onStrokeWidthChanged;
-  final ValueChanged<bool> onOutlineColorPickerExpandedChanged;
-  final ValueChanged<bool> onFillColorPickerExpandedChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = BTheme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('Shape', style: theme.typo.label),
-        const SizedBox(height: 6),
-        Wrap(
-          children: [
-            for (final option in ShapeKind.values)
-              Tooltip(
-                message: option.label,
-                child: ToolbarButton(
-                  key: ValueKey('shape-option-${option.name}'),
-                  selected: option == kind,
-                  onPressed: () => onKindChanged(option),
-                  child: Icon(
-                    _shapeIcon(option),
-                    semanticLabel: option.label,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text('Outline', style: theme.typo.label),
-        const SizedBox(height: 6),
-        ColorControl(
-          key: const ValueKey('shape-outline-color'),
-          color: strokeColor,
-          expanded: outlineColorPickerExpanded,
-          onChanged: onStrokeColorChanged,
-          onExpandedChanged: onOutlineColorPickerExpandedChanged,
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(child: Text('Fill', style: theme.typo.label)),
-            Semantics(
-              selected: fillColor == null,
-              child: IconButton(
-                key: const ValueKey('shape-fill-none'),
-                tooltip: 'No fill',
-                constraints: BoxConstraints.tight(BSizes.colorButtonSize),
-                iconSize: BSizes.defaultIconSize,
-                style: IconButton.styleFrom(
-                  padding: const EdgeInsets.all(6),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: const CircleBorder(),
-                  side: BorderSide(
-                    color: fillColor == null ? theme.colors.focusRing : Colors.transparent,
-                    width: 2,
-                  ),
-                ),
-                onPressed: () => onFillColorChanged(null),
-                icon: const Icon(LucideIcons.ban),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        ColorControl(
-          key: const ValueKey('shape-fill-color'),
-          color: fillColor,
-          expanded: fillColorPickerExpanded,
-          onChanged: onFillColorChanged,
-          onExpandedChanged: onFillColorPickerExpandedChanged,
-        ),
-        const SizedBox(height: 10),
-        Text('Width', style: theme.typo.label),
-        DiscreteSlider(
-          value: strokeWidth,
-          onChanged: onStrokeWidthChanged,
-        ),
-      ],
-    );
-  }
-}
-
-IconData _shapeIcon(ShapeKind kind) => switch (kind) {
-  ShapeKind.rectangle => LucideIcons.square,
-  ShapeKind.roundedRectangle => LucideIcons.squareRoundCorner,
-  ShapeKind.ellipse => LucideIcons.circle,
-  ShapeKind.diamond => LucideIcons.diamond,
-  ShapeKind.triangle => LucideIcons.triangle,
-  ShapeKind.hexagon => LucideIcons.hexagon,
-};
-
-class _StrokeSettings extends StatelessWidget {
-  const _StrokeSettings({
-    required this.color,
-    required this.width,
-    required this.colorPickerExpanded,
-    required this.onColorChanged,
-    required this.onColorPickerExpandedChanged,
-    required this.onWidthChanged,
-    this.widthMinimum = 0.25,
-    this.widthMaximum = 5.0,
-    this.widthLabelOffset = 0,
-    this.streamline,
-    this.onStreamlineChanged,
-    super.key,
-  });
-
-  final Color color;
-  final double width;
-  final double widthMinimum;
-  final double widthMaximum;
-  final int widthLabelOffset;
-  final double? streamline;
-  final bool colorPickerExpanded;
-  final ValueChanged<Color> onColorChanged;
-  final ValueChanged<bool> onColorPickerExpandedChanged;
-  final ValueChanged<double> onWidthChanged;
-  final ValueChanged<double>? onStreamlineChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = BTheme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('Color', style: theme.typo.label),
-        const SizedBox(height: 6),
-        ColorControl(
-          color: color,
-          expanded: colorPickerExpanded,
-          onChanged: onColorChanged,
-          onExpandedChanged: onColorPickerExpandedChanged,
-        ),
-        const SizedBox(height: 10),
-        Text('Width', style: theme.typo.label),
-        DiscreteSlider(
-          key: const ValueKey('pen-width-slider'),
-          value: width,
-          min: widthMinimum,
-          max: widthMaximum,
-          labelOffset: widthLabelOffset,
-          onChanged: onWidthChanged,
-        ),
-        if ((streamline, onStreamlineChanged) case (final streamline?, final onStreamlineChanged?)) ...[
-          const SizedBox(height: 10),
-          Text('Smoothing', style: theme.typo.label),
-          DiscreteSlider(
-            key: const ValueKey('pen-smoothing-slider'),
-            value: streamline,
-            min: penStreamlineMinimum,
-            max: penStreamlineMaximum,
-            onChanged: onStreamlineChanged,
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-ButtonStyle _toolbarButtonStyle(BColors colors, BGeo geo) {
-  return ButtonStyle(
-    foregroundColor: WidgetStatePropertyAll(colors.textSecondary),
-    backgroundColor: WidgetStateProperty.resolveWith((states) {
-      if (states.contains(WidgetState.pressed)) {
-        return colors.surfacePressed;
-      }
-      if (states.contains(WidgetState.hovered)) return colors.surfaceHover;
-      return Colors.transparent;
-    }),
-    side: WidgetStateProperty.resolveWith(
-      (states) => states.contains(WidgetState.focused) ? BorderSide(color: colors.focusRing) : BorderSide.none,
-    ),
-    shape: WidgetStatePropertyAll(
-      RoundedRectangleBorder(borderRadius: geo.radiusSmall),
-    ),
-  );
 }

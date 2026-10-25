@@ -59,29 +59,14 @@ class ToolbarButton extends StatelessWidget {
                 : theme.colors.textSecondary,
           ),
           backgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.disabled) || states.contains(WidgetState.pressed)) {
-              return theme.colors.surfacePressed;
-            }
-            if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) {
-              return theme.colors.surfaceHover;
-            }
-            return selected ? theme.colors.surfacePressed : Colors.transparent;
+            if (states.isEmpty && selected) return theme.colors.surfacePressed;
+            return null;
           }),
-          side: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.focused)
-                ? BorderSide(color: theme.colors.focusRing, width: 2)
-                : BorderSide.none,
-          ),
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: theme.geo.radiusMedium),
-          ),
-          textStyle: WidgetStatePropertyAll(theme.typo.body),
           padding: const WidgetStatePropertyAll(EdgeInsets.zero),
           minimumSize: WidgetStatePropertyAll(
             compact ? Size.zero : _regularMinimumSize,
           ),
           fixedSize: compact ? const WidgetStatePropertyAll(BSizes.defaultIconButtonSize) : null,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         child: IconTheme.merge(
           data: const IconThemeData(size: BSizes.defaultIconSize),

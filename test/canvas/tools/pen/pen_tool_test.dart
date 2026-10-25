@@ -582,7 +582,7 @@ void main() {
     expect(find.byKey(const ValueKey('draw-settings-panel')), findsOneWidget);
     expect(find.textContaining('px'), findsNothing);
     final widthSlider = find.descendant(
-      of: find.byKey(const ValueKey('pen-width-slider')),
+      of: find.byKey(const ValueKey('stroke-width-slider')),
       matching: find.byType(Slider),
     );
     final smoothingSlider = find.descendant(
@@ -598,7 +598,7 @@ void main() {
       tester
           .widget<SliderTheme>(
             find.descendant(
-              of: find.byKey(const ValueKey('pen-width-slider')),
+              of: find.byKey(const ValueKey('stroke-width-slider')),
               matching: find.byType(SliderTheme),
             ),
           )
@@ -685,7 +685,7 @@ void main() {
       find.byKey(const ValueKey('toolbar-surface')),
     );
     final settings = tester.getRect(
-      find.byKey(const ValueKey('settings-button-surface')),
+      find.byKey(const ValueKey('settings-button')),
     );
     final panel = tester.getRect(
       find.byKey(const ValueKey('draw-settings-panel')),

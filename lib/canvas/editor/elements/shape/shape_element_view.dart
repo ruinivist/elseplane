@@ -2,6 +2,7 @@
 // Used by the canvas element stack for saved shape models.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/editor/elements/shape/shape_kind.dart';
 import 'package:elseplane/canvas/editor/tools/shape_tool.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
 import 'package:elseplane/canvas/geometry/shape_geometry.dart';
@@ -161,19 +162,4 @@ void paintShape(
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth,
   );
-}
-
-// ---------- Labels ----------
-
-/// Maps persisted shape kinds to concise user-facing labels.
-/// Used by shape semantics and tool option controls.
-extension ShapeKindLabel on ShapeKind {
-  String get label => switch (this) {
-    ShapeKind.rectangle => 'Rectangle',
-    ShapeKind.roundedRectangle => 'Rounded rectangle',
-    ShapeKind.ellipse => 'Ellipse',
-    ShapeKind.diamond => 'Diamond',
-    ShapeKind.triangle => 'Triangle',
-    ShapeKind.hexagon => 'Hexagon',
-  };
 }

@@ -88,6 +88,10 @@ Text resources now retain source-keyed inline attachment and HTTPS image loads a
 
 ## 6. Consolidate presentation and guidance
 
+**Status:** in progress. Presentation ownership and shared-control consolidation (stage 6a) are implemented; group Arrange and final cleanup remain.
+
+Element option panels now live beside their elements. Pen and arrow settings share canvas-owned color/width controls; pen smoothing remains pen-owned. Code options have an independent library, and arrow icons and shape presentation mappings live with their elements. CanvasPage composes panels and retains their page-lifetime expansion state and edit boundaries. Ordinary icon/text action states come from the app theme, SurfaceIconButton has a production Settings consumer, and the unused SurfaceTextButton and its preview are removed. Tool-panel and Select geometry belong to their components; canvas options use bounded animated pointer scrolling. Annotated canvas previews cover the extracted panels and shared controls. Broader test redistribution, app-bootstrap relocation, and final guidance review are deferred; the group Arrange placeholder is unchanged.
+
 - Put element views, editors, options, and resources in their owning element folders. Put shared canvas chrome in editor widgets and file UI in library widgets.
 - Consolidate genuinely shared styling and interaction rules using existing app primitives and theme facilities. Give retained shared widgets production consumers; remove unused alternatives and their previews.
 - Keep semantic app-wide geometry in theme and component-specific layout local. Preserve accessibility, keyboard behavior, and bounded pointer scrolling.

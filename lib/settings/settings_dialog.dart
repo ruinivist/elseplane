@@ -126,35 +126,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
     );
   }
 
-  Widget _closeButton(BuildContext context) {
-    final theme = BTheme.of(context);
-    return IconButton(
-      key: const ValueKey('settings-close'),
-      tooltip: 'Close',
-      onPressed: () => Navigator.of(context).pop(),
-      icon: const Icon(Icons.close),
-      iconSize: 20,
-      color: theme.colors.textSecondary,
-      style: ButtonStyle(
-        backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.pressed)) {
-            return theme.colors.surfacePressed;
-          }
-          if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) {
-            return theme.colors.surfaceHover;
-          }
-          return Colors.transparent;
-        }),
-        side: WidgetStateProperty.resolveWith(
-          (states) =>
-              states.contains(WidgetState.focused) ? BorderSide(color: theme.colors.focusRing) : BorderSide.none,
-        ),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: theme.geo.radiusSmall),
-        ),
-      ),
-    );
-  }
+  Widget _closeButton(BuildContext context) => IconButton(
+    key: const ValueKey('settings-close'),
+    tooltip: 'Close',
+    onPressed: () => Navigator.of(context).pop(),
+    icon: const Icon(Icons.close),
+  );
 
   Widget _wideBody(BuildContext context) {
     final theme = BTheme.of(context);

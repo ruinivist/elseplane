@@ -238,13 +238,17 @@ class _FileTreePopupState extends State<FileTreePopup> {
             children: [
               Padding(
                 padding: const EdgeInsets.only(top: 38),
-                child: AnimatedPrimaryScrollController(
-                  child: SingleChildScrollView(
-                    primary: true,
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [for (final node in widget.nodes) _node(context, node, 0)],
+                // Keep scrolling rows together so their moving bounds cannot
+                // reorder Tab traversal around the fixed header controls.
+                child: FocusTraversalGroup(
+                  child: AnimatedPrimaryScrollController(
+                    child: SingleChildScrollView(
+                      primary: true,
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [for (final node in widget.nodes) _node(context, node, 0)],
+                      ),
                     ),
                   ),
                 ),
@@ -255,7 +259,6 @@ class _FileTreePopupState extends State<FileTreePopup> {
                 child: Row(
                   children: [
                     _control(
-                      context,
                       key: const ValueKey('file-tree-new-file'),
                       icon: LucideIcons.filePlus,
                       tooltip: 'New canvas',
@@ -263,7 +266,6 @@ class _FileTreePopupState extends State<FileTreePopup> {
                     ),
                     const SizedBox(width: 2),
                     _control(
-                      context,
                       key: const ValueKey('file-tree-new-folder'),
                       icon: LucideIcons.folderPlus,
                       tooltip: 'New folder',
@@ -272,7 +274,6 @@ class _FileTreePopupState extends State<FileTreePopup> {
                     if (widget.onDemo case final onDemo?) ...[
                       const SizedBox(width: 2),
                       _control(
-                        context,
                         key: const ValueKey('file-tree-demo'),
                         icon: LucideIcons.flaskConical,
                         tooltip: 'Demo',
@@ -281,7 +282,6 @@ class _FileTreePopupState extends State<FileTreePopup> {
                     ],
                     const SizedBox(width: 2),
                     _control(
-                      context,
                       key: const ValueKey('file-tree-close'),
                       icon: LucideIcons.x,
                       tooltip: 'Close',
@@ -415,36 +415,22 @@ class _FileTreePopupState extends State<FileTreePopup> {
     );
   }
 
-  Widget _control(
-    BuildContext context, {
+  Widget _control({
     required Key key,
     required IconData icon,
     required String tooltip,
     required VoidCallback onPressed,
-  }) {
-    final theme = BTheme.of(context);
-    return IconButton(
-      key: key,
-      tooltip: tooltip,
-      onPressed: onPressed,
-      icon: Icon(icon),
-      iconSize: _iconSize,
-      style: ButtonStyle(
-        foregroundColor: WidgetStatePropertyAll(theme.colors.textSecondary),
-        backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.pressed)) return theme.colors.surfacePressed;
-          if (states.contains(WidgetState.hovered) || states.contains(WidgetState.focused)) {
-            return theme.colors.surfaceHover;
-          }
-          return Colors.transparent;
-        }),
-        fixedSize: const WidgetStatePropertyAll(Size.square(_controlSize)),
-        padding: const WidgetStatePropertyAll(EdgeInsets.zero),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: theme.geo.radiusSmall)),
-      ),
-    );
-  }
+  }) => IconButton(
+    key: key,
+    tooltip: tooltip,
+    onPressed: onPressed,
+    icon: Icon(icon),
+    iconSize: _iconSize,
+    style: const ButtonStyle(
+      minimumSize: WidgetStatePropertyAll(Size.zero),
+      fixedSize: WidgetStatePropertyAll(Size.square(_controlSize)),
+    ),
+  );
 }
 
 class _DropRow extends StatefulWidget {

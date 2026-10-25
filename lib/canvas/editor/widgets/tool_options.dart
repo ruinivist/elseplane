@@ -1,9 +1,10 @@
 // Provides the animated surface that hosts active tool options.
 // Used by the canvas toolbar when switching editing tools.
 
-import 'package:elseplane/theme/sizes.dart';
+import 'package:elseplane/ui/common/pointer_scroll_boundary.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:flutter/material.dart';
+import 'package:scroll_animator/scroll_animator.dart';
 
 // ---------- Widgets ----------
 
@@ -17,7 +18,8 @@ class ToolOptions extends StatelessWidget {
   // ---------- Geometry ----------
 
   static const _padding = 12.0;
-  static const double outerWidth = BSizes.toolOptionsWidth + _padding * 2;
+  static const contentWidth = 160.0;
+  static const double outerWidth = contentWidth + _padding * 2;
 
   // ---------- Rendering ----------
 
@@ -42,9 +44,14 @@ class ToolOptions extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Surface(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(_padding),
-                child: SizedBox(width: BSizes.toolOptionsWidth, child: child),
+              child: PointerScrollBoundary(
+                child: AnimatedPrimaryScrollController(
+                  child: SingleChildScrollView(
+                    primary: true,
+                    padding: const EdgeInsets.all(_padding),
+                    child: SizedBox(width: contentWidth, child: child),
+                  ),
+                ),
               ),
             ),
           ),

@@ -25,8 +25,8 @@ class SelectOption<T> {
 
 // ---------- Geometry ----------
 
-final double _selectMinimumWidth = BSizes.defaultTextButtonSize.width;
-final double _selectTriggerHeight = BSizes.defaultTextButtonSize.height;
+const _selectMinimumWidth = 160.0;
+const _selectTriggerHeight = 36.0;
 const _selectTriggerHorizontalPadding = 16.0;
 const _selectTriggerIconSize = 16.0;
 const _selectOptionVerticalPadding = 10.0;

@@ -113,24 +113,6 @@ class _ZoomControlState extends State<ZoomControl> {
         onPressed: _resetZoom,
         style: ButtonStyle(
           foregroundColor: WidgetStatePropertyAll(theme.colors.textMuted),
-          backgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.pressed)) {
-              return theme.colors.surfacePressed;
-            }
-            if (states.contains(WidgetState.hovered)) {
-              return theme.colors.surfaceHover;
-            }
-            return Colors.transparent;
-          }),
-          side: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.focused)
-                ? BorderSide(color: theme.colors.focusRing, width: 2)
-                : BorderSide.none,
-          ),
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: theme.geo.radiusMedium),
-          ),
-          textStyle: WidgetStatePropertyAll(theme.typo.body),
           minimumSize: const WidgetStatePropertyAll(Size.zero),
           fixedSize: WidgetStatePropertyAll(Size(_collapsedWidth, _height)),
           padding: const WidgetStatePropertyAll(EdgeInsets.zero),
