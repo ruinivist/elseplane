@@ -64,6 +64,7 @@ class _ShapeElementViewState extends State<ShapeElementView> {
             widget.onChangeEnd?.call();
           },
           onPanCancel: () {
+            if (_dragPosition == null) return;
             _dragPosition = null;
             widget.onChangeEnd?.call();
           },

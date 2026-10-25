@@ -65,6 +65,7 @@ class _PenElementViewState extends State<PenElementView> {
               widget.onChangeEnd?.call();
             },
             onPanCancel: () {
+              if (_dragPosition == null) return;
               _dragPosition = null;
               widget.onChangeEnd?.call();
             },

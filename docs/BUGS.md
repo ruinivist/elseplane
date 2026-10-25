@@ -53,7 +53,7 @@ To reproduce:
 2. Scroll vertically within the code editor.
 3. Pan the canvas until the element is culled, then pan back.
 
-Expected: the editor returns to the same content and scroll position. Actual: wrapped-line layout changes the restored position; the [resource culling regression test](../test/canvas/editor/element_resources_test.dart) reproduces an offset changing from 120 to 260 even though the scroll controller retains its offset.
+Expected: the editor returns to the same content and scroll position. Actual: wrapped-line layout changes the restored position; the enabled, isolated `known re_editor defect: wrapped code retains its scroll offset after culling` [regression test](../test/canvas/editor/element_resources_test.dart) reproduces an offset changing from 120 to 260 even though the scroll controller retains its offset.
 
 Fix: add correct wrapped-code scroll restoration in `re_editor`. Its public API does not provide a scroll snapshot/restore contract. Leave stage 5 pending until a library fix is available; the dependency remains unchanged.
 
@@ -73,21 +73,9 @@ Fix: make the shared validator decode the image using the existing `readCanvasIm
 
 ## 5. Markdown attachment images reload after culling
 
-Status: open. Rendering resource ownership gap in refactor stage 5.
+Status: fixed. `TextEditorResources` owns lazy, source-keyed inline attachment and HTTPS image loads through `TextMarkdownImages`. Pending reads and decoded image streams survive culling, editing/preview transitions, and restoration with unchanged sources. Removed sources and detached element lifetimes invalidate pending completions immediately.
 
-Location: [Markdown preview](../lib/canvas/editor/elements/text/text_markdown_preview.dart), `_buildImage`; [retained text resources](../lib/canvas/editor/elements/text/text_editor_resources.dart).
-
-To reproduce:
-
-1. Display a text block containing an attachment image using a store that counts reads.
-2. Wait for the image to load.
-3. Pan until the text block is culled, then pan back.
-
-Expected: the unchanged image and its load survive with the retained element resources. Actual: the same `TextEditorResources` instance survives, but attachment reads increase from 1 to 2. With delayed reads, the returning image must wait for storage again.
-
-`_buildImage` starts a new `attachmentStore.read(path)` during widget construction. Inline image loads remain owned by the culled widget instead of retained element resources, contrary to the architecture's resource lifetime rule.
-
-Fix: retain source-keyed inline image loads and image resources with `TextEditorResources`, pass them to the preview, and retire them when the source or element lifetime ends. Add culling and restoration coverage for Markdown images alongside media images.
+The [resource tests](../test/canvas/editor/element_resources_test.dart) cover duplicate/reference images, pending and completed loads across culling, decoded stream retention, source reconciliation, read failures, and stale completions after source changes, removal, or disposal. Markdown preview only renders retained snapshots; it no longer starts independent storage reads.
 
 ## 6. Oversized canvas image pastes fail silently
 
@@ -103,55 +91,18 @@ Fix: remove the nested `FormatException` catch and use the existing outer handle
 
 ## 7. Five tests still use superseded element lifecycles
 
-Status: open. Test migration failures; no production behavior bug confirmed in these cases.
+Status: fixed. Group batching fixtures now arm a real pointer before delivering movement callbacks and cancel it afterward to drain recognizers without synthesizing a tap. Font deletion removes the target through `EditorSession.remove` and disposes rendering resources after consumers detach. Transform-layout fixtures likewise arm their controls before invoking callbacks.
 
-Location: [group document batching tests](../test/canvas/editor/canvas_document_batch_test.dart) and [font tests](../test/theme/fonts_test.dart).
-
-To reproduce, run these files in Chrome:
-
-```sh
-CHROME_EXECUTABLE=/usr/bin/chromium flutter test --platform chrome test/canvas/editor/canvas_document_batch_test.dart test/theme/fonts_test.dart
-```
-
-Expected: the migrated tests exercise the current input and document lifecycles. Actual: four group-move cases (100/1000 elements, Auto off/on) and the font case `ignores completion after block is deleted` fail.
-
-The group tests call `PenElementView.onMove` without starting a pointer sequence. `CanvasInputTarget` correctly rejects those unarmed callbacks. The font test disposes rendering resources while leaving the session element active; the settings panel now consumes the session and element ID, so this does not represent deletion.
-
-Fix: start and drain a real pointer around the group batching callbacks, and remove the font target through `EditorSession.remove`. Temporary probes using those lifecycles passed all five existing assertions. Keep the production lifetime guards and migrate the fixtures.
+The existing [batching](../test/canvas/editor/canvas_document_batch_test.dart) and [font](../test/theme/fonts_test.dart) assertions are retained. Production lifetime guards remain intact; input targets additionally bind transform completion to their originating gesture so an old completion cannot split a newer operation.
 
 ## 8. Completed pen drags merge with the next action
 
-Status: open. Undo grouping regression.
+Status: fixed. CanvasView supplies `PenElementView.onChangeEnd` with its lifetime-bound target completion, matching the other draggable views.
 
-Location: [canvas projection](../lib/canvas/editor/canvas_view.dart), `_buildElement`; [pointer handling](../lib/canvas/editor/canvas_input.dart), `CanvasInput.pointerUp`.
-
-To reproduce:
-
-1. Drag a pen stroke with Auto off and release it.
-2. Right-click another object with Auto on and another object above it in the saved stack.
-3. Undo.
-
-Expected: Undo reverses the right-click's layer promotion and leaves the completed stroke movement intact. Actual: it also returns the stroke to its original position.
-
-`CanvasInput.pointerUp` leaves transformed object operations for recognizer callbacks to finish. `PenElementView` exposes `onChangeEnd`, but `_buildElement` does not supply it, so the drag remains part of the next operation.
-
-Fix: pass `onChangeEnd: target.finish` to `PenElementView`, matching the other draggable views. Add a regression test covering a completed stroke drag followed by another object's layer promotion.
+The [history tests](../test/canvas/editor/canvas_history_test.dart) cover released and canceled stroke drags followed by another object's layer promotion. Undo reverses the promotion independently, and another Undo reverses the drag; Redo restores both operations in order.
 
 ## 9. Separate object clicks merge their layer promotions
 
-Status: open. Undo grouping regression.
+Status: fixed. Raw object-pointer release leaves completion to the tap or drag callback. Non-editing activation and interaction callbacks finish after applying their Auto promotion; focused editors retain their logical content operation. A rejected pan recognizer no longer finishes an operation when no drag started.
 
-Location: [pointer handling](../lib/canvas/editor/canvas_input.dart), `CanvasInput.pointerUp` and `CanvasInputTarget.activate`.
-
-To reproduce:
-
-1. Create three Auto-on shapes A, B, and C in that back-to-front order.
-2. Click A. The saved order becomes B, C, A.
-3. Right-click B. The saved order becomes C, A, B.
-4. Undo.
-
-Expected: the saved order returns to B, C, A, preserving the first click's promotion. Actual: it returns to A, B, C, undoing both clicks together.
-
-`CanvasInput.pointerUp` finishes a non-transforming object operation before the tap recognizer calls `activate` and promotes the object. That promotion remains unfinished and merges with the next right-click's promotion.
-
-Fix: finish non-editing click operations after their tap callbacks run. Preserve typing groups in focused editors and add a regression test for consecutive promotions through primary and secondary clicks.
+The [input tests](../test/canvas/editor/canvas_input_test.dart) cover tap callbacks on either side of raw release and reject completions from older gesture bindings. The [history tests](../test/canvas/editor/canvas_history_test.dart) cover separate shape and pen taps followed by secondary-click promotions, with independent Undo steps.

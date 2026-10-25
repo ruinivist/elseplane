@@ -349,9 +349,9 @@ class CanvasInput extends ChangeNotifier {
     final gesture = _gesture;
     if (gesture?.pointer != event.pointer) return;
     switch (gesture) {
-      case final _ObjectGesture object:
-        // Recognizer callbacks finish this operation explicitly, even after raw release.
-        if (!object.transforming && session.editing == null) session.finishOperation();
+      case _ObjectGesture():
+        // Tap and drag recognizers apply their final edits after raw release.
+        // Their lifetime-bound targets finish the operation after those edits.
         return;
       case final _PanGesture pan:
         _gesture = null;
@@ -508,27 +508,22 @@ class CanvasInputTarget {
   final CanvasInput input;
   final String id;
   final Object? _lifetime;
-  int _generation = -1;
+  _Gesture? _sequence;
   final int _contextGeneration;
   bool get attached =>
       _lifetime != null &&
       !input._disposed &&
       _contextGeneration == input._generation &&
       identical(_lifetime, input.session.elementLifetime(id));
-  bool get current =>
-      attached &&
-      !input._disposed &&
-      !input.blocked &&
-      _generation == input._generation &&
-      identical(_lifetime, input.session.elementLifetime(id));
+  bool get current => attached && !input.blocked && _sequence != null && identical(_sequence, input._gesture);
 
   void pointerDown(PointerDownEvent event, {bool control = false}) {
     if (!attached) return;
     input._observeDown(event);
     if (!input.canHandle(event) || !attached) return;
-    _generation = input._generation;
     if (input._gesture case _ObjectGesture(pointer: final pointer, id: final target)
         when pointer == event.pointer && target == id) {
+      _sequence = input._gesture;
       return;
     }
     if (event.buttons == kSecondaryButton && input.session.tool == CanvasTool.select) {
@@ -540,6 +535,7 @@ class CanvasInputTarget {
         menuTarget: id,
         secondary: true,
       );
+      _sequence = input._gesture;
       return;
     }
     if (event.buttons != kPrimaryButton || input.session.tool != CanvasTool.select) return;
@@ -548,6 +544,7 @@ class CanvasInputTarget {
     if (value == null) return;
     final selection = session.selectedIds;
     input._gesture = _ObjectGesture(event.pointer, id, selection);
+    _sequence = input._gesture;
     if (control) {
       if (!input.modifierPressed.value) session.setSelection(const [], preserveContext: true);
       return;
@@ -571,12 +568,14 @@ class CanvasInputTarget {
     session.setSelection(const [], preserveContext: true);
     if (value is ArrowElementData) {
       input._gesture = _ArrowDragGesture(event.pointer, id, event.position, input.panSlop(event.kind), selection);
+      _sequence = input._gesture;
     }
   }
 
   void activate({bool edit = false}) {
     if (!attached || input.blocked || input.modifierPressed.value) return;
     input._activate(id, edit: edit);
+    _finishClick();
   }
 
   void move(Offset delta) {
@@ -598,5 +597,14 @@ class CanvasInputTarget {
   void interact() {
     if (!attached || input.blocked) return;
     input.session.promoteAuto([id]);
+    _finishClick();
+  }
+
+  void _finishClick() {
+    // Focused content editors retain their logical typing operation. A callback
+    // from another pointer sequence cannot finish the current gesture's edits.
+    if (input._gesture case _ObjectGesture(transforming: false) when current && input.session.editing == null) {
+      finish();
+    }
   }
 }

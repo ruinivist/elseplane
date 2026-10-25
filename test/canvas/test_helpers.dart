@@ -13,6 +13,7 @@ import 'package:elseplane/canvas/editor/elements/code/code_layout.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_resources.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_resources.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_markdown_images.dart';
 import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 import 'package:elseplane/canvas/geometry/element_geometry.dart';
 import 'package:elseplane/library/canvas_library.dart';
@@ -152,7 +153,15 @@ EditorSession testSession(CanvasDocument document) {
 EditorSession _elementSession(CanvasElementData data) =>
     testSession(CanvasDocument(background: CanvasBackgroundKind.plain, elements: [data]));
 
-TextEditorResources testTextModel(TextElementData data) => TextEditorResources(_elementSession(data), data);
+TextEditorResources testTextModel(TextElementData data, {AttachmentStore? attachmentStore}) =>
+    TextEditorResources(_elementSession(data), data, attachmentStore ?? TestAttachmentStore());
+
+TextMarkdownImages testMarkdownImages([String source = '']) {
+  final images = TextMarkdownImages(source, TestAttachmentStore());
+  addTearDown(images.dispose);
+  return images;
+}
+
 CodeEditorResources testCodeModel(CodeElementData data) => CodeEditorResources(_elementSession(data), data);
 MediaResources testMediaModel(MediaElementData data, AttachmentStore store) =>
     MediaResources(_elementSession(data), data, store);

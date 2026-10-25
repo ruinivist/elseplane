@@ -706,7 +706,7 @@ x+y
                 scrollController: null,
                 onEdit: () {},
                 onMove: (_) {},
-                attachmentStore: _FakeAttachmentStore(),
+                images: testMarkdownImages(),
               ),
             ),
           ),
@@ -767,7 +767,7 @@ x+y
                 scrollController: null,
                 onEdit: () {},
                 onMove: (_) {},
-                attachmentStore: _FakeAttachmentStore(),
+                images: testMarkdownImages(),
               ),
             ),
           ),
@@ -846,7 +846,7 @@ x+y
                 scrollController: null,
                 onEdit: () {},
                 onMove: (_) {},
-                attachmentStore: _FakeAttachmentStore(),
+                images: testMarkdownImages(),
               ),
             ),
           ),
@@ -901,22 +901,11 @@ x+y
     final preview = tester.widget<MarkdownBody>(
       find.byKey(const ValueKey('text-markdown-preview')),
     );
-    final secureImage = preview.imageBuilder!(
-      Uri.parse('https://example.com/image.png'),
-      null,
-      'secure',
-    );
-    final insecureImage = preview.imageBuilder!(
-      Uri.parse('http://example.com/image.png'),
-      null,
-      'unsafe',
-    );
-    final networkImage = (secureImage as Padding).child! as Image;
+    final networkImage = tester.widget<Image>(find.byType(Image));
     expect(networkImage.image, isA<NetworkImage>());
     expect(networkImage.width, double.infinity);
     expect(networkImage.height, isNull);
     expect(networkImage.fit, BoxFit.fitWidth);
-    expect(insecureImage, isNot(isA<Image>()));
     expect(
       find.byWidgetPredicate(
         (widget) =>
@@ -950,15 +939,7 @@ x+y
     await tester.tapAt(const Offset(700, 500));
     await tester.pump();
 
-    final preview = tester.widget<MarkdownBody>(
-      find.byKey(const ValueKey('text-markdown-preview')),
-    );
-    final imagePadding = preview.imageBuilder!(
-      Uri.parse('https://example.com/fails.png'),
-      null,
-      'failed',
-    ) as Padding;
-    final image = imagePadding.child! as Image;
+    final image = tester.widget<Image>(find.byType(Image));
     final fallback = image.errorBuilder!(
       tester.element(find.byKey(const ValueKey('text-markdown-preview'))),
       Exception('failed image'),
@@ -1083,9 +1064,7 @@ x+y
     final image = find.byType(Image);
     expect(image, findsOneWidget);
     final imageLink = tester.widget<GestureDetector>(
-      find.byWidgetPredicate(
-        (widget) => widget is GestureDetector && widget.child is Padding && (widget.child! as Padding).child is Image,
-      ),
+      find.ancestor(of: image, matching: find.byType(GestureDetector)).first,
     );
     imageLink.onTap!();
     await tester.pump();

@@ -751,7 +751,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   }
 
   ElementResources? _createResources(CanvasElementData value) => switch (value) {
-    final TextElementData a => TextEditorResources(_session, a),
+    final TextElementData a => TextEditorResources(_session, a, _attachmentStore),
     final CodeElementData a => CodeEditorResources(_session, a),
     final MediaElementData a => MediaResources(_session, a, _attachmentStore),
     final PenElementData a => PenResources(_session, a),
@@ -854,6 +854,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         active: active,
         onTap: target.interact,
         onMove: target.move,
+        onChangeEnd: target.finish,
       ),
       final ArrowElementData a => ArrowElementView(data: a, selected: selected, active: active),
     };

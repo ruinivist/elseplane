@@ -25,6 +25,7 @@ void main() {
         final stroke = tester
             .widgetList<PenElementView>(find.byType(PenElementView))
             .firstWhere((stroke) => stroke.resources.data.id == 'p0');
+        final pointer = await tester.startGesture(const Offset(110, 210), kind: PointerDeviceKind.mouse);
         for (var update = 1; update <= 3; update++) {
           stroke.onMove(const Offset(4, 3));
           expect(snapshots, hasLength(update));
@@ -48,6 +49,10 @@ void main() {
           (snapshots.first.elements.firstWhere((element) => element.id == 'p0') as PenElementData).position,
           const Offset(104, 203),
         );
+        // Movement samples were delivered above. Drain the real pointer without
+        // letting its recognizer invent a tap and promote one group member.
+        await pointer.cancel();
+        await tester.pumpAndSettle();
         await _shortcut(tester, LogicalKeyboardKey.keyZ);
         expect(snapshots.last.toJson(), document.toJson());
         await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);

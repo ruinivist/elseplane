@@ -72,7 +72,7 @@ class TextElementView extends StatelessWidget {
                   onInteract: onInteract,
                   onMove: onMove,
                   onChangeEnd: onChangeEnd,
-                  attachmentStore: attachmentStore,
+                  images: model.images,
                 );
           final configuredBody = ScrollConfiguration(
             behavior: const _TextBlockScrollBehavior(),

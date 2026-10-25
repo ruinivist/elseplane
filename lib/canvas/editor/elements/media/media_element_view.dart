@@ -293,6 +293,7 @@ class _MediaImageState extends State<_MediaImage> {
           widget.onChangeEnd?.call();
         },
         onPanCancel: () {
+          if (_dragPosition == null) return;
           _dragPosition = null;
           widget.onChangeEnd?.call();
         },

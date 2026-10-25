@@ -54,7 +54,7 @@ void main() {
               scrollController: null,
               onEdit: () {},
               onMove: (_) {},
-              attachmentStore: TestAttachmentStore(),
+              images: testMarkdownImages(),
             ),
           ),
         ),
@@ -82,7 +82,7 @@ void main() {
             scrollController: null,
             onEdit: () {},
             onMove: (_) {},
-            attachmentStore: TestAttachmentStore(),
+            images: testMarkdownImages(),
           ),
         ),
       ),
@@ -198,7 +198,7 @@ void main() {
       _choose(tester, 'ABeeZee');
       await tester.pump();
       if (stale == 'deleted') {
-        model.dispose();
+        model.session.remove([model.data.id]);
       } else if (stale == 'replaced') {
         await _pumpSettings(tester, replacement, (_) async {});
       } else if (stale == 'inactive') {
@@ -242,7 +242,7 @@ void main() {
               scrollController: null,
               onEdit: () {},
               onMove: (_) {},
-              attachmentStore: TestAttachmentStore(),
+              images: testMarkdownImages(),
             ),
           ),
         ),
@@ -354,7 +354,7 @@ void main() {
                 scrollController: null,
                 onEdit: () {},
                 onMove: (_) {},
-                attachmentStore: TestAttachmentStore(),
+                images: testMarkdownImages(),
               ),
               SizedBox(
                 width: 280,

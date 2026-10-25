@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/editor/canvas_view.dart';
 import 'package:elseplane/canvas/editor/element_resources.dart';
 import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_editor_resources.dart';
@@ -40,6 +41,51 @@ void main() {
     GoogleFontsLite.config.allowRuntimeFetching = false;
   });
   tearDown(() => GoogleFontsLite.config.allowRuntimeFetching = true);
+
+  for (final cancel in [false, true]) {
+    testWidgets('completed pen drag stays separate from the next promotion with cancellation $cancel', (tester) async {
+      final document = _promotionDocument(pen: true, auto: false);
+      await pumpCanvas(tester, TestLibraryStore(document));
+      final pen = _stroke(tester);
+      final start = pen.canvasPosition;
+      final drag = await tester.startGesture(const Offset(120, 220), kind: PointerDeviceKind.mouse);
+      await drag.moveBy(const Offset(40, 30));
+      if (cancel) {
+        await drag.cancel();
+      } else {
+        await drag.up();
+      }
+      await tester.pumpAndSettle();
+      final moved = pen.canvasPosition;
+      expect(moved, isNot(start));
+      await _promoteSecond(tester);
+      await _shortcut(tester);
+      expect(pen.canvasPosition, moved);
+      expect(pen.session.document.elements.map((value) => value.id), ['a', 'b', 'c']);
+      await _shortcut(tester);
+      expect(pen.canvasPosition, start);
+      await _shortcut(tester, redo: true);
+      expect(pen.canvasPosition, moved);
+      await _shortcut(tester, redo: true);
+      expect(pen.session.document.elements.map((value) => value.id), ['a', 'c', 'b']);
+    });
+  }
+
+  for (final pen in [false, true]) {
+    testWidgets('separate ${pen ? 'pen' : 'shape'} clicks keep distinct Auto promotions', (tester) async {
+      await pumpCanvas(tester, TestLibraryStore(_promotionDocument(pen: pen)));
+      final session = tester.widget<CanvasView>(find.byType(CanvasView)).session;
+      await tester.tapAt(const Offset(120, 220), kind: PointerDeviceKind.mouse);
+      await tester.pumpAndSettle();
+      expect(session.document.elements.map((value) => value.id), ['b', 'c', 'a']);
+      await _promoteSecond(tester);
+      expect(session.document.elements.map((value) => value.id), ['c', 'a', 'b']);
+      await _shortcut(tester);
+      expect(session.document.elements.map((value) => value.id), ['b', 'c', 'a']);
+      await _shortcut(tester);
+      expect(session.document.elements.map((value) => value.id), ['a', 'b', 'c']);
+    });
+  }
 
   for (final media in [false, true]) {
     for (final unchanged in [false, true]) {
@@ -1103,4 +1149,42 @@ class _HistoryTextReader extends ClipboardReader {
 
   @override
   Future<T?> readValue<T extends Object>(ValueFormat<T> format) async => 'late' as T;
+}
+
+CanvasDocument _promotionDocument({required bool pen, bool auto = true}) => CanvasDocument(
+  background: CanvasBackgroundKind.plain,
+  elements: [
+    if (pen)
+      (_penDocument(1).elements.single as PenElementData).copyWith(
+        id: 'a',
+        autoArrange: auto,
+        position: const Offset(100, 200),
+      )
+    else
+      _promotionShape('a', const Offset(100, 200)),
+    _promotionShape('b', const Offset(300, 200)),
+    _promotionShape('c', const Offset(500, 200)),
+  ],
+);
+
+ShapeElementData _promotionShape(String id, Offset position) => ShapeElementData(
+  id: id,
+  position: position,
+  size: const Size(80, 80),
+  kind: ShapeKind.rectangle,
+  strokeColor: const Color(0xff000000),
+  strokeWidth: 2,
+  fillColor: const Color(0xff000000),
+);
+
+Future<void> _promoteSecond(WidgetTester tester) async {
+  final click = await tester.startGesture(
+    const Offset(340, 240),
+    kind: PointerDeviceKind.mouse,
+    buttons: kSecondaryButton,
+  );
+  await click.up();
+  await tester.pumpAndSettle();
+  await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+  await tester.pumpAndSettle();
 }

@@ -89,6 +89,46 @@ void main() {
     expect((session.element('a')! as ShapeElementData).position, Offset.zero);
   });
 
+  for (final releaseFirst in [false, true]) {
+    test('click promotions finish after callbacks with raw release first $releaseFirst', () {
+      final pointer = TestPointer(1, PointerDeviceKind.mouse);
+      for (final id in ['a', 'b']) {
+        final target = input.target(id)..pointerDown(pointer.down(const Offset(30, 30)));
+        if (releaseFirst) input.pointerUp(pointer.up());
+        target.activate();
+        if (!releaseFirst) input.pointerUp(pointer.up());
+      }
+      expect(session.document.elements.map((value) => value.id), ['a', 'b']);
+      session.undo();
+      expect(session.document.elements.map((value) => value.id), ['b', 'a']);
+      session.undo();
+      expect(session.document.elements.map((value) => value.id), ['a', 'b']);
+      session.redo();
+      expect(session.document.elements.map((value) => value.id), ['b', 'a']);
+      session.redo();
+      expect(session.document.elements.map((value) => value.id), ['a', 'b']);
+    });
+  }
+
+  test('an old completion cannot split a newer target transform', () {
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    final old = input.target('a')
+      ..pointerDown(pointer.down(const Offset(30, 30)), control: true)
+      ..transform(() => session.move(['a'], const Offset(10, 0)));
+    input.pointerUp(pointer.up());
+    old.finish();
+    final current = input.target('b')
+      ..pointerDown(pointer.down(const Offset(230, 30)), control: true)
+      ..transform(() => session.move(['b'], const Offset(10, 0)));
+    old.finish();
+    current.transform(() => session.move(['b'], const Offset(20, 0)));
+    input.pointerUp(pointer.up());
+    current.finish();
+    session.undo();
+    expect((session.element('b')! as ShapeElementData).position, const Offset(200, 0));
+    expect((session.element('a')! as ShapeElementData).position, const Offset(10, 0));
+  });
+
   test('one finger does not steal a stylus stroke', () {
     input.chooseTool(CanvasTool.pen);
     final stylus = TestPointer(1, PointerDeviceKind.stylus);

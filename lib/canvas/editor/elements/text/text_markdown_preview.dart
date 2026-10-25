@@ -3,17 +3,15 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
-import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_language.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_markdown_images.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:markdown/markdown.dart' as md;
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -29,7 +27,7 @@ class TextMarkdownPreview extends StatefulWidget {
     required this.scrollController,
     required this.onEdit,
     required this.onMove,
-    required this.attachmentStore,
+    required this.images,
     this.onInteract,
     this.onChangeEnd,
     super.key,
@@ -42,7 +40,7 @@ class TextMarkdownPreview extends StatefulWidget {
   final VoidCallback? onInteract;
   final ValueChanged<Offset> onMove;
   final VoidCallback? onChangeEnd;
-  final AttachmentStore attachmentStore;
+  final TextMarkdownImages images;
 
   @override
   State<TextMarkdownPreview> createState() => _TextMarkdownPreviewState();
@@ -88,11 +86,11 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
         : MarkdownBody(
             key: const ValueKey('text-markdown-preview'),
             data: widget.source,
-            inlineSyntaxes: [_TextImageSyntax()],
+            inlineSyntaxes: [TextImageSyntax()],
             styleSheet: styleSheet,
             syntaxHighlighter: _MarkdownCodeHighlighter(styleSheet.code!, BTheme.of(context).syntaxTheme),
             checkboxBuilder: (checked) => _buildCheckbox(checked, styleSheet),
-            imageBuilder: (uri, title, alt) => _buildImage(uri, alt, widget.attachmentStore),
+            imageBuilder: (uri, title, alt) => _buildImage(uri, alt, widget.images),
             onTapLink: (_, href, _) {
               widget.onInteract?.call();
               unawaited(_openLink(context, href));
@@ -114,6 +112,7 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
         widget.onChangeEnd?.call();
       },
       onPanCancel: () {
+        if (_dragPosition == null) return;
         _dragPosition = null;
         widget.onChangeEnd?.call();
       },
@@ -286,70 +285,24 @@ TextStyle _fontStyle(BuildContext context, TextNodeStyle style) {
 
 const _imagePadding = EdgeInsets.symmetric(horizontal: 12);
 
-Widget _buildImage(Uri uri, String? alt, AttachmentStore attachmentStore) {
-  final path = uri.toString();
-  if (attachmentPathPattern.hasMatch(path)) {
-    return FutureBuilder<Uint8List>(
-      future: attachmentStore.read(path),
-      builder: (_, snapshot) => switch (snapshot) {
-        AsyncSnapshot(hasData: true, data: final bytes?) => Padding(
-          padding: _imagePadding,
-          child: Image.memory(
-            bytes,
-            width: double.infinity,
-            fit: BoxFit.fitWidth,
-            errorBuilder: (_, _, _) => _TextImageError(alt: alt),
-          ),
-        ),
-        AsyncSnapshot(hasError: true) => _TextImageError(alt: alt),
-        _ => const SizedBox.shrink(),
-      },
+Widget _buildImage(Uri uri, String? alt, TextMarkdownImages images) => ListenableBuilder(
+  listenable: images,
+  builder: (context, _) {
+    final image = images.resolve(uri);
+    if (image.failed) return _TextImageError(alt: alt);
+    final provider = image.provider;
+    if (provider == null) return const SizedBox.shrink();
+    return Padding(
+      padding: _imagePadding,
+      child: Image(
+        image: provider,
+        width: double.infinity,
+        fit: BoxFit.fitWidth,
+        errorBuilder: (_, _, _) => _TextImageError(alt: alt),
+      ),
     );
-  }
-  if (uri.scheme != 'https' || uri.host.isEmpty || uri.host.contains('%')) {
-    return _TextImageError(alt: alt);
-  }
-  return Padding(
-    padding: _imagePadding,
-    child: Image.network(
-      uri.toString(),
-      width: double.infinity,
-      fit: BoxFit.fitWidth,
-      errorBuilder: (_, _, _) => _TextImageError(alt: alt),
-    ),
-  );
-}
-
-// ---------- Markdown syntax ----------
-
-class _TextImageSyntax extends md.InlineSyntax {
-  _TextImageSyntax()
-    : super(
-        r"""!\[([^\]]*)\]\((?:<([^>]*)>|([^\s)]+))(?:\s+(?:"([^"]*)"|'([^']*)'|\(([^)]*)\)))?\)""",
-        startCharacter: 33,
-      );
-
-  @override
-  bool tryMatch(md.InlineParser parser, [int? startMatchPos]) {
-    startMatchPos ??= parser.pos;
-    final match = pattern.matchAsPrefix(parser.source, startMatchPos);
-    if (match == null) return false;
-    final source = match[2] ?? match[3]!;
-    if (Uri.tryParse(source) != null) return false;
-    return super.tryMatch(parser, startMatchPos);
-  }
-
-  @override
-  bool onMatch(md.InlineParser parser, Match match) {
-    final image = md.Element.empty('img')
-      ..attributes['src'] = 'http://invalid-image'
-      ..attributes['alt'] = match[1]!;
-    final title = match[4] ?? match[5] ?? match[6];
-    if (title != null) image.attributes['title'] = title;
-    parser.addNode(image);
-    return true;
-  }
-}
+  },
+);
 
 class _TextImageError extends StatelessWidget {
   const _TextImageError({this.alt});

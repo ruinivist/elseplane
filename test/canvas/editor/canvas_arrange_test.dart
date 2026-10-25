@@ -735,9 +735,14 @@ void main() {
       await hoverArrange();
       await mouse.moveTo(const Offset(790, 590));
       await tester.pumpAndSettle();
+      final transform = await tester.startGesture(
+        tester.getCenter(find.byKey(ValueKey('$tool-block-handle'))),
+        kind: PointerDeviceKind.mouse,
+      );
       final controls = tester.widget<ElementTransformControls>(find.byType(ElementTransformControls));
       controls.onMove(const Offset(20, -110));
       controls.onRotate!(math.pi / 6);
+      await transform.cancel();
       _canvas(tester).updateScalebyDelta(0.25, focalPoint: Offset.zero);
       await tester.pumpAndSettle();
       expectAttached();

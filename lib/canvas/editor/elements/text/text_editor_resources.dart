@@ -3,9 +3,11 @@
 
 import 'dart:math' as math;
 
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/element_resources.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_markdown_images.dart';
 import 'package:elseplane/ui/common/retained_scroll_controller.dart';
 import 'package:flutter/material.dart';
 
@@ -16,7 +18,9 @@ import 'package:flutter/material.dart';
 class TextEditorResources extends ElementResources<TextElementData> {
   // ---------- Construction ----------
 
-  TextEditorResources(EditorSession session, TextElementData data) : super(session, data) {
+  TextEditorResources(EditorSession session, TextElementData data, AttachmentStore attachmentStore)
+    : super(session, data) {
+    images = TextMarkdownImages(data.markdown, attachmentStore);
     controller = TextEditingController(text: data.markdown);
     controller.addListener(_syncMarkdown);
   }
@@ -25,6 +29,7 @@ class TextEditorResources extends ElementResources<TextElementData> {
 
   TextElementData get node => data;
   late final TextEditingController controller;
+  late final TextMarkdownImages images;
   final FocusNode focusNode = FocusNode();
   final scrollController = RetainedScrollController();
 
@@ -59,6 +64,7 @@ class TextEditorResources extends ElementResources<TextElementData> {
 
   @override
   void synchronizeData(TextElementData previous, {required bool restored}) {
+    if (previous.markdown != data.markdown) images.synchronize(data.markdown);
     if (controller.text != data.markdown) controller.text = data.markdown;
   }
 
@@ -70,12 +76,19 @@ class TextEditorResources extends ElementResources<TextElementData> {
   // ---------- Lifecycle ----------
 
   @override
+  void detach() {
+    images.retire();
+    super.detach();
+  }
+
+  @override
   void dispose() {
     controller
       ..removeListener(_syncMarkdown)
       ..dispose();
     focusNode.dispose();
     scrollController.dispose();
+    images.dispose();
     super.dispose();
   }
 }
