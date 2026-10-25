@@ -4,6 +4,7 @@
 import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 // ---------- File contract ----------
 
@@ -27,15 +28,16 @@ final class _PlatformCanvasProjectFiles implements CanvasProjectFiles {
 
   @override
   Future<bool> save(Uint8List bytes, {required String suggestedName, required String mimeType}) async {
+    final file = XFile.fromData(bytes, mimeType: mimeType, name: suggestedName);
+    if (kIsWeb) {
+      await file.saveTo(suggestedName);
+      return true;
+    }
     final location = await getSaveLocation(
       suggestedName: suggestedName,
     );
     if (location == null) return false;
-    await XFile.fromData(
-      bytes,
-      mimeType: mimeType,
-      name: suggestedName,
-    ).saveTo(location.path);
+    await file.saveTo(location.path);
     return true;
   }
 }
