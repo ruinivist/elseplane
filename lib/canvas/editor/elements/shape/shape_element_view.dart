@@ -3,7 +3,6 @@
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_kind.dart';
-import 'package:elseplane/canvas/editor/tools/shape_tool.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
 import 'package:elseplane/canvas/geometry/shape_geometry.dart';
 import 'package:elseplane/theme/theme.dart';

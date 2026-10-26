@@ -8,6 +8,7 @@ import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/tools/arrow_tool.dart';
 import 'package:elseplane/canvas/editor/tools/pen_tool.dart';
 import 'package:elseplane/canvas/editor/tools/shape_tool.dart';
+import 'package:elseplane/canvas/geometry/pen_geometry.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 

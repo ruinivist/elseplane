@@ -1,5 +1,5 @@
-// Provides freehand stroke sampling, geometry, rendering, and editing state.
-// Used by the canvas pen tool and persisted pen elements.
+// Samples pointer gestures and retains drafts for newly created pen strokes.
+// CanvasInput owns pointer arbitration; EditorSession commits accepted values.
 
 import 'dart:ui';
 
@@ -9,8 +9,6 @@ import 'package:elseplane/canvas/geometry/pen_geometry.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 
-export 'package:elseplane/canvas/geometry/pen_geometry.dart';
-
 // ---------- Sampling ----------
 
 const _minimumPointDistanceSquared = 4.0;
@@ -18,7 +16,7 @@ const _minimumPointDistanceSquared = 4.0;
 // ---------- Tool state ----------
 
 /// Samples pointer input and current options for a freehand stroke.
-/// Used by the canvas page to produce positioned pen element data.
+/// CanvasInput receives raw samples; CanvasView positions them for insertion.
 class PenTool extends ChangeNotifier {
   // ---------- Construction ----------
 

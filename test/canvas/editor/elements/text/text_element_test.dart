@@ -1,8 +1,8 @@
-// Verifies text editing, Markdown preview, styling, and interaction.
-// Exercises text blocks through model and canvas widget flows.
+// Verifies text editing, Markdown rendering, resources, and interaction.
 
 import 'dart:math' as math;
 
+import 'package:elseplane/app/app.dart';
 import 'package:elseplane/app/workspace.dart';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
@@ -12,7 +12,6 @@ import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_markdown_preview.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/library/library_store.dart';
-import 'package:elseplane/main.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/starless.dart';
@@ -33,9 +32,7 @@ import 'package:shared_preferences_web/shared_preferences_web.dart';
 import 'package:url_launcher_platform_interface/link.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
-import '../../test_helpers.dart';
-
-// ---------- Tests ----------
+import '../../../test_helpers.dart';
 
 void main() {
   late UrlLauncherPlatform originalLauncher;
@@ -225,7 +222,7 @@ void main() {
     await tester.pumpWidget(const ElseplaneApp());
     await tester.pump();
     await tester.pump();
-    await _placeCodeBlock(tester, const Offset(300, 200));
+    await placeCodeBlock(tester, const Offset(300, 200));
     final code = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources..setSelected(value: true);
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
@@ -248,62 +245,6 @@ void main() {
     expect(find.byType(TextElementView), findsOneWidget);
     expect(find.byType(CodeElementView), findsOneWidget);
     expect(code.selected, isTrue);
-    FocusManager.instance.primaryFocus?.unfocus();
-    await tester.pump(const Duration(milliseconds: 100));
-  });
-
-  testWidgets('code editor keeps native select and delete actions', (
-    tester,
-  ) async {
-    await tester.pumpWidget(const ElseplaneApp());
-    await tester.pump();
-    await tester.pump();
-    await _placeCodeBlock(tester, const Offset(300, 200));
-    final code = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources..setSelected(value: true);
-    code.controller.text = 'native code';
-    code.focusNode.requestFocus();
-    await tester.pump();
-    code.controller.selectAll();
-    await tester.pump();
-    expect(code.controller.isAllSelected, isTrue);
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
-    await tester.pump();
-    expect(find.byType(CodeElementView), findsOneWidget);
-    expect(code.selected, isTrue);
-    FocusManager.instance.primaryFocus?.unfocus();
-    await tester.pump(const Duration(milliseconds: 100));
-  });
-
-  testWidgets('deleting code keeps unrelated text editing open', (
-    tester,
-  ) async {
-    await tester.pumpWidget(const ElseplaneApp());
-    await tester.pump();
-    await tester.pump();
-    await _placeCodeBlock(tester, const Offset(300, 200));
-    final code = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources..setSelected(value: true);
-
-    await tester.tap(find.byKey(const ValueKey('toolbar-text')));
-    await tester.pump();
-    await tester.tapAt(const Offset(120, 200));
-    await tester.pump();
-    await tester.pump();
-    final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
-    expect(text.editing, isTrue);
-    expect(find.byKey(const ValueKey('text-block-handle')), findsOneWidget);
-
-    FocusManager.instance.primaryFocus?.unfocus();
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
-    await tester.pump();
-    await tester.pump();
-
-    expect(find.byType(CodeElementView), findsNothing);
-    expect(find.byType(TextElementView), findsOneWidget);
-    expect(text.editing, isTrue);
-    expect(find.byKey(const ValueKey('text-block-handle')), findsOneWidget);
-    expect(code.session.selectedIds, isNot(contains(code.data.id)));
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump(const Duration(milliseconds: 100));
   });
@@ -1352,7 +1293,7 @@ x+y
     expect(model.editing, isTrue);
     expect(find.byType(ElementTransformControls), findsOneWidget);
 
-    await _placeCodeBlock(tester, const Offset(300, 200));
+    await placeCodeBlock(tester, const Offset(300, 200));
     await tester.pumpAndSettle();
     expect(model.editing, isFalse);
     expect(find.byKey(const ValueKey('code-block-handle')), findsOneWidget);
@@ -1524,29 +1465,6 @@ x+y
     expect(find.byType(ElementTransformControls), findsNothing);
     await tester.pump(const Duration(milliseconds: 100));
   });
-
-  testWidgets('malformed saved libraries are preserved and reported', (
-    tester,
-  ) async {
-    const invalid = '{"version":99,"currentId":"invalid","files":[]}';
-    final preferences = SharedPreferencesAsync();
-    await preferences.setString(PreferencesLibraryStore.libraryKey, invalid);
-
-    await tester.pumpWidget(const ElseplaneApp());
-    await tester.pump();
-    await tester.pump();
-
-    expect(find.byType(TextElementView), findsNothing);
-    expect(find.text('Could not load saved canvas'), findsOneWidget);
-    expect(await preferences.getString(PreferencesLibraryStore.libraryKey), invalid);
-
-    await tester.tap(find.byKey(const ValueKey('toolbar-text')));
-    await tester.pump();
-    await tester.tapAt(const Offset(120, 200));
-    await pumpPastSave(tester);
-    expect(find.byType(TextElementView), findsNothing);
-    expect(await preferences.getString(PreferencesLibraryStore.libraryKey), invalid);
-  });
 }
 
 // ---------- Test helpers ----------
@@ -1598,13 +1516,6 @@ Future<TextEditorResources> _placeTextBlock(
   await tester.pump();
   await tester.pump();
   return tester.widget<TextElementView>(find.byType(TextElementView).last).resources;
-}
-
-Future<void> _placeCodeBlock(WidgetTester tester, Offset position) async {
-  await tester.tap(find.byKey(const ValueKey('toolbar-code')));
-  await tester.pump();
-  await tester.tapAt(position);
-  await tester.pump();
 }
 
 // ---------- Test doubles ----------

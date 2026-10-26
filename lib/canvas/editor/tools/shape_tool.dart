@@ -1,5 +1,5 @@
-// Provides shape geometry, creation state, rendering, and interaction.
-// Used by the canvas shape tool and persisted shape elements.
+// Samples pointer gestures and retains drafts for newly created shapes.
+// CanvasInput owns pointer arbitration; EditorSession commits accepted values.
 
 import 'dart:ui';
 
@@ -8,8 +8,6 @@ import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:uuid/uuid.dart';
-
-export 'package:elseplane/canvas/geometry/shape_geometry.dart';
 
 // ---------- Tool state ----------
 

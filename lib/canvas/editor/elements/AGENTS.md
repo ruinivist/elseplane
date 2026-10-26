@@ -8,3 +8,4 @@
 - Keep element option panels and presentation mappings beside their element. CanvasPage binds current values, creation defaults, and session edit callbacks; shared stroke controls belong in ../widgets/.
 - Keep annotated panel and shared-control previews in ../previews/.
 - Use ordinary imports and keep component geometry local. Put shared canvas controls in ../widgets/ and app-wide Flutter primitives in lib/ui/common/.
+- Keep element presentation, resource, and editor tests under test/canvas/editor/elements/ by element type. Test cross-element selection, history, navigation, and clipboard policy with their editor owner instead.

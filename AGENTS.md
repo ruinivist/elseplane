@@ -1,7 +1,7 @@
 # Project Guidance
 
 - This is an infinite canvas project under active development.
-- Before structural changes, read [the architectural constitution](docs/ARCHITECTURE.md) for target ownership and allowed dependencies; follow [the refactor roadmap](docs/REFACTOR_PLAN.md) when migrating existing code. The architecture describes the intended rewrite, not the current implementation.
+- Before structural changes, read [the architectural constitution](docs/ARCHITECTURE.md) for ownership and allowed dependencies; follow [the refactor roadmap](docs/REFACTOR_PLAN.md) when migrating existing code. The architecture defines implemented ownership and allowed dependencies; the roadmap records the migration.
 - The [interaction model](docs/Interaction%20model.md) governs product behavior. Older notes do not override it or the architectural constitution.
 - Backward compatibility is not required yet.
 - Prefer globally coherent, root-cause changes over local patches, even when they require breaking changes.

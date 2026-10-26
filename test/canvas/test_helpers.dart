@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:elseplane/app/app.dart';
 import 'package:elseplane/app/workspace.dart';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
@@ -19,7 +20,6 @@ import 'package:elseplane/canvas/geometry/element_geometry.dart';
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_project_files.dart';
-import 'package:elseplane/main.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:flutter/material.dart';
@@ -122,6 +122,13 @@ Future<void> pumpElseplaneApp(
     ),
   );
   await tester.pump();
+  await tester.pump();
+}
+
+Future<void> placeCodeBlock(WidgetTester tester, Offset position) async {
+  await tester.tap(find.byKey(const ValueKey('toolbar-code')));
+  await tester.pump();
+  await tester.tapAt(position);
   await tester.pump();
 }
 

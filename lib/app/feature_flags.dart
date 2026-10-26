@@ -1,5 +1,5 @@
 // Defines compile-time availability of application features.
-// Used by feature owners to guard behavior and its settings controls.
+// App composition gates behavior and supplies the available Settings callbacks.
 
 // ---------- Feature flags ----------
 

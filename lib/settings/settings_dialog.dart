@@ -4,7 +4,6 @@
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/feature_flags.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
@@ -31,7 +30,11 @@ class SettingsDialog extends StatefulWidget {
   });
 
   final ThemeMode themeMode;
+
+  /// Enables surface-style selection; null omits its control.
   final Future<void> Function(SurfaceStyle)? onSurfaceStyleChanged;
+
+  /// Enables theme selection; null omits its control.
   final Future<void> Function(ThemeMode)? onThemeModeChanged;
   final CanvasBackgroundKind canvasBackgroundKind;
   final ValueChanged<CanvasBackgroundKind>? onCanvasBackgroundChanged;
@@ -197,7 +200,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     bool horizontal = false,
   }) {
     final children = [
-      if (FeatureFlags.themeSelection || FeatureFlags.surfaceStyleSelection)
+      if (widget.onThemeModeChanged != null || widget.onSurfaceStyleChanged != null)
         _navigationItem(
           context,
           section: _SettingsSection.appearance,
@@ -309,7 +312,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (FeatureFlags.surfaceStyleSelection) ...[
+        if (widget.onSurfaceStyleChanged != null) ...[
           Text('Surface style', style: theme.typo.label),
           const SizedBox(height: 10),
           Select<SurfaceStyle>(
@@ -320,11 +323,11 @@ class _SettingsDialogState extends State<SettingsDialog> {
               SelectOption(value: SurfaceStyle.glass, label: 'Glass'),
             ],
             showBorder: false,
-            onChanged: widget.onSurfaceStyleChanged == null ? null : _changeSurfaceStyle,
+            onChanged: _changeSurfaceStyle,
           ),
         ],
-        if (FeatureFlags.surfaceStyleSelection && FeatureFlags.themeSelection) const SizedBox(height: 20),
-        if (FeatureFlags.themeSelection) ...[
+        if (widget.onSurfaceStyleChanged != null && widget.onThemeModeChanged != null) const SizedBox(height: 20),
+        if (widget.onThemeModeChanged != null) ...[
           Text('Theme', style: theme.typo.label),
           const SizedBox(height: 10),
           Select<ThemeMode>(
@@ -335,7 +338,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
               SelectOption(value: ThemeMode.dark, label: 'Dark'),
             ],
             showBorder: false,
-            onChanged: widget.onThemeModeChanged == null ? null : _changeTheme,
+            onChanged: _changeTheme,
           ),
         ],
       ],

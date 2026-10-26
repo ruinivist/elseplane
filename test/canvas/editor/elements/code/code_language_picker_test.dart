@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
-import '../test_helpers.dart';
+import '../../../test_helpers.dart';
 
 // ---------- Tests ----------
 

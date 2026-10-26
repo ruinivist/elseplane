@@ -1,5 +1,4 @@
-// Verifies media creation, loading, resizing, and persistence behavior.
-// Exercises the media tool through model and canvas widget flows.
+// Verifies media editing, rendering resources, and asynchronous workflows.
 
 import 'dart:async';
 import 'dart:js_interop';
@@ -19,9 +18,7 @@ import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 import 'package:web/web.dart' as web;
 
-import '../../test_helpers.dart';
-
-// ---------- Tests ----------
+import '../../../test_helpers.dart';
 
 void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));

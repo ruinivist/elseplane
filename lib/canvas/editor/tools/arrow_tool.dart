@@ -1,5 +1,5 @@
-// Provides arrow geometry, editing state, rendering, and hit testing.
-// Used by the canvas arrow creation and selection flows.
+// Samples pointer gestures and retains drafts for newly created arrows.
+// CanvasInput owns pointer arbitration; EditorSession commits accepted values.
 
 import 'dart:ui';
 
@@ -9,8 +9,6 @@ import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:uuid/uuid.dart';
-
-export 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 
 // ---------- Tool state ----------
 

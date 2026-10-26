@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
+import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // ---------- Fixtures ----------
@@ -230,5 +231,48 @@ void main() {
     expect(restored.isCurrent, isFalse);
     session.move(['a'], const Offset(100, 0));
     expect((session.document.elements.single as ShapeElementData).position, Offset.zero);
+  });
+
+  test('pen movement preserves normalized local geometry', () {
+    final session = _session([
+      PenElementData(
+        id: 'pen',
+        position: const Offset(10, 20),
+        size: const Size(61, 61),
+        hitSlop: 3,
+        color: const Color(0xff000000),
+        width: 2.5,
+        points: const [
+          PenPointData(Offset(5.5, 5.5), pressure: 0.5),
+        ],
+      ),
+    ])..move(['pen'], const Offset(8, -4));
+    final pen = session.element('pen')! as PenElementData;
+
+    expect(pen.position, const Offset(18, 16));
+    expect(pen.size, const Size(61, 61));
+    expect(pen.points.single.position.dx, 5.5);
+  });
+
+  test('arrow movement shifts every durable point equally', () {
+    final session = _session([
+      ArrowElementData(
+        id: 'arrow',
+        start: Offset.zero,
+        controls: const [Offset(20, -8)],
+        end: const Offset(40, 10),
+        color: const Color(0xff000000),
+        strokeStyle: ArrowStrokeStyle.solid,
+        strokeWidth: 2,
+      ),
+    ]);
+    final before = (session.element('arrow')! as ArrowElementData).geometry;
+
+    session.move(['arrow'], const Offset(12, 7));
+    final arrow = session.element('arrow')! as ArrowElementData;
+
+    expect(arrow.geometry.start, before.start + const Offset(12, 7));
+    expect(arrow.geometry.controls.single, before.controls.single + const Offset(12, 7));
+    expect(arrow.geometry.end, before.end + const Offset(12, 7));
   });
 }

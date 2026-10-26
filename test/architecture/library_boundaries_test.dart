@@ -11,6 +11,17 @@ import 'package:flutter_test/flutter_test.dart';
 // ---------- Tests ----------
 
 void main() {
+  test('settings receives capabilities without depending on app composition', () {
+    for (final file in Directory('lib/settings').listSync(recursive: true).whereType<File>()) {
+      if (!file.path.endsWith('.dart')) continue;
+      for (final dependency in _dependencies(file)) {
+        final resolved = file.absolute.uri.resolve(dependency).toString();
+        expect(resolved.contains('/app/'), isFalse, reason: '${file.path}: $dependency');
+        expect(resolved.endsWith('/main.dart'), isFalse, reason: '${file.path}: $dependency');
+      }
+    }
+  });
+
   test('library and shared UI do not import editor implementation', () {
     for (final root in ['lib/library', 'lib/ui/common']) {
       for (final file in Directory(root).listSync(recursive: true).whereType<File>()) {

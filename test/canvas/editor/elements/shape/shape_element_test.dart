@@ -1,10 +1,7 @@
-// Verifies shape creation, editing, rendering, and toolbar behavior.
-// Exercises the shape tool through model and canvas widget flows.
+// Verifies persisted shape hit targets, options, and controls.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
-import 'package:elseplane/canvas/editor/tools/shape_tool.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/starless.dart';
@@ -17,54 +14,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
-import '../../test_helpers.dart';
-
-// ---------- Tests ----------
+import '../../../test_helpers.dart';
 
 void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
-
-  test('shape tool normalizes drags and rejects undersized shapes', () {
-    final shapes = <ShapeElementData>[];
-    final tool = ShapeTool(session: testSessionProvider(), onShape: shapes.add)
-      ..setKind(ShapeKind.hexagon)
-      ..setStrokeColor(const Color(0xffdc3f3f))
-      ..setFillColor(const Color(0xff2f6fde))
-      ..setStrokeWidth(3);
-    final pointer = TestPointer(1, PointerDeviceKind.mouse);
-
-    tool
-      ..onPointerDown(
-        pointer.down(const Offset(180, 140)),
-        const Offset(180, 140),
-      )
-      ..onPointerMove(
-        pointer.move(const Offset(40, 20)),
-        const Offset(40, 20),
-      );
-    expect(tool.preview!.rect, const Rect.fromLTRB(40, 20, 180, 140));
-    tool.onPointerUp(pointer.up(), const Offset(40, 20));
-
-    expect(shapes, hasLength(1));
-    expect(shapes.single.kind, ShapeKind.hexagon);
-    expect(shapes.single.position, const Offset(40, 20));
-    expect(shapes.single.size, const Size(140, 120));
-    expect(shapes.single.strokeColor, const Color(0xffdc3f3f));
-    expect(shapes.single.fillColor, const Color(0xff2f6fde));
-    expect(shapes.single.strokeWidth, 3);
-    expect(tool.preview, isNull);
-
-    final tiny = TestPointer(2, PointerDeviceKind.mouse);
-    tool
-      ..onPointerDown(
-        tiny.down(const Offset(200, 200)),
-        const Offset(200, 200),
-      )
-      ..onPointerUp(tiny.up(), const Offset(220, 220));
-    expect(shapes, hasLength(1));
-
-    tool.dispose();
-  });
 
   testWidgets('hollow shapes hit their full geometric area', (tester) async {
     final model = testShapeFixture(
@@ -142,59 +95,6 @@ void main() {
     await tester.pump();
     expect(shapeTaps, 1);
     expect(backgroundTaps, 1);
-  });
-
-  testWidgets('drawing tools receive drags started over text blocks', (
-    tester,
-  ) async {
-    const style = TextNodeStyle(
-      fontFamily: 'Source Serif 4',
-      color: Color(0xff201C1A),
-    );
-    await pumpCanvas(
-      tester,
-      TestLibraryStore(
-        CanvasDocument(
-          background: CanvasBackgroundKind.plain,
-          elements: [
-            TextElementData(
-              id: 'drawing-surface',
-              position: const Offset(100, 160),
-              width: 240,
-              height: 300,
-              markdown: 'Drawing surface',
-              style: style,
-            ),
-          ],
-        ),
-      ),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('toolbar-arrow')));
-    await tester.pump();
-    final arrowDrag = await tester.startGesture(
-      const Offset(140, 200),
-      kind: PointerDeviceKind.mouse,
-    );
-    await arrowDrag.moveTo(const Offset(300, 240));
-    await tester.pump();
-    expect(find.byKey(const ValueKey('arrow-preview')), findsOneWidget);
-    await arrowDrag.up();
-    await tester.pump();
-    expect(find.byType(ArrowElementView), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('toolbar-shape')));
-    await tester.pump();
-    final shapeDrag = await tester.startGesture(
-      const Offset(140, 380),
-      kind: PointerDeviceKind.mouse,
-    );
-    await shapeDrag.moveTo(const Offset(300, 420));
-    await tester.pump();
-    expect(find.byKey(const ValueKey('shape-preview')), findsOneWidget);
-    await shapeDrag.up();
-    await tester.pump();
-    expect(find.byType(ShapeElementView), findsOneWidget);
   });
 
   testWidgets('shape options fit four per row at desktop and narrow widths', (tester) async {

@@ -1,13 +1,19 @@
-// Verifies pointer ownership and cancellation without constructing canvas widgets.
-// Exercises the input-to-session boundary with a measured viewport substitute.
+// Verifies pointer ownership, cancellation, and tool routing over canvas objects.
+// Uses a measured viewport substitute and focused canvas integration.
 
 import 'dart:ui';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_input.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
+import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences_web/shared_preferences_web.dart';
+
+import '../test_helpers.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -183,6 +189,60 @@ void main() {
     expect(viewport.deltas, [const Offset(20, 0)]);
     input.pointerCancel(pointer.cancel());
     expect(viewport.ends, 0);
+  });
+
+  testWidgets('drawing tools receive drags started over text blocks', (
+    tester,
+  ) async {
+    SharedPreferencesAsyncWeb.registerWith(null);
+    const style = TextNodeStyle(
+      fontFamily: 'Source Serif 4',
+      color: Color(0xff201C1A),
+    );
+    await pumpCanvas(
+      tester,
+      TestLibraryStore(
+        CanvasDocument(
+          background: CanvasBackgroundKind.plain,
+          elements: [
+            TextElementData(
+              id: 'drawing-surface',
+              position: const Offset(100, 160),
+              width: 240,
+              height: 300,
+              markdown: 'Drawing surface',
+              style: style,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('toolbar-arrow')));
+    await tester.pump();
+    final arrowDrag = await tester.startGesture(
+      const Offset(140, 200),
+      kind: PointerDeviceKind.mouse,
+    );
+    await arrowDrag.moveTo(const Offset(300, 240));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('arrow-preview')), findsOneWidget);
+    await arrowDrag.up();
+    await tester.pump();
+    expect(find.byType(ArrowElementView), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('toolbar-shape')));
+    await tester.pump();
+    final shapeDrag = await tester.startGesture(
+      const Offset(140, 380),
+      kind: PointerDeviceKind.mouse,
+    );
+    await shapeDrag.moveTo(const Offset(300, 420));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('shape-preview')), findsOneWidget);
+    await shapeDrag.up();
+    await tester.pump();
+    expect(find.byType(ShapeElementView), findsOneWidget);
   });
 }
 

@@ -32,6 +32,7 @@ import 'package:elseplane/canvas/editor/tools/shape_tool.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/zoom_control.dart';
 import 'package:elseplane/canvas/geometry/element_geometry.dart';
+import 'package:elseplane/canvas/geometry/pen_geometry.dart';
 import 'package:elseplane/canvas/geometry/transforms.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/preset_colors.dart';
@@ -445,12 +446,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   void _openArrangeMenu(CanvasElementData value, Rect buttonBounds) {
     if (_canvasInputBlocked || _session.element(value.id) == null || _session.tool != CanvasTool.select) return;
     final selection = _input.selectionBeforePointer;
-    if (selection.contains(value.id) && selection.length > 1) {
-      _session.setSelection(selection);
-      // TODO(zero): Selected groups need their own menu for move, rotate, arrange, and delete.
-      throw UnimplementedError('Arrange controls for selected groups');
-    }
-    _session.setSelection([value.id]);
+    _session.setSelection(selection.contains(value.id) ? selection : [value.id]);
     final left = buttonBounds.left - ContextMenu.width - 4;
     final position = Offset(
       left >= MediaQuery.paddingOf(context).left ? left : buttonBounds.right + 4,

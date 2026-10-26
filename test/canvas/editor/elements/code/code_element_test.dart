@@ -1,5 +1,4 @@
-// Verifies code block backgrounds and distinguishes clicks from movement drags.
-// Exercises CodeElementView rendering and editing without the persistence boundary.
+// Verifies code editing, rendering resources, and asynchronous workflows.
 
 import 'dart:async';
 
@@ -15,7 +14,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:re_editor/re_editor.dart';
 
-import '../../test_helpers.dart';
+import '../../../test_helpers.dart';
 
 void main() {
   for (final intoTitle in [false, true]) {

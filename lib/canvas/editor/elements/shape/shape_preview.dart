@@ -3,6 +3,7 @@
 
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/tools/shape_tool.dart';
+import 'package:elseplane/canvas/geometry/shape_geometry.dart';
 import 'package:flutter/material.dart';
 
 // ---------- Preview model ----------

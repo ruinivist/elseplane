@@ -2,10 +2,13 @@
 // Exercises ordering through the canvas rather than reproducing the library algorithm.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:elseplane/app/app.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/element_resources.dart';
+import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
@@ -14,6 +17,8 @@ import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_markdown_editor.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
+import 'package:elseplane/library/canvas_library.dart';
+import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
 import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/theme/theme.dart';
@@ -26,6 +31,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../test_helpers.dart';
@@ -352,10 +358,12 @@ void main() {
   testWidgets('Auto switch applies to a mixed group and promotes immediately in one step', (tester) async {
     final document = _document().withElements((elements) => elements[2] = elements[2].copyWith(autoArrange: true));
     await pumpCanvas(tester, TestLibraryStore(document));
+    await tester.tapAt(const Offset(305, 305));
+    await tester.pumpAndSettle();
     _models(tester)['a']!.setSelected(value: true);
     _models(tester)['c']!.setSelected(value: true);
-    await _open(tester, const Offset(305, 305));
-    await _openArrange(tester);
+    await tester.tap(find.byTooltip('Arrange'));
+    await tester.pumpAndSettle();
     expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isFalse);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
@@ -484,8 +492,47 @@ void main() {
     });
   }
 
-  testWidgets('direct group placeholder restores pre-pointer selection and leaves activation intact', (tester) async {
-    final store = TestLibraryStore(_document());
+  for (final device in [PointerDeviceKind.mouse, PointerDeviceKind.touch]) {
+    for (final escape in [false, true]) {
+      testWidgets('direct group $device Arrange restores selection and dismisses with Escape $escape', (tester) async {
+        final store = TestLibraryStore(_document());
+        await pumpCanvas(tester, store);
+        await tester.tapAt(const Offset(305, 305));
+        await tester.pumpAndSettle();
+        final models = _models(tester);
+        models['a']!.setSelected(value: true);
+        models['c']!.setSelected(value: true);
+        await tester.pump();
+        final click = await tester.startGesture(tester.getCenter(find.byTooltip('Arrange')), kind: device);
+        expect(models['a']!.selected, isFalse);
+        expect(models['c']!.selected, isFalse);
+        await click.up();
+        await tester.pumpAndSettle();
+        expect(models['a']!.selected, isTrue);
+        expect(models['c']!.selected, isTrue);
+        expect(models['b']!.selected, isFalse);
+        expect(models['a']!.active, isFalse);
+        expect(find.byType(MenuSurface), findsOneWidget);
+        expect(find.byType(ElementTransformControls), findsNothing);
+        expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).focusNode!.hasFocus, isTrue);
+        if (escape) {
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        } else {
+          await tester.tapAt(const Offset(790, 590), kind: device);
+        }
+        await tester.pumpAndSettle();
+        expect(find.byType(MenuSurface), findsNothing);
+        expect(models['a']!.selected, escape);
+        expect(models['c']!.selected, escape);
+        await pumpPastSave(tester);
+        expect(store.persisted, isNull);
+      });
+    }
+  }
+
+  testWidgets('direct mixed group Arrange captures targets and saves order and Auto in one step', (tester) async {
+    final document = _document().withElements((elements) => elements[2] = elements[2].copyWith(autoArrange: true));
+    final store = TestLibraryStore(document);
     await pumpCanvas(tester, store);
     await tester.tapAt(const Offset(305, 305));
     await tester.pumpAndSettle();
@@ -493,20 +540,24 @@ void main() {
     models['a']!.setSelected(value: true);
     models['c']!.setSelected(value: true);
     await tester.pump();
-    final click = await tester.startGesture(tester.getCenter(find.byTooltip('Arrange')));
-    expect(models['a']!.selected, isFalse);
-    expect(models['c']!.selected, isFalse);
-    await click.up();
-    expect(tester.takeException(), isA<UnimplementedError>());
+    await tester.tap(find.byTooltip('Arrange'));
     await tester.pumpAndSettle();
-    expect(models['a']!.selected, isTrue);
-    expect(models['c']!.selected, isTrue);
-    expect(models['b']!.selected, isFalse);
-    expect(models['a']!.active, isTrue);
-    expect(find.byType(MenuSurface), findsNothing);
-    expect(find.byType(ElementTransformControls), findsOneWidget);
+    expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isFalse);
+    models['a']!.setSelected(value: false);
+    models['c']!.setSelected(value: false);
+    models['b']!.setSelected(value: true);
+    await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
+    expect(_canvas(tester).childOrder, ['b', 'd', 'a', 'c']);
+    expect(models['a']!.autoArrange, isFalse);
+    expect(models['c']!.autoArrange, isFalse);
     await pumpPastSave(tester);
-    expect(store.persisted, isNull);
+    expect(_order(store.persisted!), ['b', 'd', 'a', 'c']);
+    await _shortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
+    expect(models['c']!.autoArrange, isTrue);
+    await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+    expect(_canvas(tester).childOrder, ['b', 'd', 'a', 'c']);
+    expect(models['c']!.autoArrange, isFalse);
   });
 
   for (final editor in ['text', 'code', 'title', 'media']) {
@@ -1547,6 +1598,107 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+  testWidgets('pen and arrow interactions preserve stacking order', (
+    tester,
+  ) async {
+    await SharedPreferencesAsync().remove(PreferencesLibraryStore.libraryKey);
+    final document = CanvasDocument(
+      background: CanvasBackgroundKind.plain,
+      elements: [
+        PenElementData(
+          autoArrange: false,
+          id: 'pen',
+          position: const Offset(100, 250),
+          size: const Size(100, 30),
+          hitSlop: 6,
+          color: const Color(0xff000000),
+          width: 3,
+          points: const [
+            PenPointData(Offset(0, 15), pressure: 0.5),
+            PenPointData(Offset(100, 15), pressure: 0.5),
+          ],
+        ),
+        ArrowElementData(
+          autoArrange: false,
+          id: 'arrow',
+          start: const Offset(300, 250),
+          controls: const [Offset(380, 235)],
+          end: const Offset(460, 250),
+          color: const Color(0xff000000),
+          strokeStyle: ArrowStrokeStyle.solid,
+          strokeWidth: 2,
+        ),
+      ],
+    );
+    await SharedPreferencesAsync().setString(
+      PreferencesLibraryStore.libraryKey,
+      jsonEncode(CanvasLibrary.initial(document).toJson()),
+    );
+    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pump();
+    await tester.pump();
+
+    final penFinder = find.byType(PenElementView);
+    final arrowFinder = find.byType(ArrowElementView);
+    final pen = tester.widget<PenElementView>(penFinder).resources;
+    final arrow = canvasElement(tester, tester.widget<ArrowElementView>(arrowFinder).data);
+    List<String> elementIds() => tester
+        .widget<LazyCanvas>(find.byType(LazyCanvas))
+        .controller
+        .widgetsWithScreenPositions()
+        .map((child) => child.id)
+        .toList();
+
+    expect(elementIds(), ['pen', 'arrow']);
+
+    await tester.tapAt(tester.getCenter(penFinder));
+    await tester.pump();
+    expect(elementIds(), ['pen', 'arrow']);
+    expect(pen.active, isFalse);
+    expect(pen.selected, isFalse);
+    expect(find.byKey(const ValueKey('pen-block-handle')), findsNothing);
+    expect(find.byKey(const ValueKey('pen-block-delete-control')), findsNothing);
+    expect(find.byKey(const ValueKey('pen-block-rotate-control')), findsNothing);
+
+    final penPosition = tester.getTopLeft(penFinder);
+    const penDelta = Offset(32, 18);
+    await tester.drag(penFinder, penDelta, kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    expect(tester.getTopLeft(penFinder), penPosition + penDelta);
+    expect(pen.active, isFalse);
+    expect(pen.selected, isFalse);
+
+    final arrowStart =
+        tester.getTopLeft(arrowFinder) +
+        Offset(
+          arrow.start.dx - arrow.bounds.left,
+          arrow.start.dy - arrow.bounds.top,
+        );
+    await tester.tapAt(arrowStart);
+    await tester.pump();
+    expect(elementIds(), ['pen', 'arrow']);
+    expect(pen.active, isFalse);
+    expect(arrow.active, isTrue);
+    expect(arrow.selected, isFalse);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    await tester.tapAt(tester.getCenter(penFinder));
+    await tester.pump();
+    expect(elementIds(), ['pen', 'arrow']);
+    expect(pen.selected, isTrue);
+
+    await tester.tapAt(arrowStart);
+    await tester.pump();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(elementIds(), ['pen', 'arrow']);
+    expect(arrow.selected, isFalse);
+
+    await tester.pump(const Duration(milliseconds: 320));
+    final saved = (await PreferencesLibraryStore().load())!.current.document!;
+    expect(saved.elements.map((element) => element.id), ['pen', 'arrow']);
+  });
 }
 
 // ---------- Helpers ----------
@@ -1730,3 +1882,5 @@ CanvasDocument _editorDocument(String editor) => CanvasDocument(
     ),
   ],
 );
+
+// ---------- Test helpers ----------

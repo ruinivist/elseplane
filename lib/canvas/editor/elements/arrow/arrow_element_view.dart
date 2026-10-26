@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/tools/arrow_tool.dart';
+import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';

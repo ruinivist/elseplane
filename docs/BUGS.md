@@ -26,20 +26,7 @@ Fix: use parser-provided source ranges to rewrite actual image destinations. Ded
 
 Status: fixed. Editor session context changes invalidate the pending Cut before dragging another object. A delayed-Cut regression covers the completed drag.
 
-Location: `lib/canvas/editor/canvas_page.dart`, `_handleSelectableElementPointerDown`, `_handleCanvasPointerDown`, and `_copySelection`.
-
-To reproduce:
-
-1. Select shape A with no active editor.
-2. Start Cut while the clipboard write is delayed.
-3. Drag an unselected, inactive shape B and release it.
-4. Let the clipboard write finish.
-
-Expected: the change of object context cancels Cut and leaves A intact, following the [paste cancellation decision](adr/0001-cancel-unfinished-pastes.md). Actual: A is deleted after B has moved.
-
-Pressing B clears selection, but `_setActiveElement(null)` returns early when no object is active. The pending clipboard generation remains valid, so the completed Cut still deletes its captured objects.
-
-Fix: invalidate pending canvas clipboard work when pressing a different object changes the input context, before clearing selection. Preserve transforms within the same open editor. Add a delayed-Cut regression covering a completed drag of an unselected object.
+Location: `CanvasInputTarget.pointerDown` in [canvas input](../lib/canvas/editor/canvas_input.dart) invalidates the outgoing edit context; [CanvasClipboard](../lib/canvas/editor/canvas_clipboard.dart) checks its captured lifetime before deleting Cut targets. The [clipboard tests](../test/canvas/editor/canvas_clipboard_test.dart) cover a delayed Cut followed by a completed drag of another object.
 
 ## 3. Wrapped code scroll position changes after culling
 

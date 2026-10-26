@@ -9,6 +9,7 @@
 - Retain shared primitives only when they have production consumers.
 - Prefer small, composable widgets and Flutter platform primitives over broad abstractions.
 - Give every reusable UI widget its own annotated preview in `previews/`.
+- Keep shared primitive and preview behavior tests under test/ui/. Canvas-specific controls and their tests belong to the canvas editor widgets owner.
 
 ## Naming convention
 

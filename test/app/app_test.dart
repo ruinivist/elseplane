@@ -1,17 +1,16 @@
 // Verifies app-wide theme switching, storage, and failure handling.
 // Exercises settings through the root app without changing canvas content.
 
+import 'package:elseplane/app/app.dart';
+import 'package:elseplane/app/feature_flags.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
-import 'package:elseplane/feature_flags.dart';
-import 'package:elseplane/main.dart';
 import 'package:elseplane/settings/settings_dialog.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/glass_surface.dart';
-import 'package:elseplane/ui/previews/theme_preview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,30 +31,6 @@ void main() {
   tearDown(() async {
     await SharedPreferencesAsync().remove(themePreferenceKey);
     await SharedPreferencesAsync().remove(surfaceStylePreferenceKey);
-  });
-
-  testWidgets('preview theme follows preview brightness and supplies app semantics', (tester) async {
-    for (final brightness in Brightness.values) {
-      await tester.pumpWidget(
-        MediaQuery(
-          data: MediaQueryData(platformBrightness: brightness),
-          child: Builder(
-            builder: (context) => previewTheme().apply(context, const SizedBox(key: ValueKey('preview-child'))),
-          ),
-        ),
-      );
-      final theme = Theme.of(tester.element(find.byKey(const ValueKey('preview-child'))));
-      expect(theme.brightness, brightness);
-      final semantics = theme.extension<BTheme>()!;
-      expect(semantics.typo.heading.color, semantics.colors.textHeading);
-      expect(semantics.typo.body.color, semantics.colors.textPrimary);
-      if (brightness == Brightness.dark) {
-        expect(
-          semantics.colors.textHeading.computeLuminance(),
-          greaterThan(semantics.colors.textPrimary.computeLuminance()),
-        );
-      }
-    }
   });
 
   testWidgets('appearance flags guard root state, callbacks, and settings independently', (tester) async {

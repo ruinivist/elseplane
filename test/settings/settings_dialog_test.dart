@@ -5,12 +5,45 @@ import 'dart:async';
 
 import 'package:elseplane/settings/settings_dialog.dart';
 import 'package:elseplane/theme/starless.dart';
+import 'package:elseplane/theme/theme.dart';
+import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // ---------- Tests ----------
 
 void main() {
+  for (final themeEnabled in [false, true]) {
+    for (final surfaceEnabled in [false, true]) {
+      testWidgets('appearance follows callbacks with theme $themeEnabled and surface $surfaceEnabled', (tester) async {
+        ThemeMode? chosenTheme;
+        SurfaceStyle? chosenSurface;
+        await _openCanvasSettings(
+          tester,
+          onImport: () async => true,
+          onExport: () async {},
+          onThemeModeChanged: themeEnabled ? (mode) async => chosenTheme = mode : null,
+          onSurfaceStyleChanged: surfaceEnabled ? (style) async => chosenSurface = style : null,
+        );
+        if (!themeEnabled && !surfaceEnabled) {
+          expect(find.text('Appearance'), findsNothing);
+          return;
+        }
+        await tester.tap(find.text('Appearance').last);
+        await tester.pumpAndSettle();
+        final theme = find.byKey(const ValueKey('theme-select'));
+        final surface = find.byKey(const ValueKey('surface-style-select'));
+        expect(theme, themeEnabled ? findsOneWidget : findsNothing);
+        expect(surface, surfaceEnabled ? findsOneWidget : findsNothing);
+        if (themeEnabled) tester.widget<Select<ThemeMode>>(theme).onChanged!(ThemeMode.dark);
+        if (surfaceEnabled) tester.widget<Select<SurfaceStyle>>(surface).onChanged!(SurfaceStyle.solid);
+        await tester.pumpAndSettle();
+        expect(chosenTheme, themeEnabled ? ThemeMode.dark : null);
+        expect(chosenSurface, surfaceEnabled ? SurfaceStyle.solid : null);
+      });
+    }
+  }
+
   testWidgets(
     'export disables both actions until it completes',
     (tester) async {
@@ -98,6 +131,8 @@ Future<void> _openCanvasSettings(
   WidgetTester tester, {
   required Future<bool> Function() onImport,
   required Future<void> Function() onExport,
+  Future<void> Function(ThemeMode)? onThemeModeChanged,
+  Future<void> Function(SurfaceStyle)? onSurfaceStyleChanged,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -111,6 +146,8 @@ Future<void> _openCanvasSettings(
               builder: (_) => SettingsDialog(
                 onImportCanvas: onImport,
                 onExportCanvas: onExport,
+                onThemeModeChanged: onThemeModeChanged,
+                onSurfaceStyleChanged: onSurfaceStyleChanged,
               ),
             ),
             child: const Text('Open settings'),
