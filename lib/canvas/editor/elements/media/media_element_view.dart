@@ -447,7 +447,6 @@ class _MediaUrlPanelState extends State<_MediaUrlPanel> {
                         },
                         minLines: 1,
                         maxLines: 3,
-                        textAlignVertical: TextAlignVertical.center,
                         keyboardType: TextInputType.url,
                         textInputAction: TextInputAction.done,
                         cursorColor: colors.accent,
@@ -455,7 +454,7 @@ class _MediaUrlPanelState extends State<_MediaUrlPanel> {
                         decoration: const InputDecoration(
                           hintText: 'Paste link',
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         ),
                       ),
                     ),
