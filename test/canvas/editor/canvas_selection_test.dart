@@ -3,8 +3,10 @@
 import 'dart:math' as math;
 
 import 'package:elseplane/app/app.dart';
+import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/element_resources.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/library/library_store.dart';
@@ -169,6 +171,60 @@ void main() {
     expect(text.selected, isFalse);
     expect(code.selected, isFalse);
   });
+
+  for (final (device, cancel) in [(PointerDeviceKind.mouse, false), (PointerDeviceKind.touch, true)]) {
+    testWidgets('inactive media moves its selected group under zoom on $device with cancellation $cancel', (
+      tester,
+    ) async {
+      const mediaPosition = Offset(120, 150);
+      const textPosition = Offset(480, 350);
+      final document = CanvasDocument(
+        background: CanvasBackgroundKind.plain,
+        elements: [
+          MediaElementData(id: 'media', position: mediaPosition, width: 400, url: ''),
+          TextElementData(
+            id: 'text',
+            position: textPosition,
+            width: 280,
+            height: null,
+            markdown: 'Group member',
+            style: const TextNodeStyle(fontFamily: 'Inter'),
+          ),
+        ],
+      );
+      await pumpCanvas(tester, TestLibraryStore(document));
+      final media = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
+      final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+      final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller
+        ..updateScalebyDelta(-0.5, focalPoint: Offset.zero);
+      media.session.setSelection(['media', 'text']);
+      await tester.pump();
+
+      const delta = Offset(60, 30);
+      final drag = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('media-url-panel'))),
+        kind: device,
+      );
+      await drag.moveBy(delta);
+      await tester.pump();
+      if (cancel) {
+        await drag.cancel();
+      } else {
+        await drag.up();
+      }
+      await tester.pumpAndSettle();
+      expect(media.data.position, mediaPosition + delta / controller.scale);
+      expect(text.data.position, textPosition + delta / controller.scale);
+      expect(media.session.selectedIds, {'media', 'text'});
+      expect(media.active, isFalse);
+      expect(media.focusNode.hasFocus, isFalse);
+
+      media.session.undo();
+      await tester.pumpAndSettle();
+      expect(media.data.position, mediaPosition);
+      expect(text.data.position, textPosition);
+    });
+  }
 
   testWidgets('dragging a selected mixed group moves once under zoom', (
     tester,

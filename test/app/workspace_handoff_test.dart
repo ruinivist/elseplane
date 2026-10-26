@@ -79,7 +79,7 @@ void main() {
     final store = _Store(_document(media: true));
     final attachments = (await tester.runAsync(() async => _PausedAttachments()))!;
     await pumpCanvas(tester, store, attachmentStore: attachments);
-    await tester.tap(find.byKey(const ValueKey('media-url-field')));
+    await tester.tap(find.byKey(const ValueKey('media-url-panel')));
     await tester.pumpAndSettle();
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     late Future<void> upload;

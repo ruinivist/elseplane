@@ -243,8 +243,8 @@ void main() {
       await pumpCanvas(tester, TestLibraryStore(document));
       final text = media ? null : tester.widget<TextElementView>(find.byType(TextElementView)).resources;
       final image = media ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources : null;
-      await tester.tap(find.byKey(ValueKey(media ? 'media-url-field' : 'text-markdown-preview')));
-      await tester.pump();
+      await tester.tap(find.byKey(ValueKey(media ? 'media-url-panel' : 'text-markdown-preview')));
+      await tester.pumpAndSettle();
       (media ? image!.controller : text!.controller).selection = const TextSelection.collapsed(offset: 8);
       final reader = Completer<ClipboardReader>();
       final pending = media ? image!.paste(reader.future) : text!.paste(reader.future, TestAttachmentStore());

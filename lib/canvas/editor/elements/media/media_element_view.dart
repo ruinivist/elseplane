@@ -185,7 +185,6 @@ class _MediaElementViewState extends State<MediaElementView> {
                                     onPointerDown: widget.onPanelPointerDown,
                                     child: _MediaUrlPanel(
                                       resources: model,
-                                      data: widget.data,
                                       selected: widget.selected,
                                       active: widget.active,
                                       onActivate: widget.onActivate,
@@ -221,7 +220,6 @@ class _MediaElementViewState extends State<MediaElementView> {
                   )
                 : _MediaUrlPanel(
                     resources: model,
-                    data: widget.data,
                     selected: widget.selected,
                     active: widget.active,
                     onActivate: widget.onActivate,
@@ -361,10 +359,9 @@ class _MediaImageState extends State<_MediaImage> {
 
 // ---------- URL panel ----------
 
-class _MediaUrlPanel extends StatelessWidget {
+class _MediaUrlPanel extends StatefulWidget {
   const _MediaUrlPanel({
     required this.resources,
-    required this.data,
     required this.selected,
     required this.active,
     required this.onActivate,
@@ -375,7 +372,6 @@ class _MediaUrlPanel extends StatelessWidget {
   });
 
   final MediaResources resources;
-  final MediaElementData data;
   final bool selected;
   final bool active;
   final VoidCallback onActivate;
@@ -385,63 +381,98 @@ class _MediaUrlPanel extends StatelessWidget {
   final VoidCallback? onChangeEnd;
 
   @override
+  State<_MediaUrlPanel> createState() => _MediaUrlPanelState();
+}
+
+class _MediaUrlPanelState extends State<_MediaUrlPanel> {
+  Offset? _dragPosition;
+
+  void _edit() {
+    widget.onActivate();
+    // The inactive field must rebuild before it can accept focus.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.resources.active) widget.resources.focusNode.requestFocus();
+    });
+  }
+
+  void _finishDrag() {
+    if (_dragPosition == null) return;
+    _dragPosition = null;
+    widget.onChangeEnd?.call();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = BTheme.of(context);
     final colors = theme.colors;
-    return SizedBox(
+    final panel = SizedBox(
       key: const ValueKey('media-url-panel'),
-      width: resources.urlPanelWidth,
+      width: widget.resources.urlPanelWidth,
       child: Surface(
-        selected: selected,
+        selected: widget.selected,
         raised: false,
         child: Stack(
           children: [
-            Actions(
-              actions: {
-                PasteTextIntent: CallbackAction<PasteTextIntent>(
-                  onInvoke: (_) {
-                    onPaste();
-                    return null;
-                  },
+            Row(
+              children: [
+                Expanded(
+                  child: IgnorePointer(
+                    ignoring: !widget.active,
+                    child: Actions(
+                      actions: {
+                        PasteTextIntent: CallbackAction<PasteTextIntent>(
+                          onInvoke: (_) {
+                            widget.onPaste();
+                            return null;
+                          },
+                        ),
+                      },
+                      child: TextField(
+                        key: const ValueKey('media-url-field'),
+                        groupId: widget.resources,
+                        contextMenuBuilder: null,
+                        controller: widget.resources.controller,
+                        focusNode: widget.resources.focusNode,
+                        readOnly: !widget.active,
+                        canRequestFocus: widget.active,
+                        onTap: widget.onActivate,
+                        onTapOutside: (_) {
+                          widget.resources.session.invalidatePendingEdits();
+                          widget.resources.commitUrl();
+                          widget.resources.focusNode.unfocus();
+                        },
+                        onSubmitted: (_) {
+                          widget.resources.session.invalidatePendingEdits();
+                          widget.resources.commitUrl();
+                        },
+                        minLines: 1,
+                        maxLines: 3,
+                        textAlignVertical: TextAlignVertical.center,
+                        keyboardType: TextInputType.url,
+                        textInputAction: TextInputAction.done,
+                        cursorColor: colors.accent,
+                        style: theme.typo.body.copyWith(color: colors.textPrimary),
+                        decoration: const InputDecoration(
+                          hintText: 'Paste link',
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.fromLTRB(12, 0, 12, 8),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              },
-              child: TextField(
-                key: const ValueKey('media-url-field'),
-                groupId: resources,
-                contextMenuBuilder: null,
-                controller: resources.controller,
-                focusNode: resources.focusNode,
-                onTap: onActivate,
-                onTapOutside: (_) {
-                  resources.session.invalidatePendingEdits();
-                  resources.commitUrl();
-                  resources.focusNode.unfocus();
-                },
-                onSubmitted: (_) {
-                  resources.session.invalidatePendingEdits();
-                  resources.commitUrl();
-                },
-                minLines: 1,
-                maxLines: 3,
-                textAlignVertical: TextAlignVertical.center,
-                keyboardType: TextInputType.url,
-                textInputAction: TextInputAction.done,
-                cursorColor: colors.accent,
-                style: theme.typo.body.copyWith(color: colors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Paste link',
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                  suffixIcon: IconButton(
+                TextFieldTapRegion(
+                  groupId: widget.resources,
+                  child: IconButton(
                     key: const ValueKey('media-device-picker'),
                     tooltip: 'Choose image from device',
-                    onPressed: onPickImage,
+                    onPressed: widget.onPickImage,
                     icon: const Icon(LucideIcons.imageUp, size: 20),
                   ),
                 ),
-              ),
+              ],
             ),
-            if (onMove case final move?)
+            if (widget.active && widget.onMove != null)
               Positioned(
                 top: 0,
                 left: 0,
@@ -454,7 +485,7 @@ class _MediaUrlPanel extends StatelessWidget {
                     behavior: HitTestBehavior.opaque,
                     gestures: {
                       ImmediateMultiDragGestureRecognizer: immediateDragGestureFactory(
-                        (_) => CallbackDrag(move, onEnd: onChangeEnd),
+                        (_) => CallbackDrag(widget.onMove!, onEnd: widget.onChangeEnd),
                       ),
                     },
                   ),
@@ -463,6 +494,21 @@ class _MediaUrlPanel extends StatelessWidget {
           ],
         ),
       ),
+    );
+    if (widget.active || widget.onMove == null) return panel;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      dragStartBehavior: DragStartBehavior.down,
+      onTap: _edit,
+      onPanStart: (details) => _dragPosition = details.globalPosition,
+      onPanUpdate: (details) {
+        final position = details.globalPosition;
+        widget.onMove!(position - _dragPosition!);
+        _dragPosition = position;
+      },
+      onPanEnd: (_) => _finishDrag(),
+      onPanCancel: _finishDrag,
+      child: panel,
     );
   }
 }

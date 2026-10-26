@@ -269,9 +269,7 @@ void main() {
       await pumpCanvas(tester, TestLibraryStore(document));
       final controller = _canvas(tester);
       final position = controller.getInfo(target).gsPosition;
-      final start = kind == 'media'
-          ? tester.getCenter(find.byKey(const ValueKey('media-panel-drag-strip')))
-          : _autoHitPoint(tester, kind);
+      final start = _autoHitPoint(tester, kind);
       await tester.dragFrom(start, const Offset(45, 30), kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       expect(controller.childOrder.last, target);
@@ -1776,7 +1774,7 @@ Offset _autoHitPoint(WidgetTester tester, String kind) => switch (kind) {
       ValueKey(switch (kind) {
         'text' => 'text-markdown-preview',
         'title' => 'code-title-text',
-        'media' => 'media-url-field',
+        'media' => 'media-url-panel',
         _ => 'code-block-preview-surface',
       }),
     ),

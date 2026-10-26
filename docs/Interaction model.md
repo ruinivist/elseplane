@@ -50,7 +50,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 - Media does not switch between separate preview and editor surfaces: the image remains visible in both inactive and active states.
 - Clicking an image activates it and reveals its URL panel, resize handle, and top-left transform controls, including Arrange. Dragging an inactive image moves it without activating it.
-- A URL-only media block keeps its URL field visible. While active it exposes move, arrange, and delete controls; rotation becomes available after an image resolves.
+- A URL-only media block keeps its URL panel visible. Clicking its inactive body activates the block and focuses the URL field; dragging moves it without activation or editing. The device image button opens the picker with one click, including while inactive. While active, the URL field supports normal caret movement and text selection, and the block exposes move, arrange, and delete controls; rotation becomes available after an image resolves.
 - Media paths apply on Enter or leaving the field, including Escape. Typing or pasting text keeps the current image and saved path unchanged until then, including when entering the first image path. Device image selection and image paste apply immediately.
 - Moving, rotating, or resizing keeps the block active. Resizing preserves the image aspect ratio and follows the element's rotated axes.
 - Clicking empty canvas or another block, changing tools, or pressing Escape deactivates the block and hides its active controls.
