@@ -41,6 +41,19 @@ import '../test_helpers.dart';
 void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
+  testWidgets('transform controls return after deleting the previous active object', (tester) async {
+    await pumpCanvas(tester, TestLibraryStore(_editorDocument('code')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('code-block-preview-surface')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('code-block-delete-control')));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(590, 440));
+    await tester.pumpAndSettle();
+    expect(find.byType(ElementTransformControls), findsOneWidget);
+    expect(find.byKey(const ValueKey('shape-block-delete-control')).hitTestable(), findsOneWidget);
+  });
+
   for (final kind in ['text', 'code', 'title']) {
     for (final device in [PointerDeviceKind.mouse, if (kind != 'title') PointerDeviceKind.touch]) {
       testWidgets('Auto active $kind $device tap promotes without restarting editing', (tester) async {

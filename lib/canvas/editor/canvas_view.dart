@@ -110,7 +110,6 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   CanvasElementData? get _activeElement => _elements.where((a) => a.id == _session.activeId).firstOrNull;
   final ValueNotifier<CanvasElementData?> _editingChromeModel = ValueNotifier(null);
   final _selectionKeys = <Object, GlobalKey>{};
-  final _controlsOverlayController = OverlayPortalController();
   final GlobalKey _controlsPortalKey = GlobalKey();
   late CanvasInput _input;
   final _targets = <String, CanvasInputTarget>{};
@@ -147,7 +146,6 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   @override
   void initState() {
     super.initState();
-    _controlsOverlayController.show();
     _canvasController.addListener(_closeContextMenuOnNavigation);
     _attachSession();
   }
@@ -1086,9 +1084,8 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
 
   // ---------- Rendering ----------
 
-  Widget _buildControlsPortal() => OverlayPortal.overlayChildLayoutBuilder(
+  Widget _buildControlsPortal() => _ElementControlsPortal(
     key: _controlsPortalKey,
-    controller: _controlsOverlayController,
     overlayChildBuilder: (_, layout) {
       final anchor = _editingChromeModel.value;
       final bodyOffset = anchor is CodeElementData ? layout.childSize.height - anchor.size.height : 0.0;
@@ -1157,7 +1154,6 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         ),
       );
     },
-    child: const SizedBox.shrink(),
   );
 
   Widget _buildCanvasViewport(BuildContext context, Widget viewport) {
@@ -1396,6 +1392,27 @@ class _CanvasElementHost extends StatelessWidget {
     );
     return listener;
   }
+}
+
+class _ElementControlsPortal extends StatefulWidget {
+  const _ElementControlsPortal({required this.overlayChildBuilder, super.key});
+
+  final Widget Function(BuildContext, OverlayChildLayoutInfo) overlayChildBuilder;
+
+  @override
+  State<_ElementControlsPortal> createState() => _ElementControlsPortalState();
+}
+
+class _ElementControlsPortalState extends State<_ElementControlsPortal> {
+  // Visibility belongs to each mounted portal, including after culling or deletion.
+  final _controller = OverlayPortalController()..show();
+
+  @override
+  Widget build(BuildContext context) => OverlayPortal.overlayChildLayoutBuilder(
+    controller: _controller,
+    overlayChildBuilder: widget.overlayChildBuilder,
+    child: const SizedBox.shrink(),
+  );
 }
 
 Widget _textEditingChromeTransition(
