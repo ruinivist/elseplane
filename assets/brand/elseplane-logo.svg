@@ -1,43 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="logo-title logo-description">
   <title id="logo-title">elseplane logo</title>
-  <desc id="logo-description">A light folded e on a dark graphite rounded tile.</desc>
-  <defs>
-    <linearGradient id="tile" x1="80" y1="40" x2="950" y2="1024" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#3e4245"/>
-      <stop offset="0.55" stop-color="#44484b"/>
-      <stop offset="1" stop-color="#494d50"/>
-    </linearGradient>
-    <linearGradient id="upper-face" x1="36" y1="132" x2="130" y2="14" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#eef0f1"/>
-      <stop offset="0.5" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#f9fafb"/>
-    </linearGradient>
-    <radialGradient id="fold" cx="187" cy="43" r="111" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#fafafb"/>
-      <stop offset="0.22" stop-color="#dfe1e2"/>
-      <stop offset="0.5" stop-color="#9b9ea0"/>
-      <stop offset="0.76" stop-color="#5b5f62"/>
-      <stop offset="1" stop-color="#424649"/>
-    </radialGradient>
-    <radialGradient id="lower-face" cx="20" cy="128" r="104" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#909598"/>
-      <stop offset="0.33" stop-color="#bec2c5"/>
-      <stop offset="0.68" stop-color="#f0f2f3"/>
-      <stop offset="1" stop-color="#ffffff"/>
-    </radialGradient>
-    <linearGradient id="fold-edge" x1="46" y1="121" x2="174" y2="115" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#d2d6d8"/>
-      <stop offset="0.65" stop-color="#fafbfb"/>
-      <stop offset="1" stop-color="#a2a6a8"/>
-    </linearGradient>
-  </defs>
+  <desc id="logo-description">A thin, continuous light-gray stroke draws a handwritten lowercase e and its rounded-square outer border enclosing a dark canvas-colored tile.</desc>
   <g id="logo-artwork">
-    <rect width="1024" height="1024" rx="256" fill="url(#tile)"/>
-    <g transform="translate(186 185) scale(2.84)">
-      <path fill="url(#lower-face)" d="M 47,115 H 171 C 157,121 98,121 72,122 C 64,122 62,124 64,129 C 75,147 98,160 117,160 H 184 C 205,160 211,170 211,183 C 211,198 200,215 185,220 C 176,224 165,225 151,225 H 112 C 89,225 70,219 49,207 C 35,198 23,188 17,178 C 10,166 10,157 14,149 C 19,139 30,128 47,115 Z"/>
-      <path fill="url(#fold)" d="M 13,149 C 19,133 41,116 65,97 C 90,78 123,54 149,46 C 161,42 174,37 188,44 C 198,52 201,62 200,76 C 199,95 191,109 171,115 H 47 C 30,128 19,139 14,149 Z"/>
-      <path fill="url(#fold-edge)" d="M 47,115 H 171 C 159,119 104,120 72,121 C 64,121 61,123 64,129 C 59,123 53,119 47,115 Z"/>
-      <path fill="url(#upper-face)" d="M 11,160 C 9,152 10,141 10,130 V 92 C 10,76 15,67 26,54 C 40,38 65,20 87,11 C 104,3 119,9 133,13 C 152,20 174,34 188,44 C 174,37 161,42 149,46 C 123,54 90,78 65,97 C 41,116 19,133 13,149 C 11,154 11,157 11,160 Z"/>
-    </g>
+    <rect x="120" y="120" width="784" height="784" rx="184" fill="#16191E" />
+    <path
+      fill="none"
+      stroke="#B8B8B8"
+      stroke-width="42"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M 350,536
+         C 466,530 626,476 658,408
+         C 684,352 618,310 552,330
+         C 432,366 338,480 330,570
+         C 318,670 408,726 510,686
+         C 628,640 712,518 790,540
+         C 858,558 904,606 904,670
+         V 720
+         C 904,822 822,904 720,904
+         H 304
+         C 202,904 120,822 120,720
+         V 304
+         C 120,202 202,120 304,120
+         H 720
+         C 822,120 904,202 904,304
+         V 670"
+    />
   </g>
 </svg>
