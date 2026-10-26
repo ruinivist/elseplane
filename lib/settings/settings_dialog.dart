@@ -8,6 +8,8 @@ import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ---------- Dialog ----------
 
@@ -52,6 +54,9 @@ class SettingsDialog extends StatefulWidget {
 enum _SettingsSection { about, appearance, canvas }
 
 class _SettingsDialogState extends State<SettingsDialog> {
+  static const _repositoryUrl = 'https://github.com/ruinivist/elseplane';
+  static const _gitSha = String.fromEnvironment('GIT_SHA');
+
   // ---------- State ----------
 
   _SettingsSection _section = _SettingsSection.canvas;
@@ -350,11 +355,62 @@ class _SettingsDialogState extends State<SettingsDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'elseplane - dev build',
-          style: theme.typo.body.copyWith(color: theme.colors.textSecondary),
+        SvgPicture.asset(
+          'assets/brand/elseplane-logo.svg',
+          width: 80,
+          height: 80,
+          semanticsLabel: 'elseplane logo',
         ),
+        const SizedBox(height: 20),
+        Text('elseplane', style: theme.typo.heading),
+        const SizedBox(height: 20),
+        _aboutLink(context, label: 'GitHub', url: _repositoryUrl),
+        const SizedBox(height: 20),
+        if (_gitSha.isEmpty)
+          Text(
+            'Development build',
+            style: theme.typo.body.copyWith(color: theme.colors.textSecondary),
+          )
+        else
+          _aboutLink(
+            context,
+            label: 'Build ${_gitSha.substring(0, math.min(7, _gitSha.length))}',
+            url: '$_repositoryUrl/commit/$_gitSha',
+            muted: true,
+          ),
       ],
+    );
+  }
+
+  Widget _aboutLink(BuildContext context, {required String label, required String url, bool muted = false}) {
+    final theme = BTheme.of(context);
+    return TextButton(
+      style: TextButton.styleFrom(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 36),
+        foregroundColor: muted ? theme.colors.textSecondary : null,
+      ),
+      onPressed: () => _openAboutLink(url),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label),
+          const SizedBox(width: 8),
+          const Icon(Icons.north_east, size: BSizes.defaultIconSize),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openAboutLink(String url) async {
+    try {
+      if (await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) return;
+    } on Exception {
+      // Failed and unavailable platform launchers use the same feedback.
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open link')),
     );
   }
 

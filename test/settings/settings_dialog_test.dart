@@ -9,10 +9,50 @@ import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:url_launcher_platform_interface/link.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
 // ---------- Tests ----------
 
 void main() {
+  const gitSha = String.fromEnvironment('GIT_SHA');
+
+  testWidgets('about links identify the build', (tester) async {
+    final originalLauncher = UrlLauncherPlatform.instance;
+    final launcher = _FakeUrlLauncher();
+    UrlLauncherPlatform.instance = launcher;
+    addTearDown(() => UrlLauncherPlatform.instance = originalLauncher);
+
+    await _openCanvasSettings(
+      tester,
+      onImport: () async => true,
+      onExport: () async {},
+    );
+    await tester.tap(find.text('About'));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('elseplane logo'), findsOneWidget);
+    expect(find.text('elseplane'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    final github = find.widgetWithText(TextButton, 'GitHub');
+    await tester.tap(github);
+    await tester.pumpAndSettle();
+    expect(launcher.launched, ['https://github.com/ruinivist/elseplane']);
+
+    if (gitSha.isEmpty) {
+      expect(find.text('Development build'), findsOneWidget);
+    } else {
+      await tester.tap(find.text('Build ${gitSha.substring(0, 7)}'));
+      await tester.pumpAndSettle();
+      expect(launcher.launched.last, 'https://github.com/ruinivist/elseplane/commit/$gitSha');
+    }
+
+    launcher.succeeds = false;
+    await tester.tap(github);
+    await tester.pumpAndSettle();
+    expect(find.text('Could not open link'), findsOneWidget);
+  });
+
   for (final themeEnabled in [false, true]) {
     for (final surfaceEnabled in [false, true]) {
       testWidgets('appearance follows callbacks with theme $themeEnabled and surface $surfaceEnabled', (tester) async {
@@ -160,4 +200,18 @@ Future<void> _openCanvasSettings(
   await tester.pumpAndSettle();
   await tester.tap(find.text('Canvas').last);
   await tester.pumpAndSettle();
+}
+
+class _FakeUrlLauncher extends UrlLauncherPlatform {
+  final launched = <String>[];
+  bool succeeds = true;
+
+  @override
+  LinkDelegate? get linkDelegate => null;
+
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async {
+    launched.add(url);
+    return succeeds;
+  }
 }
