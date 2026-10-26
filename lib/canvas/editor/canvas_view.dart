@@ -97,7 +97,10 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   final GlobalKey _contextMenuKey = GlobalKey();
   final Object _contextMenuTapRegionGroup = Object();
   final _contextMenuFocusNode = FocusNode(debugLabel: 'Canvas context menu');
-  List<CanvasElementData> _contextMenuTargets = const [];
+  List<String> _contextMenuTargetIds = const [];
+  List<CanvasElementData> get _contextMenuTargets => [
+    for (final id in _contextMenuTargetIds) ?_session.element(id),
+  ];
   (Offset, double)? _contextMenuView;
   Offset? _contextMenuPosition;
   bool _arrangeMenuOpen = false;
@@ -216,9 +219,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       openLibrary: () => widget.onOpenLibrary(_input),
       arrange: ({required forward, required toEnd}) {
         final targets = _arrangeTargets;
-        if (_contextMenuController.isOpen) {
-          _closeContextMenu();
-        } else {
+        if (!_contextMenuController.isOpen) {
           if (_selectedInStackingOrder.isEmpty) _setSelection(targets.toSet());
           _clearElementEditing();
         }
@@ -461,7 +462,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     if (model != null) _promoteAuto([model]);
     _finishHistoryOperation();
     if (model != null && !_session.isSelected(model.id)) _setSelection({model});
-    _contextMenuTargets = model == null ? const [] : _selectedInStackingOrder;
+    _contextMenuTargetIds = model == null ? const [] : _selectedInStackingOrder.map((model) => model.id).toList();
     _arrangeMenuOpen = arrangeOnly;
     final box = _contextMenuKey.currentContext!.findRenderObject()! as RenderBox;
     _contextMenuPosition = _screenToCanvas(box.globalToLocal(position));
@@ -485,7 +486,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   }
 
   void _contextMenuClosed() {
-    _contextMenuTargets = const [];
+    _contextMenuTargetIds = const [];
     _contextMenuView = null;
     _contextMenuPosition = null;
     _arrangeMenuOpen = false;
@@ -556,7 +557,8 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       return ContextMenuAction(
         label: label,
         icon: icon,
-        onPressed: enabled ? () => _dispatchContextMenuAction(() => _arrange(action, targets)) : null,
+        onPressed: enabled ? () => _arrange(action, _contextMenuTargets) : null,
+        closeOnActivate: false,
         shortcut: SingleActivator(
           action == CanvasArrange.forward || action == CanvasArrange.front
               ? LogicalKeyboardKey.bracketRight
@@ -574,7 +576,11 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
           label: 'Auto',
           value: auto,
           focusNode: _arrangeMenuOpen ? _contextMenuFocusNode : null,
-          onPressed: () => _dispatchContextMenuAction(() => _setAutoArrange(targets, !auto)),
+          onPressed: () {
+            final targets = _contextMenuTargets;
+            _setAutoArrange(targets, !targets.every((model) => model.autoArrange));
+          },
+          closeOnActivate: false,
         ),
       ],
       [
@@ -1037,7 +1043,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   void _detachModels(List<CanvasElementData> values) {
     if (values.isEmpty) return;
     final ids = values.map((a) => a.id).toSet();
-    if (_contextMenuTargets.any((a) => ids.contains(a.id))) _closeContextMenu();
+    if (_contextMenuTargetIds.any(ids.contains)) _closeContextMenu();
     if (ids.contains(_editingChromeModel.value?.id)) _editingChromeModel.value = null;
     final retired = <ElementResources>[];
     for (final id in ids) {

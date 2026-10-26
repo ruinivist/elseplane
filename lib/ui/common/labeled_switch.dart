@@ -23,7 +23,8 @@ class LabeledSwitch extends StatelessWidget {
     required this.onChanged,
     this.focusNode,
     super.key,
-  }) : _menuItem = false;
+  }) : _menuItem = false,
+       closeOnActivate = true;
 
   const LabeledSwitch.menu({
     required this.label,
@@ -31,6 +32,7 @@ class LabeledSwitch extends StatelessWidget {
     required this.onChanged,
     this.focusNode,
     super.key,
+    this.closeOnActivate = true,
   }) : _menuItem = true;
 
   final String label;
@@ -38,6 +40,7 @@ class LabeledSwitch extends StatelessWidget {
   final ValueChanged<bool> onChanged;
   final FocusNode? focusNode;
   final bool _menuItem;
+  final bool closeOnActivate;
 
   // ---------- Rendering ----------
 
@@ -106,6 +109,7 @@ class LabeledSwitch extends StatelessWidget {
           ? MenuItemButton(
               focusNode: focusNode,
               onPressed: toggle,
+              closeOnActivate: closeOnActivate,
               style: menuItemStyle(theme, destructive: false),
               child: content,
             )

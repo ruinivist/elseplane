@@ -17,6 +17,7 @@ class ContextMenuAction {
     this.destructive = false,
     this.groups = const [],
     this.focusNode,
+    this.closeOnActivate = true,
   }) : toggleValue = null;
 
   const ContextMenuAction.toggle({
@@ -24,6 +25,7 @@ class ContextMenuAction {
     required bool value,
     required VoidCallback this.onPressed,
     this.focusNode,
+    this.closeOnActivate = true,
   }) : toggleValue = value,
        icon = null,
        shortcut = null,
@@ -38,6 +40,7 @@ class ContextMenuAction {
   final bool destructive;
   final List<List<ContextMenuAction>> groups;
   final FocusNode? focusNode;
+  final bool closeOnActivate;
 }
 
 // ---------- Widgets ----------
@@ -110,6 +113,7 @@ class _ContextMenuState extends State<ContextMenu> {
           value: value,
           focusNode: focusNode,
           onChanged: (_) => action.onPressed!(),
+          closeOnActivate: action.closeOnActivate,
         ),
       );
     }
@@ -138,6 +142,7 @@ class _ContextMenuState extends State<ContextMenu> {
         : MenuItemButton(
             focusNode: focusNode,
             onPressed: action.onPressed,
+            closeOnActivate: action.closeOnActivate,
             shortcut: action.shortcut,
             style: style,
             leadingIcon: Icon(action.icon, size: 16),

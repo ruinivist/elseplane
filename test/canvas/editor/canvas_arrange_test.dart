@@ -195,9 +195,7 @@ void main() {
     for (final auto in [true, false]) {
       testWidgets(
         'Markdown ${image ? 'image' : 'text'} link respects Auto $auto without editing or bypassing validation',
-        (
-          tester,
-        ) async {
+        (tester) async {
           var document = _autoDocument('text');
           document = document.withElements(
             (elements) => elements[0] = (elements.first as TextElementData).copyWith(
@@ -352,6 +350,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(_models(tester)['a']!.autoArrange, isFalse);
     expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
+    await _dismissMenu(tester);
     await _shortcut(tester, LogicalKeyboardKey.keyZ);
     expect(_models(tester)['a']!.autoArrange, isTrue);
     expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
@@ -371,11 +370,12 @@ void main() {
     expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isFalse);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    expect(find.byType(MenuSurface), findsNothing);
+    expect(find.byType(MenuSurface), findsOneWidget);
     expect(_canvas(tester).childOrder, ['b', 'd', 'a', 'c']);
     expect(_models(tester)['a']!.autoArrange, isTrue);
     expect(_models(tester)['c']!.autoArrange, isTrue);
     expect(_models(tester)['b']!.autoArrange, isFalse);
+    await _dismissMenu(tester);
     await _shortcut(tester, LogicalKeyboardKey.keyZ);
     expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
     expect(_models(tester)['a']!.autoArrange, isFalse);
@@ -392,6 +392,7 @@ void main() {
     expect(_canvas(tester).childOrder, ['b', 'd', 'a', 'c']);
     expect(_models(tester)['a']!.autoArrange, isFalse);
     expect(_models(tester)['c']!.autoArrange, isFalse);
+    await _dismissMenu(tester);
     await _shortcut(tester, LogicalKeyboardKey.keyZ);
     expect(_models(tester)['a']!.autoArrange, isTrue);
     expect(_models(tester)['c']!.autoArrange, isTrue);
@@ -425,8 +426,12 @@ void main() {
     expect(Focus.of(tester.element(find.text('Auto'))).hasFocus, isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    expect(find.byType(MenuSurface), findsNothing);
+    expect(find.byType(MenuSurface), findsNWidgets(2));
     expect(_models(tester)['a']!.autoArrange, isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isTrue);
+    expect(_models(tester)['a']!.autoArrange, isTrue);
     await mouse.removePointer();
   });
 
@@ -449,7 +454,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(_canvas(tester).childOrder, ['d', 'a', 'b', 'c']);
-    expect(find.byType(MenuSurface), findsNothing);
+    expect(find.byType(MenuSurface), findsOneWidget);
   });
 
   testWidgets('direct menu with no available commands can dismiss without saving', (tester) async {
@@ -556,6 +561,7 @@ void main() {
     expect(models['c']!.autoArrange, isFalse);
     await pumpPastSave(tester);
     expect(_order(store.persisted!), ['b', 'd', 'a', 'c']);
+    await _dismissMenu(tester);
     await _shortcut(tester, LogicalKeyboardKey.keyZ);
     expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
     expect(models['c']!.autoArrange, isTrue);
@@ -610,7 +616,11 @@ void main() {
     _models(tester)['c']!.setSelected(value: true);
     await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
     expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
-    expect(find.byType(MenuSurface), findsNothing);
+    expect(find.byType(MenuSurface), findsOneWidget);
+    await _shortcut(tester, LogicalKeyboardKey.bracketLeft, repeat: true);
+    expect(_canvas(tester).childOrder, ['b', 'a', 'c', 'd']);
+    expect(find.byType(MenuSurface), findsOneWidget);
+    await _dismissMenu(tester);
     await tester.tapAt(const Offset(305, 305));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Arrange'));
@@ -672,6 +682,83 @@ void main() {
     }
   }
 
+  for (final direct in [false, true]) {
+    for (final group in [false, true]) {
+      testWidgets(
+        '${direct ? 'direct' : 'submenu'} Arrange repeats and refreshes ${group ? 'group' : 'single'} actions',
+        (tester) async {
+          final store = TestLibraryStore(_document());
+          await pumpCanvas(tester, store);
+          if (direct) {
+            await tester.tapAt(const Offset(305, 305));
+            await tester.pumpAndSettle();
+          }
+          if (group) {
+            _models(tester)['a']!.setSelected(value: true);
+            _models(tester)['b']!.setSelected(value: true);
+            await tester.pump();
+          }
+          if (direct) {
+            await tester.tap(find.byTooltip('Arrange'));
+            await tester.pumpAndSettle();
+          } else {
+            await _open(tester, const Offset(305, 305));
+            await _openArrange(tester);
+          }
+          if (group) {
+            _models(tester)['a']!.setSelected(value: false);
+            _models(tester)['b']!.setSelected(value: false);
+            _models(tester)['c']!.setSelected(value: true);
+            await tester.pump();
+          }
+          final surface = tester.getRect(find.byType(MenuSurface).last);
+          final forwardOrders = group
+              ? [
+                  ['c', 'a', 'b', 'd'],
+                  ['c', 'd', 'a', 'b'],
+                ]
+              : [
+                  ['b', 'a', 'c', 'd'],
+                  ['b', 'c', 'a', 'd'],
+                  ['b', 'c', 'd', 'a'],
+                ];
+          for (final order in forwardOrders) {
+            await tester.tap(find.text('Bring Forward'));
+            await tester.pumpAndSettle();
+            expect(_canvas(tester).childOrder, order);
+            expect(tester.getRect(find.byType(MenuSurface).last), surface);
+          }
+          expect(_button(tester, 'Bring Forward').onPressed, isNull);
+          expect(_button(tester, 'Bring to Front').onPressed, isNull);
+          expect(_button(tester, 'Send Backward').onPressed, isNotNull);
+          await tester.tap(find.text('Send Backward'));
+          await tester.pumpAndSettle();
+          expect(_canvas(tester).childOrder, forwardOrders[forwardOrders.length - 2]);
+          expect(_button(tester, 'Bring Forward').onPressed, isNotNull);
+          await tester.tap(find.text('Send to Back'));
+          await tester.pumpAndSettle();
+          expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
+          expect(_button(tester, 'Send Backward').onPressed, isNull);
+          await tester.tap(find.text('Auto'));
+          await tester.pumpAndSettle();
+          expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isTrue);
+          await tester.tap(find.text('Auto'));
+          await tester.pumpAndSettle();
+          expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isFalse);
+          expect(_button(tester, 'Bring to Front').onPressed, isNull);
+          await _dismissMenu(tester);
+          await _shortcut(tester, LogicalKeyboardKey.keyZ);
+          expect(_models(tester)['a']!.autoArrange, isTrue);
+          await _shortcut(tester, LogicalKeyboardKey.keyZ);
+          expect(_models(tester)['a']!.autoArrange, isFalse);
+          expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
+          await pumpPastSave(tester);
+          expect(_order(store.persisted!), ['a', 'b', 'c', 'd']);
+        },
+      );
+    }
+  }
+
   for (final (group, direct) in [(false, false), (true, false), (false, true)]) {
     for (final (label, target, expected) in [
       ('Bring Forward', 'a', group ? ['b', 'd', 'a', 'c'] : ['b', 'a', 'c', 'd']),
@@ -712,7 +799,7 @@ void main() {
           }
           await tester.tap(find.text(label));
           await tester.pumpAndSettle();
-          expect(find.byType(MenuSurface), findsNothing);
+          expect(find.byType(MenuSurface), findsNWidgets(direct ? 1 : 2));
           expect(canvas.childOrder, expected);
           final after = _models(tester);
           for (final id in before.keys) {
@@ -723,6 +810,7 @@ void main() {
           expect(after[target]!.active, isFalse);
           await pumpPastSave(tester);
           expect(_order(store.persisted!), expected);
+          await _dismissMenu(tester);
           await _shortcut(tester, LogicalKeyboardKey.keyZ);
           expect(canvas.childOrder, ['a', 'b', 'c', 'd']);
           for (final id in before.keys) {
@@ -901,6 +989,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(canvas.childOrder, ['other', 'editor']);
     expect(model.active, isFalse);
+    await _dismissMenu(tester);
     await tester.tapAt(title);
     await tester.pumpAndSettle();
     expect(model.active, isTrue);
@@ -1013,7 +1102,9 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(_canvas(tester).childOrder, ['a', 'b', 'd', 'c']);
-    expect(find.text('Arrange'), findsNothing);
+    expect(find.text('Arrange'), findsOneWidget);
+    expect(find.text('Send Backward'), findsOneWidget);
+    await _dismissMenu(tester);
     await _open(tester, const Offset(375, 375));
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
@@ -1379,7 +1470,10 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
     await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
     expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
-    expect(find.text('Arrange'), findsNothing);
+    expect(find.text('Arrange'), findsOneWidget);
+    await _shortcut(tester, LogicalKeyboardKey.bracketLeft, repeat: true);
+    expect(_canvas(tester).childOrder, ['b', 'a', 'c', 'd']);
+    expect(find.text('Arrange'), findsOneWidget);
   });
 
   for (final editor in ['text', 'code', 'title', 'media']) {
@@ -1799,6 +1893,12 @@ Future<void> _open(WidgetTester tester, Offset position, {Offset jitter = Offset
   if (jitter != Offset.zero) await click.moveBy(jitter);
   await click.up();
   await tester.pumpAndSettle();
+}
+
+Future<void> _dismissMenu(WidgetTester tester) async {
+  await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+  await tester.pumpAndSettle();
+  expect(find.byType(MenuSurface), findsNothing);
 }
 
 Future<void> _openArrange(WidgetTester tester) async {

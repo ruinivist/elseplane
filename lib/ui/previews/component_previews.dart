@@ -128,8 +128,22 @@ Widget contextMenuPreview() => Builder(
               label: 'Arrange',
               icon: Icons.layers_outlined,
               groups: [
-                [ContextMenuAction(label: 'Bring Forward', icon: Icons.arrow_upward, onPressed: () {})],
-                [ContextMenuAction(label: 'Bring to Front', icon: Icons.flip_to_front, onPressed: () {})],
+                [
+                  ContextMenuAction(
+                    label: 'Bring Forward',
+                    icon: Icons.arrow_upward,
+                    onPressed: () {},
+                    closeOnActivate: false,
+                  ),
+                ],
+                [
+                  ContextMenuAction(
+                    label: 'Bring to Front',
+                    icon: Icons.flip_to_front,
+                    onPressed: () {},
+                    closeOnActivate: false,
+                  ),
+                ],
               ],
             ),
           ],
@@ -180,6 +194,7 @@ Widget titledContextMenuPreview() {
               shift: shift,
             ),
             onPressed: () {},
+            closeOnActivate: false,
           );
       return _surface(
         ContextMenu(
@@ -191,6 +206,7 @@ Widget titledContextMenuPreview() {
                 label: 'Auto',
                 value: auto,
                 onPressed: () => setState(() => auto = !auto),
+                closeOnActivate: false,
               ),
             ],
             [

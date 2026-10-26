@@ -469,11 +469,19 @@ void main() {
           controller: controller,
           groups: [
             [
+              ContextMenuAction(label: 'Copy', icon: Icons.copy, onPressed: () {}),
               ContextMenuAction(
                 label: 'Arrange',
                 icon: Icons.layers,
                 groups: [
-                  [ContextMenuAction(label: 'Bring forward', icon: Icons.arrow_upward, onPressed: () => called = true)],
+                  [
+                    ContextMenuAction(
+                      label: 'Bring forward',
+                      icon: Icons.arrow_upward,
+                      onPressed: () => called = true,
+                      closeOnActivate: false,
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -491,6 +499,12 @@ void main() {
     await tester.tap(find.text('Bring forward'));
     await tester.pumpAndSettle();
     expect(called, isTrue);
+    expect(controller.isOpen, isTrue);
+    await tester.tap(find.text('Bring forward'));
+    await tester.pumpAndSettle();
+    expect(controller.isOpen, isTrue);
+    await tester.tap(find.text('Copy'));
+    await tester.pumpAndSettle();
     expect(controller.isOpen, isFalse);
 
     tester.view.physicalSize = const Size(360, 480);

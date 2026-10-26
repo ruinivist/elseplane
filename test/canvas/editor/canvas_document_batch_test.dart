@@ -89,6 +89,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(snapshots, hasLength(2));
     expect(snapshots.last.elements.skip(1).every((element) => element.autoArrange), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
     await _shortcut(tester, LogicalKeyboardKey.keyZ);
     expect(snapshots.last.toJson(), snapshots.first.toJson());
     await tester.pumpWidget(const SizedBox());
