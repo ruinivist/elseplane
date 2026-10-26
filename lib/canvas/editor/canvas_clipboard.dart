@@ -211,14 +211,9 @@ class CanvasClipboard {
     final mediaPosition = position ?? pointerPosition ?? screenToCanvas(viewportSize().center(Offset.zero));
     try {
       final read = readClipboard;
-      late final CanvasClipboardSnapshot clipboard;
-      try {
-        clipboard = read != null
-            ? await read()
-            : await readCanvasClipboard(await (readerFuture ?? SystemClipboard.instance!.read()));
-      } on FormatException {
-        return;
-      }
+      final clipboard = read != null
+          ? await read()
+          : await readCanvasClipboard(await (readerFuture ?? SystemClipboard.instance!.read()));
       if (!session.isLive || !enabled() || !generation.isCurrent) return;
       final text = clipboard.text;
       final elements = text == null ? null : decodeCanvasClipboard(text);

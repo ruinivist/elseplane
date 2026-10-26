@@ -4,23 +4,9 @@ Known behavior bugs and refactor blockers.
 
 ## 1. Attachment rebasing rewrites prose and code
 
-Status: open.
+Status: fixed. `rebaseCanvasDocumentAttachments` uses parser-provided image destination ranges, deduplicates shared reference definitions, and rebuilds Markdown from the original source in source order. Matching paths in prose, code, and surrounding Markdown formatting remain unchanged.
 
-Location: `lib/library/transfer/canvas_project.dart`, `rebaseCanvasDocumentAttachments`.
-
-Import and restore assign fresh paths to imported attachments. Markdown rebasing uses `replaceAll` across the entire source, so it also changes matching paths in prose, inline code, and fenced code blocks.
-
-To reproduce, import a canvas containing an image and a literal copy of its path:
-
-```markdown
-![image](attachments/00000000-0000-4000-8000-000000000000.png)
-
-Original path: `attachments/00000000-0000-4000-8000-000000000000.png`
-```
-
-Expected: only the image destination changes. Actual: both occurrences change, silently altering saved text.
-
-Fix: use parser-provided source ranges to rewrite actual image destinations. Deduplicate shared reference definitions and apply edits from right to left. Preserve prose, code, and surrounding Markdown formatting. Add a regression test for literal paths beside real images.
+The [project tests](../test/library/transfer/canvas_project_test.dart) cover literal paths beside real images, shared references, Unicode and CRLF offsets, mixed destination ordering, repeated images, and non-cascading replacements.
 
 ## 2. Dragging another object leaves delayed Cut alive
 
@@ -60,15 +46,11 @@ The [resource tests](../test/canvas/editor/element_resources_test.dart) cover du
 
 ## 6. Oversized canvas image pastes fail silently
 
-Status: open. Current-context error reporting bug.
+Status: fixed. Clipboard read failures now reach the existing outer error handler, which reports current-context failures and suppresses canceled ones, following the [paste cancellation decision](adr/0001-cancel-unfinished-pastes.md).
 
 Location: [canvas clipboard workflow](../lib/canvas/editor/canvas_clipboard.dart), `CanvasClipboard.paste`.
 
-To reproduce, paste an image larger than 10 MiB onto the canvas while remaining in the same input context.
-
-Expected: report the rejected paste, following the [paste cancellation decision](adr/0001-cancel-unfinished-pastes.md). Actual: nothing is inserted and no error appears. `readCanvasClipboard` throws `FormatException` for the size limit, but the nested catch in `paste` returns silently before the normal error handler runs.
-
-Fix: remove the nested `FormatException` catch and use the existing outer handler, which reports current-context failures and suppresses canceled ones. Cover oversized current and canceled pastes separately.
+The [clipboard tests](../test/canvas/editor/canvas_clipboard_test.dart) cover oversized image read failures in the current context and after selection cancels the context. Both preserve document contents, selection, attachments, saving, and undo history; only the current-context failure shows the existing paste error.
 
 ## 7. Five tests still use superseded element lifecycles
 

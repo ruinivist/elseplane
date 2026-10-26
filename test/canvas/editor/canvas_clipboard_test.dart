@@ -514,6 +514,45 @@ void main() {
     );
   }
 
+  for (final canceled in [false, true]) {
+    testWidgets(
+      'oversized image clipboard read ${canceled ? 'stays silent after cancellation' : 'reports its failure'}',
+      (
+        tester,
+      ) async {
+        final read = Completer<CanvasClipboardSnapshot>();
+        final store = TestLibraryStore(_menuDocument);
+        final attachments = TestAttachmentStore();
+        await pumpCanvas(tester, store, attachmentStore: attachments, readClipboard: () => read.future);
+        _models(tester).first.setSelected(value: true);
+        await _shortcut(tester, LogicalKeyboardKey.keyV);
+        if (canceled) await _shortcut(tester, LogicalKeyboardKey.keyA);
+
+        read.completeError(const FormatException('Image exceeds 10 MiB'));
+        await tester.pumpAndSettle();
+        expect(find.text('Could not paste canvas elements'), canceled ? findsNothing : findsOneWidget);
+        expect(tester.takeException(), isNull);
+        expect(
+          _models(tester).map((model) => model.data.toJson()),
+          _menuDocument.elements.map((data) => data.toJson()),
+        );
+        _expectOnlySelected(tester, canceled ? {'a', 'b'} : {'a'});
+        expect(attachments.files, isEmpty);
+        await pumpPastSave(tester);
+        expect(store.persisted, isNull);
+
+        await _shortcut(tester, LogicalKeyboardKey.keyZ);
+        expect(
+          _models(tester).map((model) => model.data.toJson()),
+          _menuDocument.elements.map((data) => data.toJson()),
+        );
+        _expectOnlySelected(tester, canceled ? {'a', 'b'} : {'a'});
+        await pumpPastSave(tester);
+        expect(store.persisted, isNull);
+      },
+    );
+  }
+
   testWidgets('dragging another inactive object cancels delayed Cut', (tester) async {
     final write = Completer<void>();
     final store = TestLibraryStore(_menuDocument);
