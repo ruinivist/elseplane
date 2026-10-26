@@ -505,8 +505,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   bool _canArrange(CanvasArrange action, List<CanvasElementData> targets) {
     if (targets.isEmpty || targets.any((model) => _session.element(model.id) == null)) return false;
     try {
-      return _canvasController.canArrange(targets.map((model) => model.id), action) ||
-          targets.any((model) => model.autoArrange);
+      return _canvasController.canArrange(targets.map((model) => model.id), action);
       // The ordering API documents unknown layout sizes as a StateError.
       // ignore: avoid_catching_errors
     } on StateError {

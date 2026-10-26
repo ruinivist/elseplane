@@ -187,16 +187,29 @@ void main() {
     expect(session.editing, isNull);
   });
 
-  test('manual arrangement disables Auto even when order is unchanged', () {
-    final session = _session([_shape('a', auto: true)]);
-    final original = session.document;
-    session
-      ..arrange(['a'], null)
-      ..finishOperation();
-    expect(session.document.elements.single.autoArrange, isFalse);
-    session.undo();
-    expect(session.document, original);
-  });
+  for (final order in <List<String>?>[
+    null,
+    ['a', 'b'],
+  ]) {
+    test('unchanged arrangement $order preserves Auto, publication, and redo', () {
+      final session = _session([_shape('a', auto: true), _shape('b')])
+        ..move(['b'], const Offset(10, 0))
+        ..finishOperation();
+      final moved = session.document;
+      session.undo();
+      final original = session.document;
+      var publications = 0;
+      session.documentChanges.addListener(() => publications++);
+      session
+        ..arrange(['a', 'b'], order)
+        ..finishOperation();
+      expect(session.document, same(original));
+      expect(session.document.elements.first.autoArrange, isTrue);
+      expect(publications, 0);
+      session.redo();
+      expect(session.document, moved);
+    });
+  }
 
   test('history retains fifty operations and new choices clear redo', () {
     final session = _session([_shape('a')]);

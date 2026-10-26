@@ -346,30 +346,91 @@ void main() {
     expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
   });
 
-  testWidgets('manual boundary choice disables Auto and undo restores its setting', (tester) async {
-    await pumpCanvas(tester, TestLibraryStore(_document(auto: true)));
-    await tester.tapAt(const Offset(305, 305));
-    await tester.pumpAndSettle();
-    await tester.tapAt(const Offset(305, 305));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Arrange'));
-    await tester.pumpAndSettle();
-    final toggle = tester.widget<LabeledSwitch>(find.byType(LabeledSwitch));
-    expect(toggle.value, isTrue);
-    expect(toggle.focusNode!.hasFocus, isTrue);
-    expect(tester.getSemantics(find.byType(LabeledSwitch)).flagsCollection.isToggled.toBoolOrNull(), isTrue);
-    expect(_button(tester, 'Bring to Front').onPressed, isNotNull);
-    await tester.tap(find.text('Bring to Front'));
-    await tester.pumpAndSettle();
-    expect(_models(tester)['a']!.autoArrange, isFalse);
-    expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
-    await _dismissMenu(tester);
-    await _shortcut(tester, LogicalKeyboardKey.keyZ);
-    expect(_models(tester)['a']!.autoArrange, isTrue);
-    expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
-    await _shortcut(tester, LogicalKeyboardKey.keyZ);
-    expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
-  });
+  for (final direct in [false, true]) {
+    testWidgets('${direct ? 'direct' : 'submenu'} boundary commands preserve Auto', (tester) async {
+      final store = TestLibraryStore(_document(auto: true));
+      await pumpCanvas(tester, store);
+      if (direct) {
+        await tester.tapAt(const Offset(305, 305));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Arrange'));
+        await tester.pumpAndSettle();
+      } else {
+        await _open(tester, const Offset(305, 305));
+        await _openArrange(tester);
+      }
+      final toggle = tester.widget<LabeledSwitch>(find.byType(LabeledSwitch));
+      expect(toggle.value, isTrue);
+      if (direct) expect(toggle.focusNode!.hasFocus, isTrue);
+      expect(tester.getSemantics(find.byType(LabeledSwitch)).flagsCollection.isToggled.toBoolOrNull(), isTrue);
+      expect(_button(tester, 'Bring Forward').onPressed, isNull);
+      expect(_button(tester, 'Bring to Front').onPressed, isNull);
+      expect(_button(tester, 'Send Backward').onPressed, isNotNull);
+      expect(_button(tester, 'Send to Back').onPressed, isNotNull);
+      await pumpPastSave(tester);
+      final saved = store.persisted;
+      await _shortcut(tester, LogicalKeyboardKey.bracketRight);
+      await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
+      await pumpPastSave(tester);
+      expect(store.persisted, same(saved));
+      expect(_models(tester)['a']!.autoArrange, isTrue);
+      expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
+      expect(find.text('Send Backward'), findsOneWidget);
+      await tester.tap(find.text('Send Backward'));
+      await tester.pumpAndSettle();
+      expect(_models(tester)['a']!.autoArrange, isFalse);
+      expect(_canvas(tester).childOrder, ['b', 'c', 'a', 'd']);
+      expect(_button(tester, 'Bring to Front').onPressed, isNotNull);
+      expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isFalse);
+      await _dismissMenu(tester);
+      await _shortcut(tester, LogicalKeyboardKey.keyZ);
+      expect(_models(tester)['a']!.autoArrange, isTrue);
+      expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
+      _models(tester)['a']!.setSelected(value: true);
+      await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
+      expect(_models(tester)['a']!.autoArrange, isTrue);
+      await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+      expect(_models(tester)['a']!.autoArrange, isFalse);
+      expect(_canvas(tester).childOrder, ['b', 'c', 'a', 'd']);
+    });
+  }
+
+  for (final wholeStack in [false, true]) {
+    testWidgets('${wholeStack ? 'whole-stack' : 'mixed Auto'} group disables invalid commands', (tester) async {
+      final document = _document().withElements(
+        (elements) => elements[3] = elements[3].copyWith(autoArrange: true),
+      );
+      final store = TestLibraryStore(document);
+      await pumpCanvas(tester, store);
+      for (final id in wholeStack ? ['a', 'b', 'c', 'd'] : ['c', 'd']) {
+        _models(tester)[id]!.setSelected(value: true);
+      }
+      await _open(tester, const Offset(375, 375));
+      await _openArrange(tester);
+      expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isFalse);
+      for (final label in [
+        'Bring Forward',
+        'Bring to Front',
+        if (wholeStack) ...['Send Backward', 'Send to Back'],
+      ]) {
+        expect(_button(tester, label).onPressed, isNull);
+      }
+      await _shortcut(tester, LogicalKeyboardKey.bracketRight);
+      await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
+      if (wholeStack) {
+        await _shortcut(tester, LogicalKeyboardKey.bracketLeft);
+        await _shortcut(tester, LogicalKeyboardKey.bracketLeft, shift: true);
+      } else {
+        expect(_button(tester, 'Send Backward').onPressed, isNotNull);
+        expect(_button(tester, 'Send to Back').onPressed, isNotNull);
+      }
+      expect(_canvas(tester).childOrder, ['a', 'b', 'c', 'd']);
+      expect(_models(tester)['c']!.autoArrange, isFalse);
+      expect(_models(tester)['d']!.autoArrange, isTrue);
+      await pumpPastSave(tester);
+      expect(store.persisted, isNull);
+    });
+  }
 
   testWidgets('Auto switch applies to a mixed group and promotes immediately in one step', (tester) async {
     final document = _document().withElements((elements) => elements[2] = elements[2].copyWith(autoArrange: true));
@@ -755,6 +816,9 @@ void main() {
           await tester.tap(find.text('Auto'));
           await tester.pumpAndSettle();
           expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isTrue);
+          expect(_button(tester, 'Bring Forward').onPressed, isNull);
+          expect(_button(tester, 'Bring to Front').onPressed, isNull);
+          expect(_button(tester, 'Send Backward').onPressed, isNotNull);
           await tester.tap(find.text('Auto'));
           await tester.pumpAndSettle();
           expect(tester.widget<LabeledSwitch>(find.byType(LabeledSwitch)).value, isFalse);

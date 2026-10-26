@@ -343,6 +343,7 @@ class EditorSession extends ChangeNotifier {
         order.any((id) => !byId.containsKey(id))) {
       throw ArgumentError('Expected every document ID once');
     }
+    if (listEquals(order, byId.keys.toList())) return;
     _publish(
       document.copyWith(
         elements: [
