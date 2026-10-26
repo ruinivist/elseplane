@@ -275,8 +275,7 @@ void main() {
     tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText(' edited');
     await _open(tester);
     final originalSaved = store.library.current.document!.toJson();
-    await tester.tap(find.byTooltip('Demo'));
-    await tester.pumpAndSettle();
+    await _createDemo(tester);
 
     expect(find.byType(CanvasFilePicker), findsNothing);
     final first = store.library.current;
@@ -293,8 +292,7 @@ void main() {
     tester.widgetList<TextElementView>(find.byType(TextElementView)).first.resources.insertPastedText(' changed');
     await _open(tester);
     final firstSaved = store.library.current.document!.toJson();
-    await tester.tap(find.byTooltip('Demo'));
-    await tester.pumpAndSettle();
+    await _createDemo(tester);
     final second = store.library.current;
     expect(second.name, 'Demo 4');
     expect(second.id, isNot(first.id));
@@ -324,16 +322,14 @@ void main() {
       final original = store.library.toJson();
       attachments.fail = failAttachment;
       store.fail = !failAttachment;
-      await tester.tap(find.byTooltip('Demo'));
-      await tester.pumpAndSettle();
+      await _createDemo(tester);
       expect(store.library.toJson(), original);
       expect(find.byType(CanvasFilePicker), findsOneWidget);
       expect(find.text('Could not save changes. Please try again.'), findsOneWidget);
 
       attachments.fail = false;
       store.fail = false;
-      await tester.tap(find.byTooltip('Demo'));
-      await tester.pumpAndSettle();
+      await _createDemo(tester);
       expect(store.library.current.name, 'Demo');
       expect(find.byType(CanvasFilePicker), findsNothing);
       expect(tester.takeException(), isNull);
@@ -351,7 +347,7 @@ void main() {
     final gate = Completer<void>();
     attachments.gate = gate.future;
     await tester.tap(find.byTooltip('Demo'));
-    await tester.pumpAndSettle();
+    await pumpUntil(tester, () => attachments.started.isCompleted);
     expect(store.library.files.singleWhere((file) => file.isFolder).name, 'Notes');
     expect(find.byType(CanvasFilePicker), findsOneWidget);
     final popup = tester.widget<FileTreePopup>(find.byType(FileTreePopup));
@@ -361,7 +357,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CanvasFilePicker), findsOneWidget);
     gate.complete();
-    await tester.pumpAndSettle();
+    await pumpUntil(tester, () => attachments.files.isNotEmpty);
     expect(store.library.files.where((file) => !file.isFolder), hasLength(2));
     expect(store.library.current.name, 'Demo');
     expect(find.byType(CanvasFilePicker), findsNothing);
@@ -592,6 +588,17 @@ void main() {
 
 // ---------- Helpers ----------
 
+Future<void> _createDemo(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Demo'));
+  await tester.pump();
+  await pumpUntil(
+    tester,
+    () =>
+        find.byType(CanvasFilePicker).evaluate().isEmpty ||
+        tester.widget<FileTreePopup>(find.byType(FileTreePopup)).enabled,
+  );
+}
+
 Future<void> _open(WidgetTester tester) async {
   await tester.tap(find.byType(CanvasTitle));
   await tester.pumpAndSettle();
@@ -617,11 +624,15 @@ class _FailingLibraryStore extends TestLibraryStore {
 class _FailingAttachmentStore extends TestAttachmentStore {
   bool fail = false;
   Future<void>? gate;
+  final started = Completer<void>();
 
   @override
   Future<void> write(String path, Uint8List bytes) async {
     if (fail) throw StateError('Storage full');
-    if (gate case final gate?) await gate;
+    if (gate case final gate?) {
+      started.complete();
+      await gate;
+    }
     await super.write(path, bytes);
   }
 }

@@ -84,6 +84,19 @@ final onePixelPngBytes = Uint8List.fromList(
   ),
 );
 
+/// Lets browser work finish while advancing the widget test's fake microtasks and frames.
+Future<void> pumpUntil(WidgetTester tester, bool Function() done) async {
+  await tester.runAsync(() async {
+    final elapsed = Stopwatch()..start();
+    while (!done() && elapsed.elapsed < const Duration(seconds: 10)) {
+      await Future<void>.delayed(Duration.zero);
+      await tester.pump();
+    }
+  });
+  await tester.pumpAndSettle();
+  expect(done(), isTrue);
+}
+
 Future<void> pumpCanvas(
   WidgetTester tester,
   LibraryStore libraryStore, {

@@ -46,17 +46,11 @@ Before enabling wrapping, fix wrapped-code scroll restoration in `re_editor`. It
 
 ## 4. Corrupt image bytes pass validation on web
 
-Status: open. Image validation bug affecting paste, import, and restore.
+Status: fixed. Shared attachment validation decodes the first image frame through `readCanvasImageSize`. Project import, library restore, and backup reject corrupt bytes. Markdown image paste validates before writing and rechecks the target lifetime afterward, preserving silent cancellation and write cleanup.
 
 Location: [attachment validation](../lib/attachments/image_import.dart), `validateCanvasAttachment`; [text image paste](../lib/canvas/editor/elements/text/text_markdown_editor.dart), `TextClipboardEdits.insertPastedImage`.
 
-To reproduce, create a project containing a Markdown image reference to a valid attachment path, with `[1, 2, 3]` as that attachment's bytes. Import the project on web. Pasting those bytes through `insertPastedImage` also saves them as a PNG attachment.
-
-Expected: reject corrupt image data before writing attachments or publishing document changes. Actual: the corrupt attachment is accepted; project export/reimport and library backup also succeed with those bytes.
-
-`ImageDescriptor.encoded` only wraps bytes on Flutter web; creating a descriptor does not decode or validate the image. Text image paste checks only byte length before writing. The malformed-image case in [the project tests](../test/library/transfer/canvas_project_test.dart) has no matching document reference, so attachment-map validation rejects it before image validation runs.
-
-Fix: make the shared validator decode the image using the existing `readCanvasImageSize`, and call that validator before text-image writes. Preserve cancellation checks and cleanup. Test corrupt bytes with a genuine document reference so the image validator is exercised.
+The [attachment tests](../test/attachments/attachment_test.dart) cover rejection before any write or text/selection change, and cancellation during validation with valid and corrupt bytes. The [project regression](../test/library/transfer/canvas_project_test.dart) includes a genuine Markdown image reference so image decoding is exercised. The [archive tests](../test/library/transfer/canvas_library_archive_test.dart) reject corrupt referenced images during backup and restore.
 
 ## 5. Markdown attachment images reload after culling
 

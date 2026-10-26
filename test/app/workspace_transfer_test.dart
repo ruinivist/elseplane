@@ -99,14 +99,15 @@ void main() {
       ],
     );
     final files = _FakeProjectFiles()
-      ..opened = await encodeCanvasLibraryArchive(imported, _FakeAttachmentStore({_path0: _newBytes}));
+      ..opened = await tester.runAsync(
+        () => encodeCanvasLibraryArchive(imported, _FakeAttachmentStore({_path0: _newBytes})),
+      );
     await pumpElseplaneApp(tester, libraryStore: store, attachmentStore: attachments, projectFiles: files);
     final oldId = store.library.currentId;
     await _openCanvasSettings(tester);
 
     await tester.tap(find.byKey(const ValueKey('library-restore-button')));
-    await tester.pumpAndSettle();
-    expect(find.text('Replace library?'), findsOneWidget);
+    await _waitForReplacement(tester, 'Replace library?');
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(store.library.currentId, oldId);
@@ -114,7 +115,7 @@ void main() {
 
     store.failLibrarySaves = true;
     await tester.tap(find.byKey(const ValueKey('library-restore-button')));
-    await tester.pumpAndSettle();
+    await _waitForReplacement(tester, 'Replace library?');
     await tester.tap(find.text('Replace library'));
     await tester.pumpAndSettle();
     expect(find.text('Could not restore library'), findsOneWidget);
@@ -123,7 +124,7 @@ void main() {
 
     store.failLibrarySaves = false;
     await tester.tap(find.byKey(const ValueKey('library-restore-button')));
-    await tester.pumpAndSettle();
+    await _waitForReplacement(tester, 'Replace library?');
     await tester.tap(find.text('Replace library'));
     await tester.pumpAndSettle();
     expect(store.library.current.name, 'New');
@@ -478,9 +479,12 @@ Future<void> _openCanvasSettings(WidgetTester tester) async {
 }
 
 Future<void> _confirmCanvasImport(WidgetTester tester) async {
-  await tester.pumpAndSettle();
+  await _waitForReplacement(tester, 'Replace canvas?');
   await tester.tap(find.text('Replace canvas'));
 }
+
+Future<void> _waitForReplacement(WidgetTester tester, String title) =>
+    pumpUntil(tester, () => find.text(title).evaluate().isNotEmpty);
 
 Future<void> _historyShortcut(WidgetTester tester, {bool redo = false}) async {
   await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);

@@ -282,10 +282,14 @@ Suffix ${_path(1)}
     await expectLater(_decodeJson(invalidBase64), throwsFormatException);
 
     final malformedImage = _validProjectJson()
+      ..['document'] = _document(markdown: '![corrupt](${_path(0)})').toJson()
       ..['attachments'] = {
         _path(0): base64Encode(<int>[1, 2, 3]),
       };
-    await expectLater(_decodeJson(malformedImage), throwsFormatException);
+    await expectLater(
+      _decodeJson(malformedImage),
+      throwsA(isA<FormatException>().having((error) => error.message, 'message', contains('Invalid encoded image'))),
+    );
 
     final missingAttachment = _validProjectJson()
       ..['document'] = _document(markdown: '![missing](${_path(0)})').toJson();

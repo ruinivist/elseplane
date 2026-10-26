@@ -5,6 +5,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
@@ -47,6 +48,29 @@ void main() {
     expect(restored.library.path(restored.library.files.last.id).map((file) => file.name), ['Notes.json', 'Sketch']);
     expect(restored.library.current.name, 'Notes');
     expect(restored.attachments[_path], onePixelPngBytes);
+  });
+
+  test('backup and restore reject corrupt referenced images', () async {
+    final source = CanvasLibrary(
+      files: [CanvasFile(id: 'canvas', name: 'Canvas', document: _document('one'))],
+      currentId: 'canvas',
+    );
+    final bytes = Uint8List.fromList([1, 2, 3]);
+    final invalidImage = throwsA(
+      isA<FormatException>().having((error) => error.message, 'message', contains('Invalid encoded image')),
+    );
+
+    await expectLater(encodeCanvasLibraryArchive(source, TestAttachmentStore({_path: bytes})), invalidImage);
+
+    final content = utf8.encode(
+      jsonEncode({'version': 1, 'name': 'Canvas', 'document': source.current.document!.toJson()}),
+    );
+    final archive = Archive()
+      ..add(ArchiveFile.directory('library/'))
+      ..add(ArchiveFile.bytes('library/Canvas.json', content))
+      ..add(ArchiveFile.directory('attachments/'))
+      ..add(ArchiveFile.bytes(_path, bytes));
+    await expectLater(decodeCanvasLibraryArchive(ZipEncoder().encodeBytes(archive)), invalidImage);
   });
 
   test('rejects missing attachments and duplicate ZIP paths', () async {

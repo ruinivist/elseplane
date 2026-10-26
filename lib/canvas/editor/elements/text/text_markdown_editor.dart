@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:elseplane/attachments/attachment_store.dart';
+import 'package:elseplane/attachments/image_import.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
 import 'package:elseplane/theme/theme.dart';
@@ -133,8 +134,8 @@ extension TextClipboardEdits on TextEditorResources {
   ) async {
     final token = session.captureEdit(data.id);
     try {
-      validateAttachmentSize(bytes.length, 'Image exceeds 10 MiB');
       final path = 'attachments/${const Uuid().v4()}.$extension';
+      await validateCanvasAttachment(path, bytes);
       if (!token.isCurrent || !attached) return;
       var written = false;
       try {

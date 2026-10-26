@@ -160,19 +160,25 @@ void main() {
     final document = _autoDocument('text').withElements(
       (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
     );
-    final attachments = _DelayedAttachmentStore();
+    final attachments = (await tester.runAsync(() async => _DelayedAttachmentStore()))!;
     await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
     await tester.tapAt(_autoHitPoint(tester, 'text'));
     await tester.pumpAndSettle();
     final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     model.controller.selection = const TextSelection.collapsed(offset: 0);
-    final paste = model.insertPastedImage(onePixelPngBytes, 'png', attachments);
+    late Future<void> paste;
+    await tester.runAsync(() async {
+      paste = model.insertPastedImage(onePixelPngBytes, 'png', attachments);
+      await attachments.started.future;
+    });
     await _promoteOther(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(model.editing, isFalse);
-    attachments.resume.complete();
-    await paste;
+    await tester.runAsync(() async {
+      attachments.resume.complete();
+      await paste;
+    });
     await tester.pumpAndSettle();
     expect(_canvas(tester).childOrder, ['editor', 'other']);
     expect(model.controller.text, 'contents');
@@ -1704,10 +1710,12 @@ void main() {
 // ---------- Helpers ----------
 
 class _DelayedAttachmentStore extends TestAttachmentStore {
+  final started = Completer<void>();
   final resume = Completer<void>();
 
   @override
   Future<void> write(String path, Uint8List bytes) async {
+    started.complete();
     await resume.future;
     await super.write(path, bytes);
   }

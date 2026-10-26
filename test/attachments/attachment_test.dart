@@ -115,7 +115,7 @@ void main() {
           baseOffset: 7,
           extentOffset: 12,
         );
-      final bytes = Uint8List.fromList(<int>[1, 2, 3]);
+      final bytes = onePixelPngBytes;
 
       await model.insertPastedImage(bytes, 'png', store);
 
@@ -142,7 +142,7 @@ void main() {
 
     await expectLater(
       model.insertPastedImage(
-        Uint8List.fromList(<int>[1]),
+        onePixelPngBytes,
         'png',
         _FailingAttachmentStore(failWrites: true),
       ),
@@ -150,6 +150,47 @@ void main() {
     );
     expect(model.node.markdown, 'unchanged');
   });
+
+  test('corrupt pasted images fail before writing or changing text and selection', () async {
+    final store = _TrackingAttachmentStore();
+    final model = _model('before after')..controller.selection = const TextSelection(baseOffset: 7, extentOffset: 12);
+    addTearDown(model.dispose);
+    final value = model.controller.value;
+    final document = model.session.document;
+
+    await expectLater(
+      model.insertPastedImage(Uint8List.fromList([1, 2, 3]), 'png', store),
+      throwsFormatException,
+    );
+
+    expect(store.writes, 0);
+    expect(store.files, isEmpty);
+    expect(model.controller.value, value);
+    expect(model.session.document, same(document));
+  });
+
+  for (final corrupt in [false, true]) {
+    test('cancellation during image validation is silent with corrupt bytes $corrupt', () async {
+      final store = _TrackingAttachmentStore();
+      final model = _model('unchanged');
+      addTearDown(model.dispose);
+      final value = model.controller.value;
+      final document = model.session.document;
+      final pending = model.insertPastedImage(
+        corrupt ? Uint8List.fromList([1, 2, 3]) : onePixelPngBytes,
+        'png',
+        store,
+      );
+      model.session.invalidatePendingEdits();
+
+      await pending;
+
+      expect(store.writes, 0);
+      expect(store.files, isEmpty);
+      expect(model.controller.value, value);
+      expect(model.session.document, same(document));
+    });
+  }
 
   test('plain text paste replaces the current selection', () {
     final model = _model('before after')
@@ -242,6 +283,16 @@ TextEditorResources _model(String markdown) => testTextModel(
 );
 
 // ---------- Test doubles ----------
+
+class _TrackingAttachmentStore extends TestAttachmentStore {
+  int writes = 0;
+
+  @override
+  Future<void> write(String path, Uint8List bytes) async {
+    writes++;
+    await super.write(path, bytes);
+  }
+}
 
 class _FailingAttachmentStore extends TestAttachmentStore {
   _FailingAttachmentStore({required this.failWrites});

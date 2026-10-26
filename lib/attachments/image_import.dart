@@ -1,5 +1,5 @@
 // Validates encoded attachment images and their storage limits.
-// Used by project and library transfers before preparing attachments.
+// Used by image edits and project/library transfers before saving attachments.
 
 import 'dart:typed_data';
 import 'dart:ui';
@@ -11,21 +11,15 @@ import 'package:elseplane/attachments/attachment_store.dart';
 Future<void> validateCanvasAttachment(String path, Uint8List bytes) async {
   if (!attachmentPathPattern.hasMatch(path)) throw FormatException('Invalid attachment path: $path');
   validateAttachmentSize(bytes.length, 'Attachment exceeds 10 MiB: $path');
-  ImmutableBuffer? buffer;
-  ImageDescriptor? descriptor;
   try {
-    buffer = await ImmutableBuffer.fromUint8List(bytes);
-    descriptor = await ImageDescriptor.encoded(buffer);
+    await readCanvasImageSize(bytes);
   } catch (error) {
     throw FormatException('Invalid encoded image: $path ($error)');
-  } finally {
-    descriptor?.dispose();
-    buffer?.dispose();
   }
 }
 
-/// Decodes the first frame to measure an image on every supported platform.
-/// Used when clipboard and device images need dimensions before placement.
+/// Decodes the first frame to validate and measure an image on every supported platform.
+/// Used by attachment validation and clipboard/device image placement.
 Future<Size> readCanvasImageSize(Uint8List bytes) async {
   validateAttachmentSize(bytes.length, 'Image exceeds 10 MiB');
   Codec? codec;
