@@ -34,14 +34,30 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
+    :root {
+      /* Mirrors Starless Dark canvasBackground and textSecondary in lib/theme/starless.dart. */
+      --canvas-background: #16191e;
+      --text-secondary: #a3a3a3;
+      background: var(--canvas-background);
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      background: var(--canvas-background);
+    }
+
     #startup-loader {
       position: fixed;
       inset: 0;
       z-index: 1;
-      display: grid;
-      place-items: center;
-      background: #fbf9f7;
-      color: #201c1a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      background: var(--canvas-background);
+      color: var(--text-secondary);
       font: 14px monospace;
     }
 
@@ -75,6 +91,35 @@
 </head>
 <body>
   <div id="startup-loader" role="status" aria-label="Loading">
+    <!-- Inlined from assets/brand/elseplane-logo.svg to show immediately without an extra request. -->
+    <svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 1024 1024" aria-hidden="true" focusable="false">
+      <g id="logo-artwork">
+        <rect x="120" y="120" width="784" height="784" rx="184" fill="#16191E" />
+        <path
+          fill="none"
+          stroke="#B8B8B8"
+          stroke-width="42"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M 350,536
+             C 466,530 626,476 658,408
+             C 684,352 618,310 552,330
+             C 432,366 338,480 330,570
+             C 318,670 408,726 510,686
+             C 628,640 712,518 790,540
+             C 858,558 904,606 904,670
+             V 720
+             C 904,822 822,904 720,904
+             H 304
+             C 202,904 120,822 120,720
+             V 304
+             C 120,202 202,120 304,120
+             H 720
+             C 822,120 904,202 904,304
+             V 670"
+        />
+      </g>
+    </svg>
     <span aria-hidden="true">Loading <span class="loading-dots"></span></span>
   </div>
   <script>
