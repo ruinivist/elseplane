@@ -9,6 +9,7 @@
 - We maintain our own fork of `flutter_markdown_plus`. Use the library's exposed styling options as intended first; if they cannot achieve the required styling, suggest modifying the fork.
 - Use packages that are available on all platforms but only test build for "web", no need to test for any others at this stage.
 - Nested folders can have their own AGENTS.md, read those if you are working in a relevant directory.
+- Use lowercase Conventional Commit subjects (`type: description`), keeping the entire subject to 4–6 words.
 
 # UI Decisions
 
