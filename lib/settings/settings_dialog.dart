@@ -396,10 +396,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       style: TextButton.styleFrom(
         minimumSize: const Size(0, 36),
         foregroundColor: muted ? theme.colors.textSecondary : null,
-      ).copyWith(
-        backgroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.hovered) ? Colors.transparent : null,
-        ),
+        overlayColor: Colors.transparent,
       ),
       onPressed: () => _openAboutLink(url),
       child: Row(
