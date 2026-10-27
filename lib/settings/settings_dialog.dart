@@ -1,6 +1,7 @@
 // Provides the application settings dialog and its local editing state.
 // Used by the canvas shell to configure appearance and transfer projects.
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
@@ -54,6 +55,7 @@ class SettingsDialog extends StatefulWidget {
 enum _SettingsSection { about, appearance, canvas }
 
 class _SettingsDialogState extends State<SettingsDialog> {
+  static const _aboutLogo = SvgAssetLoader('assets/brand/elseplane-logo.svg');
   static const _repositoryUrl = 'https://github.com/ruinivist/elseplane';
   static const _gitSha = String.fromEnvironment('GIT_SHA');
 
@@ -63,6 +65,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late ThemeMode _themeMode = widget.themeMode;
   late CanvasBackgroundKind _canvasBackgroundKind = widget.canvasBackgroundKind;
   var _transferActive = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    unawaited(_aboutLogo.loadBytes(context));
+  }
 
   // ---------- Theme selection ----------
 
@@ -355,8 +363,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SvgPicture.asset(
-          'assets/brand/elseplane-logo.svg',
+        const SvgPicture(
+          _aboutLogo,
           width: 80,
           height: 80,
           semanticsLabel: 'elseplane logo',
