@@ -386,9 +386,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
     final theme = BTheme.of(context);
     return TextButton(
       style: TextButton.styleFrom(
-        padding: EdgeInsets.zero,
         minimumSize: const Size(0, 36),
         foregroundColor: muted ? theme.colors.textSecondary : null,
+      ).copyWith(
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.hovered) ? Colors.transparent : null,
+        ),
       ),
       onPressed: () => _openAboutLink(url),
       child: Row(
