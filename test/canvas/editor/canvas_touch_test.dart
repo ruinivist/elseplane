@@ -1,6 +1,7 @@
 // Verifies touch ownership between canvas tools, object edits, and navigation.
 // Exercises elseplane's handoff through real pointer sequences and persisted models.
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
@@ -8,6 +9,7 @@ import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/pen/pen_preview.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
@@ -20,11 +22,110 @@ import 'package:shared_preferences_web/shared_preferences_web.dart';
 import 'package:web/web.dart' as web;
 
 import '../test_helpers.dart';
+import '../touch_test_helpers.dart';
 
 // ---------- Tests ----------
 
 void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
+
+  for (final frameHz in [60, 120]) {
+    for (final objectJump in [false, true]) {
+      testWidgets('handoff checks reject restored ${objectJump ? 'object' : 'viewport'} jumps at $frameHz Hz', (
+        tester,
+      ) async {
+        await pumpCanvas(tester, TestLibraryStore(touchDocument([_code()])));
+        final controller = _canvas(tester);
+        final start = touchView(controller);
+        final object = find.byType(CodeElementView);
+        final model = tester.widget<CodeElementView>(object).resources;
+        final original = model.data;
+        final corners = touchWorldCorners(tester, object, start);
+        if (objectJump) {
+          model.moveBy(const Offset(0, 20));
+        } else {
+          controller.scrollBy(const Offset(0, 20));
+        }
+        tester.binding.addPostFrameCallback((_) {
+          if (objectJump) {
+            model.moveBy(const Offset(0, -20));
+          } else {
+            controller.scrollBy(const Offset(0, -20));
+          }
+        });
+        tester.binding.scheduleFrame();
+        TestFailure? failure;
+        try {
+          await pumpTouchResponse(
+            tester,
+            previous: start,
+            target: start,
+            frameHz: frameHz,
+            onFrame: (view) {
+              expect(model.data, original);
+              expectTouchWorldCorners(tester, object, corners, view);
+            },
+          );
+        } on TestFailure catch (error) {
+          failure = error;
+        }
+        expect(failure, isA<TestFailure>());
+        expect(model.data, original);
+        expectTouchWorldCorners(tester, object, corners, start);
+        TouchMotionReport()
+          ..sample(Duration.zero, paintedTouchLandmarks(tester), start, 'restored endpoint')
+          ..verify();
+      });
+    }
+    for (final canceled in [false, true]) {
+      for (final corrupt in [false, true]) {
+        testWidgets(
+          '${canceled ? 'canceled' : 'held'} touch ${corrupt ? 'rejects restored drift' : 'stays stable'} over 200ms at $frameHz Hz',
+          (tester) async {
+            await pumpCanvas(tester, TestLibraryStore(touchDocument()));
+            final controller = _canvas(tester);
+            final start = touchView(controller);
+            final first = await tester.startGesture(const Offset(250, 340), pointer: 1);
+            final second = await tester.startGesture(const Offset(490, 340), pointer: 2);
+            const delta = Offset(20, 10);
+            await first.moveBy(delta);
+            await second.moveBy(delta);
+            final frozen = (offset: start.offset - delta / start.scale, scale: start.scale);
+            await pumpTouchResponse(tester, previous: start, target: frozen, frameHz: frameHz);
+            if (canceled) {
+              await first.cancel();
+              await second.cancel();
+            }
+            if (corrupt) {
+              Timer(const Duration(milliseconds: 40), () => controller.scrollBy(const Offset(0, 20)));
+              Timer(const Duration(milliseconds: 140), () => controller.scrollBy(const Offset(0, -20)));
+            }
+            TestFailure? failure;
+            try {
+              await pumpTouchHold(tester, expected: frozen, frameHz: frameHz);
+            } on TestFailure catch (error) {
+              failure = error;
+            }
+            if (corrupt) {
+              expect(failure, isA<TestFailure>());
+              final observed = RegExp(r'at (\d+)us').firstMatch(failure?.message ?? '');
+              expect(observed, isNotNull);
+              expect(int.parse(observed!.group(1)!), inInclusiveRange(40000, 140000));
+            } else {
+              expect(failure, isNull);
+            }
+            TouchMotionReport()
+              ..sample(Duration.zero, paintedTouchLandmarks(tester), frozen, 'restored endpoint')
+              ..verify();
+            if (!canceled) {
+              await first.up();
+              await second.up();
+            }
+          },
+        );
+      }
+    }
+  }
 
   testWidgets('empty touch pans after slop, preserves selection, and converts zoom', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
@@ -64,15 +165,16 @@ void main() {
 
   for (final displacement in [Offset.zero, const Offset(60, 30)]) {
     testWidgets('canceling empty touch at $displacement preserves selection without inertia', (tester) async {
-      await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
+      await pumpCanvas(tester, TestLibraryStore(touchDocument([_pen('a')])));
       final model = tester.widget<PenElementView>(find.byType(PenElementView)).resources..setSelected(value: true);
       final controller = _canvas(tester);
       final touch = await tester.startGesture(const Offset(550, 400));
       await touch.moveBy(displacement, timeStamp: const Duration(milliseconds: 16));
       await touch.moveBy(displacement, timeStamp: const Duration(milliseconds: 32));
+      final frozenView = touchView(controller);
+      final frozen = frozenView.offset;
       await touch.cancel();
-      final frozen = controller.offset;
-      await tester.pump(const Duration(milliseconds: 200));
+      await pumpTouchHold(tester, expected: frozenView, onFrame: (_) => expect(model.selected, isTrue));
       expect(controller.offset, frozen);
       expect(model.selected, isTrue);
       final fresh = await tester.startGesture(const Offset(550, 400));
@@ -100,21 +202,34 @@ void main() {
 
   for (final displacement in [Offset.zero, const Offset(60, 30)]) {
     testWidgets('two fingers take over empty touch at $displacement without a jump or fling', (tester) async {
-      await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
+      await pumpCanvas(tester, TestLibraryStore(touchDocument([_pen('a')])));
       final model = tester.widget<PenElementView>(find.byType(PenElementView)).resources..setSelected(value: true);
       final controller = _canvas(tester);
       final first = await tester.startGesture(const Offset(200, 400), pointer: 1);
       await first.moveBy(displacement, timeStamp: const Duration(milliseconds: 16));
+      final beforeNavigation = touchView(controller);
       final panned = (controller.offset, controller.scale);
       final second = await tester.startGesture(const Offset(550, 400), pointer: 2);
       expect((controller.offset, controller.scale), panned);
-      await second.moveBy(const Offset(60, 30));
+      const delta = Offset(60, 30);
+      final target = _stationaryTarget(tester, beforeNavigation, (
+        const Offset(200, 400) + displacement,
+        const Offset(550, 400),
+      ), delta);
+      await second.moveBy(delta);
+      await pumpTouchResponse(
+        tester,
+        previous: beforeNavigation,
+        target: target,
+        onFrame: (_) => expect(model.selected, isTrue),
+      );
       expect((controller.offset, controller.scale), isNot(panned));
+      final frozenView = target;
       await second.up();
-      final frozen = (controller.offset, controller.scale);
+      final frozen = (frozenView.offset, frozenView.scale);
       await first.moveBy(const Offset(60, 30));
       await first.up();
-      await tester.pump(const Duration(milliseconds: 200));
+      await pumpTouchHold(tester, expected: frozenView, onFrame: (_) => expect(model.selected, isTrue));
       expect((controller.offset, controller.scale), frozen);
       expect(model.selected, isTrue);
       final fresh = await tester.startGesture(const Offset(550, 400));
@@ -125,32 +240,50 @@ void main() {
   }
 
   testWidgets('tool changes cancel empty touch pan through final release', (tester) async {
-    await pumpCanvas(tester, TestLibraryStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(touchDocument()));
     final controller = _canvas(tester);
     final touch = await tester.startGesture(const Offset(200, 300));
     await touch.moveBy(const Offset(60, 30));
+    final frozenView = touchView(controller);
+    final frozen = frozenView.offset;
     await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
-    final frozen = controller.offset;
     await touch.moveBy(const Offset(60, 30));
     await touch.up();
-    await tester.pump(const Duration(milliseconds: 200));
+    await pumpTouchHold(
+      tester,
+      expected: frozenView,
+      onFrame: (_) {
+        _expectNoDrafts(tester);
+        expect(find.byType(PenElementView), findsNothing);
+      },
+    );
     expect(controller.offset, frozen);
     expect(find.byType(PenElementView), findsNothing);
   });
 
   testWidgets('document replacement cancels an empty touch pan', (tester) async {
-    await pumpCanvas(tester, TestLibraryStore(_document([_pen('a')])));
+    await pumpCanvas(tester, TestLibraryStore(touchDocument([_pen('a')])));
     await tester.dragFrom(const Offset(150, 300), const Offset(60, 30));
     await tester.pump();
     final controller = _canvas(tester);
     final touch = await tester.startGesture(const Offset(550, 400));
     await touch.moveBy(const Offset(60, 30));
+    final frozenView = touchView(controller);
+    final frozen = frozenView.offset;
     await _undo(tester);
-    final frozen = controller.offset;
     await touch.moveBy(const Offset(60, 30));
     await touch.up();
-    await tester.pump(const Duration(milliseconds: 200));
+    await pumpTouchHold(
+      tester,
+      expected: frozenView,
+      onFrame: (_) {
+        expect(
+          tester.widget<PenElementView>(find.byType(PenElementView)).resources.data.position,
+          const Offset(100, 250),
+        );
+      },
+    );
     expect(controller.offset, frozen);
     expect(tester.widget<PenElementView>(find.byType(PenElementView)).resources.data.position, const Offset(100, 250));
   });
@@ -533,15 +666,30 @@ void main() {
 
   for (final (tool, type) in [('draw', PenElementView), ('arrow', ArrowElementView), ('shape', ShapeElementView)]) {
     testWidgets('$tool draws with one finger and discards on navigation takeover', (tester) async {
-      await pumpCanvas(tester, TestLibraryStore(_document()));
+      await pumpCanvas(tester, TestLibraryStore(touchDocument()));
       await _chooseTool(tester, tool);
       final controller = _canvas(tester);
       final first = await tester.startGesture(const Offset(200, 300), pointer: 1);
       await first.moveBy(const Offset(60, 30));
       expect(controller.offset, Offset.zero);
       expect(controller.scale, 1);
+      final beforeNavigation = touchView(controller);
       final second = await tester.startGesture(const Offset(500, 300), pointer: 2);
-      await second.moveBy(const Offset(80, 30));
+      const delta = Offset(80, 30);
+      final target = _stationaryTarget(tester, beforeNavigation, (
+        const Offset(260, 330),
+        const Offset(500, 300),
+      ), delta);
+      await second.moveBy(delta);
+      await pumpTouchResponse(
+        tester,
+        previous: beforeNavigation,
+        target: target,
+        onFrame: (_) {
+          _expectNoDrafts(tester);
+          expect(_toolViews(type), findsNothing);
+        },
+      );
       expect(controller.scale, greaterThan(1));
       expect(controller.offset, isNot(Offset.zero));
       await second.up();
@@ -550,11 +698,11 @@ void main() {
       expect((controller.offset, controller.scale), frozen);
       await first.up();
       await tester.pump();
-      expect(find.byType(type), findsNothing);
+      expect(_toolViews(type), findsNothing);
 
       await tester.dragFrom(const Offset(200, 300), const Offset(120, 90));
       await tester.pump();
-      expect(find.byType(type), findsOneWidget);
+      expect(_toolViews(type), findsOneWidget);
     });
   }
 
@@ -563,33 +711,33 @@ void main() {
       await pumpCanvas(tester, TestLibraryStore(_document()));
       await _chooseTool(tester, tool);
       final first = await tester.startGesture(const Offset(200, 300), pointer: 1);
-      expect(find.byType(type), findsNothing);
+      expect(_toolViews(type), findsNothing);
       final second = await tester.startGesture(const Offset(500, 300), pointer: 2);
       await second.moveBy(const Offset(50, 20));
       await second.up();
       await first.up();
       await tester.pump();
-      expect(find.byType(type), findsNothing);
+      expect(_toolViews(type), findsNothing);
 
       final drag = await tester.startGesture(const Offset(200, 300));
       await drag.moveBy(const Offset(60, 30));
       await drag.up();
       await tester.pump();
-      expect(find.byType(type), findsNothing);
+      expect(_toolViews(type), findsNothing);
       final canceled = await tester.startGesture(const Offset(200, 300));
       await canceled.cancel();
       await tester.pump();
-      expect(find.byType(type), findsNothing);
+      expect(_toolViews(type), findsNothing);
       await tester.tapAt(const Offset(200, 300));
       await tester.pump();
-      expect(find.byType(type), findsOneWidget);
+      expect(_toolViews(type), findsOneWidget);
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pump(const Duration(milliseconds: 150));
     });
   }
 
   testWidgets('two actual fingers discard a stylus stroke until interrupted pointers release', (tester) async {
-    await pumpCanvas(tester, TestLibraryStore(_document()));
+    await pumpCanvas(tester, TestLibraryStore(touchDocument()));
     await _chooseTool(tester, 'draw');
     final controller = _canvas(tester);
     final stylus = await tester.startGesture(const Offset(200, 300), pointer: 1, kind: PointerDeviceKind.stylus);
@@ -597,8 +745,20 @@ void main() {
     await stylus.moveBy(const Offset(40, 20));
     await finger.moveBy(const Offset(20, 0));
     expect((controller.offset, controller.scale), (Offset.zero, 1));
+    final beforeNavigation = touchView(controller);
     final second = await tester.startGesture(const Offset(600, 300), pointer: 3);
-    await second.moveBy(const Offset(40, 20));
+    const delta = Offset(40, 20);
+    final target = _stationaryTarget(tester, beforeNavigation, (const Offset(420, 300), const Offset(600, 300)), delta);
+    await second.moveBy(delta);
+    await pumpTouchResponse(
+      tester,
+      previous: beforeNavigation,
+      target: target,
+      onFrame: (_) {
+        _expectNoDrafts(tester);
+        expect(find.byType(PenElementView), findsNothing);
+      },
+    );
     expect(controller.scale, greaterThan(1));
     await second.up();
     await finger.cancel();
@@ -666,7 +826,7 @@ void main() {
 
   for (final control in ['code-block-handle', 'code-block-rotate-control', 'code-block-resize-handle']) {
     testWidgets('$control hands off without further object changes', (tester) async {
-      await pumpCanvas(tester, TestLibraryStore(_document([_code()])));
+      await pumpCanvas(tester, TestLibraryStore(touchDocument([_code()])));
       final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
       await tester.tapAt(const Offset(220, 300));
       await tester.pumpAndSettle();
@@ -675,9 +835,25 @@ void main() {
       await tester.pump();
       final edited = (model.data.position, model.size, model.rotation);
       expect(edited, isNot((const Offset(180, 220), const Size(280, 240), 0)));
+      final beforeNavigation = touchView(_canvas(tester));
+      final object = find.byType(CodeElementView);
+      final corners = touchWorldCorners(tester, object, beforeNavigation);
       final second = await tester.startGesture(const Offset(600, 450), pointer: 2);
-      await first.moveBy(const Offset(30, 20));
-      await second.moveBy(const Offset(30, 20));
+      expect((model.data.position, model.size, model.rotation), edited);
+      const delta = Offset(30, 20);
+      await first.moveBy(delta);
+      expect((model.data.position, model.size, model.rotation), edited);
+      await second.moveBy(delta);
+      final target = (offset: beforeNavigation.offset - delta / beforeNavigation.scale, scale: beforeNavigation.scale);
+      await pumpTouchResponse(
+        tester,
+        previous: beforeNavigation,
+        target: target,
+        onFrame: (view) {
+          expect((model.data.position, model.size, model.rotation), edited);
+          expectTouchWorldCorners(tester, object, corners, view);
+        },
+      );
       expect(_canvas(tester).offset, isNot(Offset.zero));
       expect((model.data.position, model.size, model.rotation), edited);
       await second.up();
@@ -718,7 +894,7 @@ void main() {
     await pumpCanvas(
       tester,
       TestLibraryStore(
-        _document([
+        touchDocument([
           ArrowElementData(
             id: 'arrow',
             start: const Offset(200, 300),
@@ -741,9 +917,26 @@ void main() {
     await first.moveBy(const Offset(40, 30));
     final edited = model.data.end;
     expect(edited, isNot(const Offset(500, 300)));
+    await tester.pump();
+    final beforeNavigation = touchView(_canvas(tester));
+    final object = find.byType(ArrowElementView);
+    final corners = touchWorldCorners(tester, object, beforeNavigation);
     final second = await tester.startGesture(const Offset(600, 450), pointer: 2);
-    await first.moveBy(const Offset(30, 20));
-    await second.moveBy(const Offset(30, 20));
+    expect(model.data.end, edited);
+    const delta = Offset(30, 20);
+    await first.moveBy(delta);
+    expect(model.data.end, edited);
+    await second.moveBy(delta);
+    final target = (offset: beforeNavigation.offset - delta / beforeNavigation.scale, scale: beforeNavigation.scale);
+    await pumpTouchResponse(
+      tester,
+      previous: beforeNavigation,
+      target: target,
+      onFrame: (view) {
+        expect(model.data.end, edited);
+        expectTouchWorldCorners(tester, object, corners, view);
+      },
+    );
     expect(_canvas(tester).offset, isNot(Offset.zero));
     expect(model.data.end, edited);
     await second.up();
@@ -797,3 +990,28 @@ CodeElementData _code() => CodeElementData(
   title: 'title',
   showLineNumbers: true,
 );
+
+// Fixture landmarks are not content produced by drawing tools.
+Finder _toolViews(Type type) => find.byWidgetPredicate(
+  (widget) => widget.runtimeType == type && (widget is! ShapeElementView || !widget.data.id.startsWith('landmark-')),
+);
+
+TouchView _stationaryTarget(WidgetTester tester, TouchView start, TouchTouches initial, Offset delta) {
+  final origin = tester.getTopLeft(find.byType(LazyCanvas));
+  final local = (initial.$1 - origin, initial.$2 - origin);
+  final raw = stationaryTouchView(start, local, (local.$1, local.$2 + delta));
+  final controller = _canvas(tester);
+  final scale = raw.scale.clamp(controller.minScale!, controller.maxScale!);
+  return (offset: start.offset + local.$1 / start.scale - local.$1 / scale, scale: scale);
+}
+
+void _expectNoDrafts(WidgetTester tester) {
+  expect(find.byKey(const ValueKey('arrow-preview')), findsNothing);
+  expect(find.byKey(const ValueKey('shape-preview')), findsNothing);
+  final pen = find.byKey(const ValueKey('pen-preview'));
+  if (pen.evaluate().isNotEmpty) {
+    final tool = (tester.widget<CustomPaint>(pen).painter! as PenPreviewPainter).tool;
+    expect(tool.active, isFalse);
+    expect(tool.points, isEmpty);
+  }
+}
