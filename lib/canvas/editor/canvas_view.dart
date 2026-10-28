@@ -102,6 +102,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     for (final id in _contextMenuTargetIds) ?_session.element(id),
   ];
   (Offset, double)? _contextMenuView;
+  late (Offset, double) _inputViewport;
   Offset? _contextMenuPosition;
   bool _arrangeMenuOpen = false;
   final _geometryListeners = <String, VoidCallback>{};
@@ -146,6 +147,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   @override
   void initState() {
     super.initState();
+    _inputViewport = (_canvasController.offset, _canvasController.scale);
     _canvasController.addListener(_closeContextMenuOnNavigation);
     _attachSession();
   }
@@ -166,6 +168,8 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         CanvasTool.media => _addMedia(position),
         _ => null,
       },
+      onQuickText: (position) => _addTextBlock(position, background: BlockBackgroundKind.transparent),
+      isFocusedEditorAt: _isFocusedEditorAt,
       onStroke: _addStroke,
       onArrow: _addArrow,
       onShape: _addShape,
@@ -382,6 +386,13 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     if (active != null) _target(active).pointerDown(event, control: true);
   }
 
+  bool _isFocusedEditorAt(Offset globalPosition) {
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus == null || _fieldForFocus(focus) == null) return false;
+    final box = focus.context?.findRenderObject();
+    return box is RenderBox && box.hitTest(BoxHitTestResult(), position: box.globalToLocal(globalPosition));
+  }
+
   void _focusElement(String id, {bool edit = false}) {
     final value = _element(id);
     if (value == null) return;
@@ -497,6 +508,9 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   }
 
   void _closeContextMenuOnNavigation() {
+    final viewport = (_canvasController.offset, _canvasController.scale);
+    if (_inputViewport != viewport) _input.cancelQuickText();
+    _inputViewport = viewport;
     if (_contextMenuView case final view? when view != (_canvasController.offset, _canvasController.scale)) {
       _closeContextMenu();
     }
@@ -720,7 +734,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   BlockBackgroundKind get _newBlockBackground =>
       BTheme.of(context).surfaceStyle == SurfaceStyle.glass ? BlockBackgroundKind.glass : BlockBackgroundKind.card;
 
-  void _addTextBlock(Offset position) {
+  void _addTextBlock(Offset position, {BlockBackgroundKind? background}) {
     if (!_documentLoaded) return;
     final node = TextElementData(
       id: const Uuid().v4(),
@@ -731,10 +745,10 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       style: TextNodeStyle(
         fontFamily: defaultFontFamily,
         color: defaultCanvasColor,
-        background: _newBlockBackground,
+        background: background ?? _newBlockBackground,
       ),
     );
-    _session.insert([node], returnToSelect: true);
+    _session.insert([node], returnToSelect: _session.tool != CanvasTool.select);
     final model = _elements.whereType<TextElementData>().firstWhere((model) => model.id == node.id);
     _editorFocusNode(model)?.requestFocus();
     _startTextEditing(model);
@@ -809,6 +823,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         onMove: target.move,
         onChangeEnd: target.finish,
         onResize: (size, delta) => _resizeTextBlock(a, size, delta),
+        onControlPointerDown: (event) => target.pointerDown(event, control: true),
       ),
       final CodeElementData a => CodeElementView(
         data: a,
@@ -832,7 +847,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         onMove: target.move,
         onChangeEnd: target.finish,
         onResize: (delta) => _resizeMedia(a, delta),
-        onPanelPointerDown: (event) => target.pointerDown(event, control: true),
+        onControlPointerDown: (event) => target.pointerDown(event, control: true),
         onDeactivate: () {
           if (!_contextMenuController.isOpen && _session.activeId == a.id) _setActiveElement(null);
         },
@@ -845,6 +860,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         onMove: target.move,
         onChangeEnd: target.finish,
         onResize: (delta) => _resizeShape(a, delta),
+        onControlPointerDown: (event) => target.pointerDown(event, control: true),
       ),
       final PenElementData a => PenElementView(
         data: a,

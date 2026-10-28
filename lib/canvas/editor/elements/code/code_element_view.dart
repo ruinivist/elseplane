@@ -286,6 +286,7 @@ class _CodeElementViewState extends State<CodeElementView> {
                 child: ResizeHandle(
                   key: const ValueKey('code-block-resize-handle'),
                   semanticLabel: 'Resize code block',
+                  onPointerDown: widget.onControlPointerDown,
                   gestures: {
                     ScaleGestureRecognizer: GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
                       () => ScaleGestureRecognizer(

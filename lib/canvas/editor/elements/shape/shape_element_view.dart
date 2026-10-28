@@ -23,6 +23,7 @@ class ShapeElementView extends StatefulWidget {
     required this.onMove,
     required this.onResize,
     this.onChangeEnd,
+    this.onControlPointerDown,
     super.key,
   });
 
@@ -32,6 +33,7 @@ class ShapeElementView extends StatefulWidget {
   final VoidCallback onActivate;
   final ValueChanged<Offset> onMove;
   final VoidCallback? onChangeEnd;
+  final PointerDownEventListener? onControlPointerDown;
   final ValueChanged<Offset> onResize;
 
   @override
@@ -90,6 +92,7 @@ class _ShapeElementViewState extends State<ShapeElementView> {
                   child: ResizeHandle(
                     key: const ValueKey('shape-resize-handle'),
                     semanticLabel: 'Resize shape',
+                    onPointerDown: widget.onControlPointerDown,
                     gestures: {
                       ImmediateMultiDragGestureRecognizer: immediateDragGestureFactory(
                         (_) => CallbackDrag(widget.onResize, onEnd: widget.onChangeEnd),

@@ -50,7 +50,7 @@ class MediaElementView extends StatefulWidget {
     required this.onResize,
     required this.onActivate,
     required this.onDeactivate,
-    this.onPanelPointerDown,
+    this.onControlPointerDown,
     this.onChangeEnd,
     super.key,
   });
@@ -64,7 +64,7 @@ class MediaElementView extends StatefulWidget {
   final ValueChanged<Offset> onResize;
   final VoidCallback onActivate;
   final VoidCallback onDeactivate;
-  final PointerDownEventListener? onPanelPointerDown;
+  final PointerDownEventListener? onControlPointerDown;
 
   @override
   State<MediaElementView> createState() => _MediaElementViewState();
@@ -182,7 +182,7 @@ class _MediaElementViewState extends State<MediaElementView> {
                               ? TapRegion(
                                   groupId: model,
                                   child: Listener(
-                                    onPointerDown: widget.onPanelPointerDown,
+                                    onPointerDown: widget.onControlPointerDown,
                                     child: _MediaUrlPanel(
                                       resources: model,
                                       selected: widget.selected,
@@ -216,6 +216,7 @@ class _MediaElementViewState extends State<MediaElementView> {
                       onMove: widget.onMove,
                       onChangeEnd: widget.onChangeEnd,
                       onResize: widget.onResize,
+                      onControlPointerDown: widget.onControlPointerDown,
                     ),
                   )
                 : _MediaUrlPanel(
@@ -250,6 +251,7 @@ class _MediaImage extends StatefulWidget {
     required this.onMove,
     required this.onResize,
     this.onChangeEnd,
+    this.onControlPointerDown,
   });
 
   final MediaResources resources;
@@ -259,6 +261,7 @@ class _MediaImage extends StatefulWidget {
   final VoidCallback onActivate;
   final ValueChanged<Offset> onMove;
   final VoidCallback? onChangeEnd;
+  final PointerDownEventListener? onControlPointerDown;
   final ValueChanged<Offset> onResize;
 
   @override
@@ -334,6 +337,7 @@ class _MediaImageState extends State<_MediaImage> {
                       ? ResizeHandle(
                           key: const ValueKey('media-resize-handle'),
                           semanticLabel: 'Resize media',
+                          onPointerDown: widget.onControlPointerDown,
                           showCornerSurface: true,
                           gestures: {
                             ImmediateMultiDragGestureRecognizer: immediateDragGestureFactory(

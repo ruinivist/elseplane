@@ -28,6 +28,9 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 ## Text blocks
 
+- In Select, primary-button double-click or finger double-tap on the canvas creates a transparent text block at the second press position, above existing objects, and immediately focuses its Markdown editor. This works over objects as well as empty canvas, preserving touch-selection mode. Normal Text-tool placement keeps its app-wide background default.
+- Quick insertion preserves immediate single-click activation. Eligibility belongs to the first press: activating an inactive block on that press does not prevent insertion on the second. Gestures starting inside an already focused text, code, title, or media field retain native editing behavior. Menus, toolbars, option panels, transform controls, modifier selection, Space panning, and stylus input do not trigger insertion. Dragging, navigation, interruption, and tool or document changes cancel pending recognition.
+
 - Clicking the preview makes the block active, opens the Markdown source editor, and focuses it.
 - Dragging the preview moves the block without activating it.
 - Using an option or starting a move or rotation closes the source editor but leaves the block active. Options and transform controls remain available.

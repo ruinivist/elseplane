@@ -87,6 +87,13 @@ final class _EraserGesture extends _Gesture {
   const _EraserGesture(super.pointer);
 }
 
+final class _QuickTextTap {
+  _QuickTextTap(this.down, {this.second = false});
+  final PointerDownEvent down;
+  final bool second;
+  Duration? released;
+}
+
 // ---------- Pointer ownership ----------
 
 /// Owns pointer arbitration, creation drafts, and interaction cancellation.
@@ -102,6 +109,8 @@ class CanvasInput extends ChangeNotifier {
     required this.onEndEditing,
     required this.onFocusElement,
     required this.onPlace,
+    required this.onQuickText,
+    required this.isFocusedEditorAt,
     required this.onStroke,
     required this.onArrow,
     required this.onShape,
@@ -126,6 +135,8 @@ class CanvasInput extends ChangeNotifier {
   final void Function({bool commitMediaDraft}) onEndEditing;
   final void Function(String id, {bool edit}) onFocusElement;
   final ValueChanged<Offset> onPlace;
+  final ValueChanged<Offset> onQuickText;
+  final bool Function(Offset globalPosition) isFocusedEditorAt;
   final ValueChanged<RawPenStroke> onStroke;
   final ValueChanged<ArrowElementData> onArrow;
   final ValueChanged<ShapeElementData> onShape;
@@ -137,6 +148,7 @@ class CanvasInput extends ChangeNotifier {
   final _pointers = <int, PointerDeviceKind>{};
   final _blockedPointers = <int>{};
   _Gesture? _gesture;
+  _QuickTextTap? _quickTextTap;
   bool _navigating = false;
   bool _spaceHeld = false;
   int _generation = 0;
@@ -149,6 +161,7 @@ class CanvasInput extends ChangeNotifier {
   set spaceHeld(bool value) {
     if (_spaceHeld == value) return;
     _spaceHeld = value;
+    if (value) cancelQuickText();
     notifyListeners();
   }
 
@@ -192,6 +205,7 @@ class CanvasInput extends ChangeNotifier {
   void interrupt() {
     if (_disposed) return;
     _generation++;
+    cancelQuickText();
     _blockedPointers.addAll(_pointers.keys);
     _cancelGesture();
     spaceHeld = false;
@@ -255,6 +269,46 @@ class CanvasInput extends ChangeNotifier {
       interrupt();
     }
     if (blocked) _blockedPointers.add(event.pointer);
+    final previous = _quickTextTap;
+    final second =
+        previous?.released != null &&
+        previous!.down.kind == event.kind &&
+        event.timeStamp >= previous.released! &&
+        event.timeStamp - previous.released! <= kDoubleTapTimeout &&
+        event.timeStamp - previous.down.timeStamp >= kDoubleTapMinTime &&
+        (event.position - previous.down.position).distance <= kDoubleTapSlop;
+    if (!canHandle(event) ||
+        _pointers.length != 1 ||
+        session.tool != CanvasTool.select ||
+        spaceHeld ||
+        modifierPressed.value ||
+        event.buttons != kPrimaryButton ||
+        (event.kind != PointerDeviceKind.mouse && event.kind != PointerDeviceKind.touch) ||
+        (!second && isFocusedEditorAt(event.position))) {
+      cancelQuickText();
+    } else {
+      _quickTextTap = _QuickTextTap(event, second: second);
+    }
+  }
+
+  void cancelQuickText() => _quickTextTap = null;
+
+  bool _completeQuickText(PointerUpEvent event) {
+    final tap = _quickTextTap;
+    if (tap == null || tap.down.pointer != event.pointer) return false;
+    if ((event.position - tap.down.position).distance > panSlop(event.kind) || spaceHeld || modifierPressed.value) {
+      cancelQuickText();
+      return false;
+    }
+    if (!tap.second) {
+      tap.released = event.timeStamp;
+      return false;
+    }
+    final position = viewport.screenToCanvas(viewport.globalToScreen(tap.down.position));
+    endInteraction();
+    session.setSelection(const []);
+    onQuickText(position);
+    return true;
   }
 
   void pointerDown(PointerDownEvent event) {
@@ -314,6 +368,13 @@ class CanvasInput extends ChangeNotifier {
   void pointerMove(PointerMoveEvent event) {
     if (!canHandle(event)) return;
     pointerPosition.value = event.localPosition;
+    final tap = _quickTextTap;
+    if (tap != null &&
+        tap.down.pointer == event.pointer &&
+        ((event.position - tap.down.position).distance > panSlop(event.kind) ||
+            (event.position - tap.down.position).distance > kDoubleTapTouchSlop)) {
+      cancelQuickText();
+    }
     switch (_gesture) {
       case final _PanGesture pan when pan.pointer == event.pointer:
         pan.velocity.addPosition(event.timeStamp, event.localPosition);
@@ -347,6 +408,7 @@ class CanvasInput extends ChangeNotifier {
     _pointers.remove(event.pointer);
     _blockedPointers.remove(event.pointer);
     if (!allowed) return;
+    if (_completeQuickText(event)) return;
     final gesture = _gesture;
     if (gesture?.pointer != event.pointer) return;
     switch (gesture) {
@@ -401,6 +463,7 @@ class CanvasInput extends ChangeNotifier {
   }
 
   void pointerCancel(PointerCancelEvent event) {
+    cancelQuickText();
     _pointers.remove(event.pointer);
     _blockedPointers.remove(event.pointer);
     if (_gesture?.pointer == event.pointer) {
@@ -483,6 +546,7 @@ class CanvasInput extends ChangeNotifier {
 
   @override
   void dispose() {
+    cancelQuickText();
     _disposed = true;
     _generation++;
     session.removeListener(_sessionChanged);
@@ -521,6 +585,7 @@ class CanvasInputTarget {
   void pointerDown(PointerDownEvent event, {bool control = false}) {
     if (!attached) return;
     input._observeDown(event);
+    if (control) input.cancelQuickText();
     if (!input.canHandle(event) || !attached) return;
     if (input._gesture case _ObjectGesture(pointer: final pointer, id: final target)
         when pointer == event.pointer && target == id) {

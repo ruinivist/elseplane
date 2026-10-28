@@ -35,6 +35,7 @@ class TextElementView extends StatelessWidget {
     required this.onResize,
     this.onInteract,
     this.onChangeEnd,
+    this.onControlPointerDown,
     super.key,
   });
 
@@ -47,6 +48,7 @@ class TextElementView extends StatelessWidget {
   final VoidCallback? onInteract;
   final ValueChanged<Offset> onMove;
   final VoidCallback? onChangeEnd;
+  final PointerDownEventListener? onControlPointerDown;
   final void Function(Size renderedSize, Offset delta) onResize;
 
   @override
@@ -113,6 +115,7 @@ class TextElementView extends StatelessWidget {
                                 child: ResizeHandle(
                                   key: const ValueKey('text-block-resize-handle'),
                                   semanticLabel: 'Resize text block',
+                                  onPointerDown: onControlPointerDown,
                                   gestures: {resizeRecognizer: resizeGestureFactory},
                                 ),
                               )

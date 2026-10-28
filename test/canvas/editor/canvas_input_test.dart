@@ -5,12 +5,15 @@ import 'dart:ui';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_input.dart';
+import 'package:elseplane/canvas/editor/canvas_view.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../test_helpers.dart';
@@ -20,6 +23,8 @@ void main() {
   late EditorSession session;
   late CanvasInput input;
   late _Viewport viewport;
+  late List<Offset> quickText;
+  var focusedEditor = false;
 
   setUp(() {
     session = EditorSession(
@@ -49,6 +54,8 @@ void main() {
       initialColor: const Color(0xff000000),
     );
     viewport = _Viewport();
+    quickText = [];
+    focusedEditor = false;
     input = CanvasInput(
       session: session,
       viewport: viewport,
@@ -59,6 +66,8 @@ void main() {
       onEndEditing: ({commitMediaDraft = true}) {},
       onFocusElement: (_, {edit = false}) {},
       onPlace: (_) {},
+      onQuickText: quickText.add,
+      isFocusedEditorAt: (_) => focusedEditor,
       onStroke: (_) {},
       onArrow: (_) {},
       onShape: (_) {},
@@ -68,6 +77,245 @@ void main() {
     input.dispose();
     session.dispose();
   });
+
+  for (final rejection in [
+    'drag',
+    'cancel',
+    'navigation',
+    'tool',
+    'modifier',
+    'timeout',
+    'distance',
+    'focused',
+    'control',
+    'two fingers',
+  ]) {
+    testWidgets('quick text rejects $rejection', (tester) async {
+      final pointer = TestPointer(1, PointerDeviceKind.mouse);
+      const position = Offset(500, 300);
+      focusedEditor = rejection == 'focused';
+      input.pointerDown(pointer.down(position, timeStamp: const Duration(milliseconds: 100)));
+      if (rejection == 'drag') {
+        input
+          ..pointerMove(pointer.move(position + const Offset(30, 0)))
+          ..pointerMove(pointer.move(position));
+      }
+      if (rejection == 'cancel') {
+        input.pointerCancel(pointer.cancel());
+      } else {
+        input.pointerUp(pointer.up(timeStamp: const Duration(milliseconds: 120)));
+      }
+      if (rejection == 'navigation') input.cancelQuickText();
+      if (rejection == 'tool') input.chooseTool(CanvasTool.pen);
+      if (rejection == 'modifier') input.modifierPressed.value = true;
+      if (rejection == 'control') {
+        final control = TestPointer(3, PointerDeviceKind.mouse);
+        input.target('a').pointerDown(control.down(Offset.zero), control: true);
+        input.pointerUp(control.up());
+      }
+      if (rejection == 'two fingers') {
+        final first = TestPointer(4);
+        final second = TestPointer(5);
+        input
+          ..pointerDown(first.down(position))
+          ..pointerDown(second.down(position))
+          ..pointerUp(second.up())
+          ..pointerUp(first.up());
+      }
+      final secondPosition = rejection == 'distance' ? position + const Offset(200, 0) : position;
+      final time = rejection == 'timeout' ? 1000 : 200;
+      input
+        ..pointerDown(pointer.down(secondPosition, timeStamp: Duration(milliseconds: time)))
+        ..pointerUp(pointer.up(timeStamp: Duration(milliseconds: time + 20)));
+      expect(quickText, isEmpty);
+    });
+  }
+
+  for (final kind in [PointerDeviceKind.mouse, PointerDeviceKind.touch]) {
+    for (final surface in ['empty', 'shape', 'text', 'code', 'media']) {
+      testWidgets('quick text over $surface with $kind keeps focus', (tester) async {
+        SharedPreferencesAsyncWeb.registerWith(null);
+        final elements = <CanvasElementData>[
+          if (surface == 'shape') session.document.elements.first,
+          if (surface == 'text')
+            TextElementData(
+              id: 'existing',
+              position: Offset.zero,
+              width: 300,
+              height: 240,
+              markdown: 'Existing text',
+              style: const TextNodeStyle(fontFamily: 'JetBrains Mono'),
+            ),
+          if (surface == 'code')
+            CodeElementData(
+              id: 'existing',
+              position: Offset.zero,
+              size: const Size(300, 240),
+              language: CodeLanguage.dart,
+              source: 'final value = 1;',
+              title: '',
+              showLineNumbers: false,
+            ),
+          if (surface == 'media')
+            MediaElementData(
+              id: 'existing',
+              position: Offset.zero,
+              width: 300,
+              url: '',
+            ),
+        ];
+        await pumpCanvas(
+          tester,
+          TestLibraryStore(
+            CanvasDocument(
+              background: CanvasBackgroundKind.plain,
+              elements: elements,
+            ),
+          ),
+        );
+        final editor = tester.widget<CanvasView>(find.byType(CanvasView)).session;
+        final touchSelection = kind == PointerDeviceKind.touch && surface != 'empty';
+        if (touchSelection) {
+          editor.chooseTool(CanvasTool.select, touchSelectionEnabled: true);
+        }
+        final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller
+          ..updateScalebyDelta(0.25, focalPoint: Offset.zero)
+          ..scrollBy(const Offset(-160, -180));
+        await tester.pumpAndSettle();
+        final position = surface == 'empty'
+            ? const Offset(520, 400)
+            : (const Offset(40, 40) - canvas.offset) * canvas.scale;
+        final expected = canvas.offset + position / canvas.scale;
+        await _doubleClick(tester, position, kind);
+        expect(editor.document.elements.length, elements.length + 1);
+        final value = editor.document.elements.last as TextElementData;
+        expect(value.position, expected);
+        expect(value.style.background, BlockBackgroundKind.transparent);
+        expect(editor.activeId, value.id);
+        expect(editor.editing, (id: value.id, field: EditorField.markdown));
+        expect(editor.touchSelectionEnabled, touchSelection);
+        final view = tester
+            .widgetList<TextElementView>(find.byType(TextElementView))
+            .firstWhere((view) => view.data.id == value.id);
+        expect(view.resources.focusNode.hasFocus, isTrue);
+        await tester.enterText(find.byKey(const ValueKey('text-markdown-editor')), 'Quick text');
+        editor
+          ..editField(null)
+          ..undo();
+        expect((editor.element(value.id)! as TextElementData).markdown, '');
+        editor.undo();
+        expect(editor.element(value.id), isNull);
+        editor.redo();
+        expect((editor.element(value.id)! as TextElementData).style.background, BlockBackgroundKind.transparent);
+      });
+    }
+  }
+
+  testWidgets('focused editors keep double-click selection', (tester) async {
+    SharedPreferencesAsyncWeb.registerWith(null);
+    await pumpCanvas(tester, TestLibraryStore());
+    await _doubleClick(tester, const Offset(120, 200), PointerDeviceKind.mouse);
+    await tester.enterText(find.byKey(const ValueKey('text-markdown-editor')), 'hello world');
+    final editor = tester.widget<CanvasView>(find.byType(CanvasView)).session;
+    final field = find.byKey(const ValueKey('text-markdown-editor'));
+    await _doubleClick(tester, tester.getTopLeft(field) + const Offset(45, 36), PointerDeviceKind.mouse, start: 1000);
+    expect(editor.document.elements, hasLength(1));
+    final view = tester.widget<TextElementView>(find.byType(TextElementView));
+    expect(view.resources.focusNode.hasFocus, isTrue);
+    expect(view.resources.controller.selection.isCollapsed, isFalse);
+  });
+
+  for (final field in ['code', 'title', 'media']) {
+    testWidgets('focused $field field keeps double-click gestures', (tester) async {
+      SharedPreferencesAsyncWeb.registerWith(null);
+      await pumpCanvas(tester, TestLibraryStore());
+      final editor = tester.widget<CanvasView>(find.byType(CanvasView)).session
+        ..chooseTool(field == 'media' ? CanvasTool.media : CanvasTool.code);
+      await tester.tapAt(const Offset(120, 200));
+      await tester.pumpAndSettle();
+      final finder = find.byKey(
+        ValueKey(switch (field) {
+          'code' => 'code-block-preview-surface',
+          'title' => 'code-title-input',
+          _ => 'media-url-field',
+        }),
+      );
+      final position = field == 'title' ? tester.getCenter(finder) : tester.getTopLeft(finder) + const Offset(45, 20);
+      await tester.tapAt(position);
+      await tester.pumpAndSettle();
+      final focus = FocusManager.instance.primaryFocus;
+      await _doubleClick(tester, position, PointerDeviceKind.mouse, start: 1000);
+      expect(editor.document.elements, hasLength(1));
+      expect(FocusManager.instance.primaryFocus, same(focus));
+    });
+  }
+
+  for (final kind in [PointerDeviceKind.mouse, PointerDeviceKind.touch]) {
+    for (final type in ['text', 'code', 'shape', 'media']) {
+      testWidgets('$type resize handle rejects quick text with $kind', (tester) async {
+        SharedPreferencesAsyncWeb.registerWith(null);
+        const position = Offset(120, 200);
+        final element = switch (type) {
+          'text' => TextElementData(
+            id: 'existing',
+            position: position,
+            width: 240,
+            height: 220,
+            markdown: 'Existing',
+            style: const TextNodeStyle(fontFamily: 'JetBrains Mono'),
+          ),
+          'code' => CodeElementData(
+            id: 'existing',
+            position: position,
+            size: const Size(300, 260),
+            language: CodeLanguage.dart,
+            source: 'final value = 1;',
+            title: '',
+            showLineNumbers: false,
+          ),
+          'media' => MediaElementData(
+            id: 'existing',
+            position: position,
+            width: 240,
+            url: 'attachments/00000000-0000-4000-8000-000000000000.png',
+          ),
+          _ => (session.document.elements.first as ShapeElementData).copyWith(id: 'existing', position: position),
+        };
+        await pumpCanvas(
+          tester,
+          TestLibraryStore(
+            CanvasDocument(
+              background: CanvasBackgroundKind.plain,
+              elements: [element],
+            ),
+          ),
+          attachmentStore: TestAttachmentStore({
+            'attachments/00000000-0000-4000-8000-000000000000.png': onePixelPngBytes,
+          }),
+        );
+        final editor = tester.widget<CanvasView>(find.byType(CanvasView)).session..setActive('existing');
+        await tester.pumpAndSettle();
+        if (type == 'media') {
+          await pumpUntil(tester, () => find.byKey(const ValueKey('media-resize-handle')).evaluate().isNotEmpty);
+        }
+        final handle = find.byKey(
+          ValueKey(
+            type == 'text' || type == 'code' ? '$type-block-resize-handle' : '$type-resize-handle',
+          ),
+        );
+        await _doubleClick(tester, tester.getCenter(handle), kind);
+        expect(editor.document.elements, [element]);
+        expect(editor.editing, isNull);
+        final drag = await tester.startGesture(tester.getCenter(handle), kind: kind);
+        await drag.moveBy(const Offset(30, 20));
+        await drag.moveBy(const Offset(30, 20));
+        await drag.up();
+        await tester.pumpAndSettle();
+        expect(editor.document.elements, hasLength(1));
+        expect(editor.document.elements.single, isNot(element));
+      });
+    }
+  }
 
   test('takeover rejects old callbacks even after a new gesture on the same target', () {
     final first = TestPointer();
@@ -267,4 +515,15 @@ class _Viewport implements CanvasInputViewport {
   void updatePan(Offset position, Offset delta) => deltas.add(delta);
   @override
   void endPan(Velocity velocity) => ends++;
+}
+
+Future<void> _doubleClick(WidgetTester tester, Offset position, PointerDeviceKind kind, {int start = 100}) async {
+  final first = await tester.createGesture(kind: kind);
+  await first.down(position, timeStamp: Duration(milliseconds: start));
+  await first.up(timeStamp: Duration(milliseconds: start + 20));
+  await tester.pump(const Duration(milliseconds: 80));
+  final second = await tester.createGesture(kind: kind);
+  await second.down(position, timeStamp: Duration(milliseconds: start + 100));
+  await second.up(timeStamp: Duration(milliseconds: start + 120));
+  await tester.pumpAndSettle();
 }

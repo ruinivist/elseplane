@@ -14,12 +14,14 @@ class ResizeHandle extends StatelessWidget {
     required this.semanticLabel,
     required this.gestures,
     this.showCornerSurface = false,
+    this.onPointerDown,
     super.key,
   });
 
   final String semanticLabel;
   final Map<Type, GestureRecognizerFactory> gestures;
   final bool showCornerSurface;
+  final PointerDownEventListener? onPointerDown;
 
   // ---------- Rendering ----------
 
@@ -30,21 +32,24 @@ class ResizeHandle extends StatelessWidget {
       child: Semantics(
         button: true,
         label: semanticLabel,
-        child: RawGestureDetector(
-          behavior: HitTestBehavior.opaque,
-          gestures: gestures,
-          child: showCornerSurface
-              ? SizedBox.square(
-                  dimension: 22,
-                  child: CustomPaint(
-                    painter: _CornerSurfacePainter(BTheme.of(context).colors.surface),
-                    child: const Align(
-                      alignment: Alignment.bottomRight,
-                      child: ResizeIcon(),
+        child: Listener(
+          onPointerDown: onPointerDown,
+          child: RawGestureDetector(
+            behavior: HitTestBehavior.opaque,
+            gestures: gestures,
+            child: showCornerSurface
+                ? SizedBox.square(
+                    dimension: 22,
+                    child: CustomPaint(
+                      painter: _CornerSurfacePainter(BTheme.of(context).colors.surface),
+                      child: const Align(
+                        alignment: Alignment.bottomRight,
+                        child: ResizeIcon(),
+                      ),
                     ),
-                  ),
-                )
-              : const ResizeIcon(),
+                  )
+                : const ResizeIcon(),
+          ),
         ),
       ),
     );
