@@ -403,7 +403,7 @@ packages:
     description:
       path: "."
       ref: main
-      resolved-ref: f6053f734f3f37d38582cacdac1ce3f413ac752c
+      resolved-ref: "6fbda1c4c5f83dda5c0377730d3cc8299432c2ec"
       url: "https://github.com/ruinivist/infinite_lazy_grid.git"
     source: git
     version: "2.0.0"

@@ -5,6 +5,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/editor/canvas_view.dart';
+import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
@@ -13,6 +15,7 @@ import 'package:elseplane/canvas/editor/elements/pen/pen_preview.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
+import 'package:elseplane/theme/starless.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -287,6 +290,43 @@ void main() {
     expect(controller.offset, frozen);
     expect(tester.widget<PenElementView>(find.byType(PenElementView)).resources.data.position, const Offset(100, 250));
   });
+
+  for (final draining in [false, true]) {
+    testWidgets('session replacement preserves touch ownership while draining $draining', (tester) async {
+      final original = testSession(touchDocument());
+      final replacement = testSession(touchDocument())..chooseTool(CanvasTool.pen);
+      final attachments = TestAttachmentStore();
+      Future<void> showSession(EditorSession session) => tester.pumpWidget(
+        MaterialApp(
+          theme: starlessLightThemeData,
+          home: CanvasView(
+            session: session,
+            attachmentStore: attachments,
+            chromeBuilder: (_, _) => const SizedBox.shrink(),
+            onOpenLibrary: (_) async {},
+          ),
+        ),
+      );
+      await showSession(original);
+      final first = await tester.startGesture(const Offset(250, 340), pointer: 1);
+      final second = await tester.startGesture(const Offset(490, 340), pointer: 2);
+      if (draining) await second.up();
+      await showSession(replacement);
+      final third = await tester.startGesture(const Offset(600, 450), pointer: 3);
+      await third.moveBy(const Offset(60, 30));
+      await tester.pump();
+      _expectNoDrafts(tester);
+      await third.up();
+      if (!draining) await second.up();
+      await first.up();
+      await tester.pump();
+      expect(find.byType(PenElementView), findsNothing);
+      await tester.dragFrom(const Offset(250, 340), const Offset(60, 30));
+      await tester.pump();
+      expect(find.byType(PenElementView), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 
   for (final select in [false, true]) {
     testWidgets('touch object movement with Select $select leaves the viewport fixed', (tester) async {

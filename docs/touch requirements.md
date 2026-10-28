@@ -2,7 +2,7 @@
 
 Touch navigation should feel smooth, predictable, and directly connected to the fingers. Brief, consistent input delay is acceptable when needed to preserve stable motion. Unintended zoom or jumps followed by a correction are failures.
 
-These acceptance requirements supplement the [interaction model](Interaction%20model.md). They describe intended behavior; the current app and tests may not yet satisfy them.
+These acceptance requirements supplement the [interaction model](Interaction%20model.md). The grid's standalone tests and the app's integration tests verify them on intermediate rendered frames.
 
 ## Expected behavior
 
@@ -30,12 +30,12 @@ Pan and zoom must work together throughout a gesture. Recognizing one must not p
 - Identical received input histories must have the same response allowance. Tests must not require the app to anticipate an update that has not arrived.
 - Buffer durations and filtering techniques are implementation choices. They must satisfy the visible behavior and response budget above.
 
-## Stage 0: tests before gesture fixes
+## Regression coverage
 
 1. Encode these requirements as assertions on intermediate rendered frames, not only final positions or diagnostic logs. Edge cases at zoom limits and coincident touches must also check every rendered frame during the response allowance. Tool/control handoffs, held-touch pauses, and post-cancellation waits must also check every display frame throughout their observation interval.
 2. Exercise paired and staggered updates, both finger delivery orders, and independent input and display clocks. Observe frames before and after the trailing update.
 3. Verify that deliberately injected wobble, unwanted zoom, jumps, stalls, overshoot, and invalid transforms make the assertions fail, even when endpoints are correct.
 4. Verify that stable motion with an allowed brief delay passes.
-5. Run the tests against the current app and retain failures that expose violations of these requirements. Correct contradictory fixtures without weakening the intended behavior to match the implementation.
+5. Run the tests against both the grid and the app. Correct contradictory fixtures without weakening the intended behavior to match the implementation.
 
-Stage 0 changes requirements and tests only. Gesture implementation fixes follow once the failing regressions consistently express the expected behavior.
+The grid owns touch sampling, navigation geometry, and frame timing. App tests additionally verify tool and control handoffs, selection, placement, and undo behavior.

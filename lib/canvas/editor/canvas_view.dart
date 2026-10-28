@@ -113,6 +113,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   final _selectionKeys = <Object, GlobalKey>{};
   final GlobalKey _controlsPortalKey = GlobalKey();
   late CanvasInput _input;
+  bool _touchNavigationActive = false;
   final _targets = <String, CanvasInputTarget>{};
   CanvasInputTarget _target(CanvasElementData value) {
     final target = _targets[value.id];
@@ -174,6 +175,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       onArrow: _addArrow,
       onShape: _addShape,
     )..addListener(_handleDrawingToolChanged);
+    if (_touchNavigationActive) _input.navigationChanged(active: true);
     _session.addListener(_sessionChanged);
     _canvasController
       ..rawPointerDownListener = _input.pointerDown
@@ -1291,7 +1293,10 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
                 controller: _canvasController,
                 foregroundChildId: _activeElement?.id,
                 touchNavigationMode: TouchNavigationMode.twoFinger,
-                onTouchNavigationChanged: (active) => _input.navigationChanged(active: active),
+                onTouchNavigationChanged: (active) {
+                  _touchNavigationActive = active;
+                  _input.navigationChanged(active: active);
+                },
                 viewportBuilder: _buildCanvasViewport,
                 mousePanButtons:
                     (_session.tool == CanvasTool.select ? 0 : kSecondaryMouseButton) |
