@@ -22,6 +22,7 @@ import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_project_files.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/starless.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -141,7 +142,7 @@ Future<void> pumpElseplaneApp(
 Future<void> placeCodeBlock(WidgetTester tester, Offset position) async {
   await tester.tap(find.byKey(const ValueKey('toolbar-code')));
   await tester.pump();
-  await tester.tapAt(position);
+  await tester.tapAt(position, kind: PointerDeviceKind.mouse);
   await tester.pump();
 }
 

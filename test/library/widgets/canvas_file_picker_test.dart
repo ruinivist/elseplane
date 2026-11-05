@@ -153,7 +153,7 @@ void main() {
     final store = _FailingLibraryStore();
     await pumpCanvas(tester, store);
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
-    await tester.tapAt(const Offset(100, 180));
+    await tester.tapAt(const Offset(100, 180), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText('Unsaved');
     store.fail = true;

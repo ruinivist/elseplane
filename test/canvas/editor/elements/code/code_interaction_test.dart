@@ -57,7 +57,7 @@ void main() {
     await tester.pump();
     expect(find.byType(CodeElementView), findsNothing);
 
-    await tester.tapAt(const Offset(120, 200));
+    await tester.tapAt(const Offset(120, 200), kind: PointerDeviceKind.mouse);
     await tester.pump();
     final code = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
     expect(tester.getTopLeft(find.byKey(const ValueKey('code-block-surface'))), const Offset(120, 200));
@@ -123,7 +123,7 @@ void main() {
       codeArea,
     );
 
-    await tester.tap(find.byKey(const ValueKey('code-block-preview-surface')));
+    await tester.tap(find.byKey(const ValueKey('code-block-preview-surface')), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.enterText(
       find.byKey(const ValueKey('code-title-input')),
@@ -158,7 +158,7 @@ void main() {
     expect(find.byKey(const ValueKey('code-show-line-numbers')), findsNothing);
     expect(find.byKey(const ValueKey('code-block-handle')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('code-block-preview-surface')));
+    await tester.tap(find.byKey(const ValueKey('code-block-preview-surface')), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(code.active, isTrue);
     expect(find.byKey(const ValueKey('code-title-tab')), findsNothing);
@@ -296,14 +296,14 @@ void main() {
     final originalSize = tester.getSize(block);
 
     expect(handle, findsOneWidget);
-    await tester.drag(handle, const Offset(80, 60));
+    await tester.drag(handle, const Offset(80, 60), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     final enlargedSize = tester.getSize(block);
     expect(enlargedSize.width, greaterThan(originalSize.width));
     expect(enlargedSize.height, greaterThan(originalSize.height));
 
-    await tester.drag(handle, const Offset(-1000, -1000));
+    await tester.drag(handle, const Offset(-1000, -1000), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     expect(
@@ -384,12 +384,12 @@ void main() {
     expect(tester.widget<CodeElementView>(block).resources.selected, isFalse);
 
     const delta = Offset(80, 60);
-    await tester.drag(preview, delta);
+    await tester.drag(preview, delta, kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     expect(model.data.position, originalPosition + delta);
 
-    await tester.tapAt(const Offset(24, 200));
+    await tester.tapAt(const Offset(24, 200), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(tester.widget<CodeElementView>(block).resources.selected, isFalse);
 

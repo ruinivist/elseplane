@@ -61,7 +61,7 @@ class PenTool extends ChangeNotifier {
 
   bool _isAllowedPointer(PointerDownEvent event) => switch (event.kind) {
     PointerDeviceKind.mouse => event.buttons & kPrimaryButton != 0,
-    PointerDeviceKind.touch || PointerDeviceKind.stylus || PointerDeviceKind.invertedStylus => true,
+    PointerDeviceKind.stylus || PointerDeviceKind.invertedStylus => true,
     _ => false,
   };
 

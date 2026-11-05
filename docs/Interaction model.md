@@ -28,7 +28,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 ## Text blocks
 
-- In Select, primary-button double-click or finger double-tap on the canvas creates a transparent text block at the second press position, above existing objects, and immediately focuses its Markdown editor. This works over objects as well as empty canvas, preserving touch-selection mode. Normal Text-tool placement keeps its app-wide background default.
+- In Select, primary mouse double-click on the canvas creates a transparent text block at the second press position, above existing objects, and immediately focuses its Markdown editor. This works over objects as well as empty canvas. Normal Text-tool placement keeps its app-wide background default.
 - Quick insertion preserves immediate single-click activation. Eligibility belongs to the first press: activating an inactive block on that press does not prevent insertion on the second. Gestures starting inside an already focused text, code, title, or media field retain native editing behavior. Menus, toolbars, option panels, transform controls, modifier selection, Space panning, and stylus input do not trigger insertion. Dragging, navigation, interruption, and tool or document changes cancel pending recognition.
 
 - Clicking the preview makes the block active, opens the Markdown source editor, and focuses it.
@@ -73,7 +73,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 - Canvas history groups text and code changes by logical field. Moving between code source and title, ending editing, or starting another document operation closes the group. Temporary browser focus loss does not split it. A placement is separate from subsequent typing; its automatic return to Select remains part of placement.
 
-- Explicit tool choices, switching tools, toggling a tool off, and Escape disabling a tool each form one undo step. Touch Select is included; choosing it from another tool is one step.
+- Explicit tool choices, switching tools, toggling a tool off, and Escape disabling a tool each form one undo step.
 - Undoing a stroke keeps the pen enabled. Another Undo reverses choosing the pen. Redo restores these actions in order.
 - Undoing object placement re-enables its placement tool. Automatically returning to Select belongs to the placement operation and does not add a separate step.
 - Tool-only undo and redo preserve canvas contents and object selection without saving the document. Drawing defaults, object selection, and activation are not history operations.
@@ -109,8 +109,8 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 - Document order runs from back to front. New and pasted objects append at the front; pasted objects preserve their internal order.
 - Activation temporarily brings the whole block, including its title, above the stack for painting and pointer targeting. Clicking away, Escape, or changing tools removes this lift. Moving, rotating, or resizing an active block keeps its lift.
-- Auto is a saved per-object setting, enabled by default for every element, including elements loaded without an explicit setting. Clicks, taps, modifier-clicks, right-clicks, editing, and transforms bring Auto-on objects permanently to the front. Hover, marquee selection, and canvas navigation do not change layers. Saving and reopening preserve document order.
-- Taps inside an active text or code editor and Markdown link clicks also promote the block without restarting editing or changing link behavior. Content edits, including completed pastes, promote the block; restoring saved content and changing only the text selection do not.
+- Auto is a saved per-object setting, enabled by default for every element, including elements loaded without an explicit setting. Clicks, modifier-clicks, right-clicks, editing, and transforms bring Auto-on objects permanently to the front. Hover, marquee selection, and canvas navigation do not change layers. Saving and reopening preserve document order.
+- Interaction inside an active text or code editor and Markdown link clicks also promote the block without restarting editing or changing link behavior. Content edits, including completed pastes, promote the block; restoring saved content and changing only the text selection do not.
 - Dragging a selected group promotes only its Auto-on members, retaining their relative order. Auto-off members keep their saved layers. Auto-off objects still receive the temporary foreground lift while active.
 - Each automatic promotion is undoable. A drag or transform and its promotion share one undo step; interactions that do not change order add no history entry.
 - Entering Arrange ends editing and activation and reveals the saved order before the menu opens or a shortcut changes it. Arrange changes stay visible after dismissal.
@@ -124,7 +124,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 ## Object context menu
 
-- In the Select tool, secondary-button release on an object opens a menu containing Cut, Copy, Paste, Arrange, and Delete when movement stays within 4 logical pixels of the press position. The canvas stays still within that distance; crossing it commits to panning, even if the pointer returns to the press position. Right-clicking empty canvas opens a Paste-only menu, preserves selection, and ends editing and activation. Touch long-press has no object menu.
+- In the Select tool, secondary-button release on an object opens a menu containing Cut, Copy, Paste, Arrange, and Delete when movement stays within 4 logical pixels of the press position. The canvas stays still within that distance; crossing it commits to panning, even if the pointer returns to the press position. Right-clicking empty canvas opens a Paste-only menu, preserves selection, and ends editing and activation.
 - Right-clicking a selected object targets its selected group. Right-clicking an unselected object makes it the sole selection. Neither activates an object nor enters editing.
 - Right-clicking an editor captures its target, preserves content, ends editing and activation, and transfers keyboard focus to the menu. Editor context menus do not compete with the canvas menu. Menu clicks count as object-control interaction, including for active media.
 - Menus stay upright and use screen coordinates under zoom and rotation. Hover, click, arrow keys, Enter, and Escape use Flutter's menu navigation. While open, the menu owns keyboard input and Cut, Copy, Delete, and Arrange shortcuts use the targets captured on opening. Paste uses the canvas location captured on opening, including under zoom. The first enabled item receives focus.
@@ -132,32 +132,11 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Paste retains canvas objects, images, and media URL support. Inserted content is centered at the captured location and becomes selected. Pointer movement during a clipboard read does not change the destination; leaving the logical canvas context cancels pending insertion or cutting. Clipboard menu actions are disabled when direct clipboard access is unavailable, while browser clipboard events retain native shortcut access.
 - Outside clicks dismiss object menus and the standalone Arrange popover and continue through normal interactions. Ordinary clicks clear all canvas selection and activate or edit the clicked block; empty-canvas clicks clear activation too. Ctrl-click and Cmd-click retain selection toggling, and dragging a selected object still moves its group without activating it. Outside clicks on page controls clear selection and perform the control action. Escape dismisses the current menu level while preserving selection. Navigation, tool changes, file-picker opening, target deletion, document replacement, and leaving the page close menus.
 
-## Touch navigation
+## Touch and supported input
 
-| Action | Select off | Select on |
-| --- | --- | --- |
-| Drag empty canvas | Pan | Draw a selection box |
-| Drag an unselected object | Move that object | Move that object |
-| Drag a selected object | Move the selected group | Move the selected group |
-| Tap an object | Existing activation or editing behavior | Same behavior |
-| Tap empty canvas | Clear activation and selection | Same behavior |
-| Two fingers | Pan and pinch zoom | Pan and pinch zoom |
-
-- Select changes only empty-canvas touch dragging. It stays enabled after box selection until tapped again, another tool is chosen, or the document is replaced. Turning Select off preserves selected objects and their direct group movement.
-- The Select button appears initially on Android/iOS platform classification. Elsewhere, the first actual touch anywhere on the page or its controls reveals it after all touches and release callbacks finish. It remains visible until reload; mouse, stylus, keyboard, hover, and screen width do not hide or reveal it. Visibility and Select mode are not persisted.
-- Movement below Flutter's touch threshold remains a tap. With Select off, crossing the threshold pans with the full drag displacement without changing selection. Normal release can continue panning with inertia; cancellation does not.
-- With Select on, crossing the threshold draws the selection box using the existing overlap rules, including zoom and rotated bounds. Cancellation, two-finger takeover, or a tool change restores the prior selection and removes the unfinished box.
-- Tapping empty canvas clears activation and selection on release. Dragging an object moves it directly; dragging a selected member moves the selected group.
-- Escape first dismisses active editing or object controls as before, then disables Select on the next press. Mouse marquee and modifier selection keep their existing behavior in either mode.
-- One finger also draws, erases, places objects, or interacts with object controls when those tools are enabled. Two fingers pan and pinch to zoom, including when a finger starts on an object control or code title.
-- For coherent received touch samples, two-finger translation preserves zoom; symmetric pinching keeps the canvas point beneath the gesture's centroid anchored to it. Rotating fingers at constant separation and centroid changes neither zoom nor position.
-- Once a gesture has a usable zoom baseline, if one finger stays still, keep the canvas point beneath that finger anchored instead, including when the other finger moves diagonally. This stationary-finger rule takes precedence over centroid anchoring. Intermediate frames must be judged from arrived input, with the same bounded response policy for stationary and moving fingers. See [touch requirements](touch%20requirements.md) for frame-by-frame acceptance rules.
-- Coincident fingers still pan. When a gesture starts with coincident contacts, establishing the initial zoom baseline keeps zoom unchanged and preserves centroid movement; stationary-finger zoom anchoring applies after that baseline exists. Fingers meeting during a pinch must not lose movement or reset that gesture's original scale reference. Zoom remains within its limits.
-- Adding a second finger cancels a pending or active single-finger pan without a jump or fling. Changing tools or replacing the document also cancels the pan; held pointers cannot restart it.
-- Adding a second finger discards unfinished pen, arrow, and shape drawings and pending placement. Erasures and object moves, resizes, rotations, and arrow-point edits already made are kept as one undoable operation.
-- The original two fingers control navigation; additional fingers do not change its anchor or zoom. When either original finger lifts or cancels, remaining fingers do nothing until all touches lift. A replacement finger cannot restart navigation. Interrupted pointers cannot resume editing; an interrupted stylus must also lift before tools resume. Replacing the editor session preserves this ownership until all touches lift.
-- Text, code, and media are placed on single-finger touch tap release. Dragging, cancellation, or adding a second finger cancels placement. Mouse and stylus placement happen on press.
-- A stylus and one finger do not start navigation. Two actual fingers can take over and discard an unfinished stylus drawing.
+- Canvas editing is supported with mouse, keyboard, touchpad, and stylus.
+- Ordinary Flutter touch navigation and native control/editor interactions are best effort, not a supported canvas-editing workflow. Do not globally block touch on buttons, menus, text fields, scrolling, or accessibility surfaces.
+- Finger input must not independently start Plane's custom canvas edits while Grid handles touch navigation. There is no touch-only Select mode or discovery, custom touch pan or marquee, finger drawing or erasing, object/control manipulation, touch-release placement, finger double-tap text insertion, or guaranteed two-finger takeover, anchoring, or frame behavior. Mouse double-click text insertion remains supported.
 
 ## Canvas files
 

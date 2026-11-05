@@ -69,7 +69,10 @@ void main() {
           await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
           final text = media ? null : tester.widget<TextElementView>(find.byType(TextElementView)).resources;
           final image = media ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources : null;
-          await tester.tap(find.byKey(ValueKey(media ? 'media-url-panel' : 'text-markdown-preview')));
+          await tester.tap(
+            find.byKey(ValueKey(media ? 'media-url-panel' : 'text-markdown-preview')),
+            kind: PointerDeviceKind.mouse,
+          );
           await tester.pump();
           await tester.runAsync(() async {
             _dispatchImagePaste(onePixelPngBytes);
@@ -127,7 +130,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-media')));
     await tester.pump();
-    await tester.tapAt(const Offset(120, 180));
+    await tester.tapAt(const Offset(120, 180), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
 
@@ -175,52 +178,50 @@ void main() {
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    await tester.tapAt(tester.getCenter(find.byType(MediaElementView)));
+    await tester.tapAt(tester.getCenter(find.byType(MediaElementView)), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     expect(model.selected, isTrue);
     await tester.pumpAndSettle();
   });
 
-  for (final device in [PointerDeviceKind.mouse, PointerDeviceKind.touch]) {
-    for (final source in ['', 'original', 'attachments/11111111-1111-4111-8111-111111111111.png']) {
-      testWidgets('inactive URL-only media with "$source" drags before editing on $device', (tester) async {
-        const position = Offset(120, 150);
-        await pumpCanvas(
-          tester,
-          TestLibraryStore(_document(MediaElementData(id: 'media', position: position, width: 400, url: source))),
-        );
-        final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
-        final panel = find.byKey(const ValueKey('media-url-panel'));
-        final selection = model.controller.selection;
-        expect(model.active, isFalse);
-        expect(model.focusNode.hasFocus, isFalse);
-        expect(model.hasImage, isFalse);
+  for (final source in ['', 'original', 'attachments/11111111-1111-4111-8111-111111111111.png']) {
+    testWidgets('inactive URL-only media with "$source" drags before editing', (tester) async {
+      const position = Offset(120, 150);
+      await pumpCanvas(
+        tester,
+        TestLibraryStore(_document(MediaElementData(id: 'media', position: position, width: 400, url: source))),
+      );
+      final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
+      final panel = find.byKey(const ValueKey('media-url-panel'));
+      final selection = model.controller.selection;
+      expect(model.active, isFalse);
+      expect(model.focusNode.hasFocus, isFalse);
+      expect(model.hasImage, isFalse);
 
-        const delta = Offset(60, 30);
-        await tester.drag(panel, delta, kind: device);
-        await tester.pumpAndSettle();
-        expect(model.data.position, position + delta);
-        expect(model.active, isFalse);
-        expect(model.focusNode.hasFocus, isFalse);
-        expect(model.controller.selection, selection);
-        expect(model.data.url, source);
-        expect(find.byKey(const ValueKey('media-block-handle')), findsNothing);
+      const delta = Offset(60, 30);
+      await tester.drag(panel, delta, kind: PointerDeviceKind.mouse);
+      await tester.pumpAndSettle();
+      expect(model.data.position, position + delta);
+      expect(model.active, isFalse);
+      expect(model.focusNode.hasFocus, isFalse);
+      expect(model.controller.selection, selection);
+      expect(model.data.url, source);
+      expect(find.byKey(const ValueKey('media-block-handle')), findsNothing);
 
-        final click = await tester.startGesture(tester.getCenter(panel), kind: device);
-        await tester.pump();
-        expect(model.active, isFalse);
-        expect(model.focusNode.hasFocus, isFalse);
-        await click.moveBy(const Offset(1, 1));
-        await click.up();
-        await tester.pumpAndSettle();
-        expect(model.active, isTrue);
-        expect(model.focusNode.hasFocus, isTrue);
-        expect(model.data.position, position + delta);
-        expect(find.byKey(const ValueKey('media-block-handle')), findsOneWidget);
-        await tester.pumpWidget(const SizedBox());
-      });
-    }
+      final click = await tester.startGesture(tester.getCenter(panel), kind: PointerDeviceKind.mouse);
+      await tester.pump();
+      expect(model.active, isFalse);
+      expect(model.focusNode.hasFocus, isFalse);
+      await click.moveBy(const Offset(1, 1));
+      await click.up();
+      await tester.pumpAndSettle();
+      expect(model.active, isTrue);
+      expect(model.focusNode.hasFocus, isTrue);
+      expect(model.data.position, position + delta);
+      expect(find.byKey(const ValueKey('media-block-handle')), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
   }
 
   testWidgets('inactive media picker opens on one click and cancellation preserves content', (tester) async {
@@ -270,7 +271,7 @@ void main() {
     );
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     final field = find.byKey(const ValueKey('media-url-field'));
-    await tester.tap(find.byKey(const ValueKey('media-url-panel')));
+    await tester.tap(find.byKey(const ValueKey('media-url-panel')), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     final position = model.data.position;
     await tester.enterText(field, url);
@@ -323,7 +324,7 @@ void main() {
     );
 
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
-    await tester.tap(find.byKey(const ValueKey('media-image')));
+    await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     final field = find.byKey(const ValueKey('media-url-field'));
     final fieldRect = tester.getRect(field);
@@ -377,7 +378,7 @@ void main() {
       final size = model.canvasSize;
       var changes = 0;
       model.session.documentChanges.addListener(() => changes++);
-      await tester.tap(find.byKey(const ValueKey('media-image')));
+      await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       final field = find.byKey(const ValueKey('media-url-field'));
 
@@ -429,7 +430,7 @@ void main() {
         ),
       );
       final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
-      await tester.tap(find.byKey(const ValueKey('media-image')));
+      await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('media-url-field')), draft);
       await tester.pump();
@@ -456,7 +457,7 @@ void main() {
     );
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     final image = model.image;
-    await tester.tap(find.byKey(const ValueKey('media-image')));
+    await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('media-url-field')), 'unfinished');
     model.session
@@ -483,7 +484,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-media')));
     await tester.pump();
-    await tester.tapAt(const Offset(120, 180));
+    await tester.tapAt(const Offset(120, 180), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
 
@@ -526,7 +527,7 @@ void main() {
     );
 
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
-    await tester.tap(find.byKey(const ValueKey('media-url-panel')));
+    await tester.tap(find.byKey(const ValueKey('media-url-panel')), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     model.controller.selection = const TextSelection(baseOffset: 0, extentOffset: 7);
 
@@ -566,7 +567,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-media')));
     await tester.pump();
-    await tester.tapAt(const Offset(120, 180));
+    await tester.tapAt(const Offset(120, 180), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
@@ -619,7 +620,7 @@ void main() {
     expect(find.byKey(const ValueKey('media-url-field')), findsNothing);
     expect(find.byKey(const ValueKey('media-block-handle')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('media-image')));
+    await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(model.active, isTrue);
     expect(model.selected, isFalse);
@@ -704,6 +705,7 @@ void main() {
     await tester.drag(
       find.byKey(const ValueKey('media-image')),
       const Offset(30, 20),
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
     expect(model.data.position.dx, closeTo(position.dx + 30, 0.01));
@@ -736,7 +738,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-media')));
     await tester.pump();
-    await tester.tapAt(const Offset(120, 180));
+    await tester.tapAt(const Offset(120, 180), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     expect(find.byType(MediaElementView), findsOneWidget);

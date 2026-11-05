@@ -1,4 +1,4 @@
-.PHONY: build deploy fmt preview run run-release test-touch
+.PHONY: build deploy fmt preview run run-release
 
 GIT_SHA := $(shell git rev-parse HEAD)
 
@@ -10,9 +10,6 @@ run:
 
 run-release:
 	flutter run --release -d chrome --dart-define=GIT_SHA=$(GIT_SHA)
-
-test-touch:
-	CHROME_EXECUTABLE=$${CHROME_EXECUTABLE:-/usr/bin/chromium} flutter test --platform chrome --reporter expanded test/canvas/editor/canvas_navigation_test.dart test/canvas/editor/canvas_touch_test.dart
 
 preview:
 	flutter widget-preview start

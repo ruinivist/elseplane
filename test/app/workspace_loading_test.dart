@@ -31,7 +31,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(40, 160));
+    await tester.tapAt(const Offset(40, 160), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
     final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
@@ -190,7 +190,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(120, 200));
+    await tester.tapAt(const Offset(120, 200), kind: PointerDeviceKind.mouse);
     await pumpPastSave(tester);
     expect(find.byType(TextElementView), findsNothing);
     expect(await preferences.getString(PreferencesLibraryStore.libraryKey), invalid);

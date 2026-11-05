@@ -11,6 +11,7 @@ import 'package:elseplane/settings/settings_dialog.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/glass_surface.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -242,7 +243,7 @@ void main() {
           find.descendant(of: find.byKey(ValueKey('toolbar-$tool')), matching: find.byType(TextButton)),
         );
         await tester.pumpAndSettle();
-        await tester.tapAt(position);
+        await tester.tapAt(position, kind: PointerDeviceKind.mouse);
         await tester.pumpAndSettle();
         await pumpPastSave(tester);
       }

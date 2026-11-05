@@ -290,6 +290,11 @@ class _CodeElementViewState extends State<CodeElementView> {
                   gestures: {
                     ScaleGestureRecognizer: GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
                       () => ScaleGestureRecognizer(
+                        supportedDevices: const {
+                          PointerDeviceKind.mouse,
+                          PointerDeviceKind.stylus,
+                          PointerDeviceKind.invertedStylus,
+                        },
                         allowedButtonsFilter: (buttons) => buttons == kPrimaryButton,
                       ),
                       (recognizer) {

@@ -42,8 +42,8 @@ void main() {
       final trigger = find.byKey(const ValueKey('searchable-select-trigger'));
       final search = find.byKey(const ValueKey('searchable-select-search'));
 
-      Future<void> click(Offset position) async {
-        final pointer = await tester.startGesture(position, kind: kind);
+      Future<void> click(Offset position, {PointerDeviceKind? pointerKind}) async {
+        final pointer = await tester.startGesture(position, kind: pointerKind ?? kind);
         await pointer.up();
         await tester.pumpAndSettle();
       }
@@ -55,7 +55,10 @@ void main() {
         return position;
       }
 
-      await click(tester.getCenter(find.byKey(const ValueKey('code-block-surface'))));
+      await click(
+        tester.getCenter(find.byKey(const ValueKey('code-block-surface'))),
+        pointerKind: PointerDeviceKind.mouse,
+      );
       expect(model.active, isTrue);
       await click(tester.getCenter(trigger));
       expect(search, findsOneWidget);
@@ -93,9 +96,13 @@ void main() {
       expect(search, findsOneWidget);
       await click(const Offset(700, 500));
       expect(search, findsNothing);
+      await click(const Offset(700, 500), pointerKind: PointerDeviceKind.mouse);
       expect(model.active, isFalse);
 
-      await click(tester.getCenter(find.byKey(const ValueKey('code-block-surface'))));
+      await click(
+        tester.getCenter(find.byKey(const ValueKey('code-block-surface'))),
+        pointerKind: PointerDeviceKind.mouse,
+      );
       await click(tester.getCenter(trigger));
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();

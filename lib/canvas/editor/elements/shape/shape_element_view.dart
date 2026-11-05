@@ -54,6 +54,11 @@ class _ShapeElementViewState extends State<ShapeElementView> {
         selected: widget.selected,
         child: GestureDetector(
           dragStartBehavior: DragStartBehavior.down,
+          supportedDevices: const {
+            PointerDeviceKind.mouse,
+            PointerDeviceKind.stylus,
+            PointerDeviceKind.invertedStylus,
+          },
           onTap: widget.onActivate,
           onPanStart: (details) => _dragPosition = details.globalPosition,
           onPanUpdate: (details) {

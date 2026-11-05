@@ -12,6 +12,11 @@ import 'package:elseplane/canvas/geometry/pen_geometry.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 
+bool _supportsCanvasEditing(PointerDeviceKind kind) => switch (kind) {
+  PointerDeviceKind.mouse || PointerDeviceKind.stylus || PointerDeviceKind.invertedStylus => true,
+  _ => false,
+};
+
 // ---------- View boundary ----------
 
 /// Supplies measured viewport operations without giving input ownership of the grid.
@@ -43,22 +48,14 @@ final class _ObjectGesture extends _Gesture {
 }
 
 final class _PanGesture extends _Gesture {
-  _PanGesture(PointerDownEvent event, this.start, this.slop, {this.menuTarget, this.secondary = false})
+  _PanGesture(PointerDownEvent event, this.start, this.slop, {this.menuTarget})
     : velocity = (VelocityTracker.withKind(event.kind)..addPosition(event.timeStamp, start)),
       super(event.pointer);
   final Offset start;
   final double slop;
   final VelocityTracker velocity;
   final String? menuTarget;
-  final bool secondary;
   bool started = false;
-}
-
-final class _PlacementGesture extends _Gesture {
-  const _PlacementGesture(super.pointer, this.start, this.tool, this.slop);
-  final Offset start;
-  final CanvasTool tool;
-  final double slop;
 }
 
 final class _MarqueeGesture extends _Gesture {
@@ -149,14 +146,13 @@ class CanvasInput extends ChangeNotifier {
   final _blockedPointers = <int>{};
   _Gesture? _gesture;
   _QuickTextTap? _quickTextTap;
-  bool _navigating = false;
   bool _spaceHeld = false;
   int _generation = 0;
   late int _restoration;
   late CanvasTool _tool;
   bool _disposed = false;
 
-  bool get blocked => !enabled() || _navigating || _blockedPointers.isNotEmpty;
+  bool get blocked => !enabled() || _blockedPointers.isNotEmpty;
   bool get spaceHeld => _spaceHeld;
   set spaceHeld(bool value) {
     if (_spaceHeld == value) return;
@@ -189,10 +185,10 @@ class CanvasInput extends ChangeNotifier {
     }
   }
 
-  void chooseTool(CanvasTool tool, {bool touchSelectionEnabled = false}) {
+  void chooseTool(CanvasTool tool) {
     if (!enabled()) return;
     endInteraction();
-    session.chooseTool(tool, touchSelectionEnabled: touchSelectionEnabled);
+    session.chooseTool(tool);
   }
 
   void toggleTool(CanvasTool tool) => chooseTool(session.tool == tool ? CanvasTool.select : tool);
@@ -218,17 +214,6 @@ class CanvasInput extends ChangeNotifier {
     onEndEditing(commitMediaDraft: commitMediaDraft);
   }
 
-  void navigationChanged({required bool active}) {
-    if (_disposed) return;
-    _navigating = active;
-    if (active) {
-      onCloseMenu();
-      interrupt();
-      pointerPosition.value = null;
-    }
-    notifyListeners();
-  }
-
   void _cancelGesture() {
     pen.cancel();
     arrow.cancel();
@@ -245,7 +230,7 @@ class CanvasInput extends ChangeNotifier {
   }
 
   bool canHandle(PointerEvent event) {
-    if (_disposed) return false;
+    if (_disposed || !_supportsCanvasEditing(event.kind)) return false;
     if (blocked) return false;
     final gesture = _gesture;
     if (event is PointerDownEvent &&
@@ -254,20 +239,13 @@ class CanvasInput extends ChangeNotifier {
         _pointers.containsKey(gesture.pointer)) {
       return false;
     }
-    return event is! PointerDownEvent ||
-        event.kind != PointerDeviceKind.touch ||
-        !_pointers.entries.any((entry) => entry.key != event.pointer && entry.value == PointerDeviceKind.touch);
+    return true;
   }
 
   void _observeDown(PointerDownEvent event) {
-    if (_disposed) return;
+    if (_disposed || !_supportsCanvasEditing(event.kind)) return;
     if (_pointers.containsKey(event.pointer)) return;
-    final anotherTouch = event.kind == PointerDeviceKind.touch && _pointers.values.contains(PointerDeviceKind.touch);
     _pointers[event.pointer] = event.kind;
-    if (anotherTouch) {
-      onCloseMenu();
-      interrupt();
-    }
     if (blocked) _blockedPointers.add(event.pointer);
     final previous = _quickTextTap;
     final second =
@@ -278,12 +256,11 @@ class CanvasInput extends ChangeNotifier {
         event.timeStamp - previous.down.timeStamp >= kDoubleTapMinTime &&
         (event.position - previous.down.position).distance <= kDoubleTapSlop;
     if (!canHandle(event) ||
-        _pointers.length != 1 ||
         session.tool != CanvasTool.select ||
         spaceHeld ||
         modifierPressed.value ||
         event.buttons != kPrimaryButton ||
-        (event.kind != PointerDeviceKind.mouse && event.kind != PointerDeviceKind.touch) ||
+        event.kind != PointerDeviceKind.mouse ||
         (!second && isFocusedEditorAt(event.position))) {
       cancelQuickText();
     } else {
@@ -312,6 +289,7 @@ class CanvasInput extends ChangeNotifier {
   }
 
   void pointerDown(PointerDownEvent event) {
+    if (!_supportsCanvasEditing(event.kind)) return;
     final seen = _pointers.containsKey(event.pointer);
     _observeDown(event);
     pointerPosition.value = event.localPosition;
@@ -332,17 +310,13 @@ class CanvasInput extends ChangeNotifier {
         event.buttons == kSecondaryButton &&
         session.tool == CanvasTool.select) {
       viewport.stopAnimation();
-      _gesture = _PanGesture(event, event.localPosition, 4, secondary: true);
+      _gesture = _PanGesture(event, event.localPosition, 4);
       return;
     }
     if (event.buttons != kPrimaryButton) return;
     final position = viewport.screenToCanvas(event.localPosition);
     if (placing) {
-      if (event.kind == PointerDeviceKind.touch) {
-        _gesture = _PlacementGesture(event.pointer, event.localPosition, session.tool, panSlop(event.kind));
-      } else {
-        onPlace(position);
-      }
+      onPlace(position);
       return;
     }
     if (session.tool == CanvasTool.arrow || session.tool == CanvasTool.shape) {
@@ -351,16 +325,11 @@ class CanvasInput extends ChangeNotifier {
       if (session.tool == CanvasTool.shape) shape.onPointerDown(event, position);
       return;
     }
-    if (event.kind == PointerDeviceKind.touch && !session.touchSelectionEnabled && !spaceHeld) {
-      _gesture = _PanGesture(event, event.localPosition, panSlop(event.kind));
-      return;
-    }
-    final touchSelection = event.kind == PointerDeviceKind.touch && session.touchSelectionEnabled;
-    if (!touchSelection) onEndEditing();
+    onEndEditing();
     final previous = session.selectedIds;
-    final toggle = !touchSelection && modifierPressed.value;
-    if (!touchSelection && !toggle) session.setSelection(const []);
-    if (!touchSelection && event.kind != PointerDeviceKind.mouse) return;
+    final toggle = modifierPressed.value;
+    if (!toggle) session.setSelection(const []);
+    if (event.kind != PointerDeviceKind.mouse) return;
     _gesture = _MarqueeGesture(event.pointer, event.localPosition, panSlop(event.kind), previous, toggle: toggle);
     notifyListeners();
   }
@@ -383,8 +352,6 @@ class CanvasInput extends ChangeNotifier {
         if (!pan.started) viewport.startPan(pan.start);
         viewport.updatePan(event.localPosition, pan.started ? event.localDelta : displacement);
         pan.started = true;
-      case final _PlacementGesture placement when placement.pointer == event.pointer:
-        if ((event.localPosition - placement.start).distance > placement.slop) _gesture = null;
       case final _DrawingGesture drawing when drawing.pointer == event.pointer:
         if (session.tool == CanvasTool.pen) pen.onPointerUpdate(event);
         if (session.tool == CanvasTool.arrow) arrow.onPointerMove(event, viewport.screenToCanvas(event.localPosition));
@@ -404,6 +371,7 @@ class CanvasInput extends ChangeNotifier {
   }
 
   void pointerUp(PointerUpEvent event) {
+    if (!_supportsCanvasEditing(event.kind)) return;
     final allowed = canHandle(event);
     _pointers.remove(event.pointer);
     _blockedPointers.remove(event.pointer);
@@ -422,17 +390,7 @@ class CanvasInput extends ChangeNotifier {
           pan.velocity.addPosition(event.timeStamp, event.localPosition);
           viewport.endPan(pan.velocity.getVelocity());
         } else if ((event.localPosition - pan.start).distance <= pan.slop) {
-          if (pan.secondary) {
-            onOpenMenu(pan.menuTarget, event.position);
-          } else {
-            onEndEditing();
-            session.setSelection(const []);
-          }
-        }
-      case final _PlacementGesture placement:
-        _gesture = null;
-        if (placement.tool == session.tool && (event.localPosition - placement.start).distance <= placement.slop) {
-          onPlace(viewport.screenToCanvas(event.localPosition));
+          onOpenMenu(pan.menuTarget, event.position);
         }
       case _DrawingGesture():
         _gesture = null;
@@ -449,10 +407,6 @@ class CanvasInput extends ChangeNotifier {
       case final _MarqueeGesture marquee:
         _updateMarquee(marquee, event.localPosition);
         _gesture = null;
-        if (event.kind == PointerDeviceKind.touch && marquee.end == null) {
-          onEndEditing();
-          session.setSelection(const []);
-        }
       case _EraserGesture():
         _gesture = null;
         session.finishOperation();
@@ -463,6 +417,7 @@ class CanvasInput extends ChangeNotifier {
   }
 
   void pointerCancel(PointerCancelEvent event) {
+    if (!_supportsCanvasEditing(event.kind)) return;
     cancelQuickText();
     _pointers.remove(event.pointer);
     _blockedPointers.remove(event.pointer);
@@ -473,11 +428,13 @@ class CanvasInput extends ChangeNotifier {
   }
 
   void hover(PointerHoverEvent event) {
+    if (!_supportsCanvasEditing(event.kind)) return;
     pointerPosition.value = event.localPosition;
     if (session.tool == CanvasTool.pen && !spaceHeld && !blocked) pen.onPointerHover(event);
   }
 
   void exit(PointerExitEvent event) {
+    if (!_supportsCanvasEditing(event.kind)) return;
     pointerPosition.value = null;
     if (session.tool == CanvasTool.pen && !blocked) pen.onPointerExit(event);
   }
@@ -583,7 +540,7 @@ class CanvasInputTarget {
   bool get current => attached && !input.blocked && _sequence != null && identical(_sequence, input._gesture);
 
   void pointerDown(PointerDownEvent event, {bool control = false}) {
-    if (!attached) return;
+    if (!attached || !_supportsCanvasEditing(event.kind)) return;
     input._observeDown(event);
     if (control) input.cancelQuickText();
     if (!input.canHandle(event) || !attached) return;
@@ -599,7 +556,6 @@ class CanvasInputTarget {
         input.viewport.globalToScreen(event.position),
         4,
         menuTarget: id,
-        secondary: true,
       );
       _sequence = input._gesture;
       return;

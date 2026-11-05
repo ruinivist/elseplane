@@ -6,6 +6,7 @@ import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart'
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -66,7 +67,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
-    await tester.tapAt(const Offset(100, 160));
+    await tester.tapAt(const Offset(100, 160), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
     expect(find.byKey(const ValueKey('text-markdown-editor')), findsOneWidget);
@@ -84,7 +85,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(120, 200));
+    await tester.tapAt(const Offset(120, 200), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
 

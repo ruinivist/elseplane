@@ -282,6 +282,11 @@ class _MediaImageState extends State<_MediaImage> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         dragStartBehavior: DragStartBehavior.down,
+        supportedDevices: const {
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.stylus,
+          PointerDeviceKind.invertedStylus,
+        },
         onTap: widget.onActivate,
         onPanStart: (details) => _dragPosition = details.globalPosition,
         onPanUpdate: (details) {
@@ -502,6 +507,11 @@ class _MediaUrlPanelState extends State<_MediaUrlPanel> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
+      supportedDevices: const {
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+      },
       onTap: _edit,
       onPanStart: (details) => _dragPosition = details.globalPosition,
       onPanUpdate: (details) {

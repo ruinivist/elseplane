@@ -36,7 +36,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(40, 520));
+    await tester.tapAt(const Offset(40, 520), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
     final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
@@ -49,6 +49,7 @@ void main() {
     await tester.dragFrom(
       const Offset(350, 540),
       const Offset(50, 20),
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
@@ -102,7 +103,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(40, 350));
+    await tester.tapAt(const Offset(40, 350), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
     await placeCodeBlock(tester, const Offset(120, 140));
@@ -124,19 +125,19 @@ void main() {
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    await tester.tapAt(textTapPosition);
+    await tester.tapAt(textTapPosition, kind: PointerDeviceKind.mouse);
     await tester.pump();
-    await tester.tapAt(codeSurfaceCenter);
+    await tester.tapAt(codeSurfaceCenter, kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(text.selected, isTrue);
     expect(code.selected, isTrue);
     expect(text.active, isFalse);
     expect(code.active, isTrue);
-    await tester.tapAt(codeSurfaceCenter);
+    await tester.tapAt(codeSurfaceCenter, kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(text.selected, isTrue);
     expect(code.selected, isFalse);
-    await tester.tapAt(codeSurfaceCenter);
+    await tester.tapAt(codeSurfaceCenter, kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
@@ -158,7 +159,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tapAt(textTapPosition);
+    await tester.tapAt(textTapPosition, kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(text.active, isTrue);
     expect(code.active, isFalse);
@@ -166,16 +167,14 @@ void main() {
     expect(text.selected, isFalse);
     expect(code.selected, isFalse);
 
-    await tester.tapAt(const Offset(20, 300));
+    await tester.tapAt(const Offset(20, 300), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(text.selected, isFalse);
     expect(code.selected, isFalse);
   });
 
-  for (final (device, cancel) in [(PointerDeviceKind.mouse, false), (PointerDeviceKind.touch, true)]) {
-    testWidgets('inactive media moves its selected group under zoom on $device with cancellation $cancel', (
-      tester,
-    ) async {
+  for (final cancel in [false, true]) {
+    testWidgets('inactive media moves its selected group under zoom with cancellation $cancel', (tester) async {
       const mediaPosition = Offset(120, 150);
       const textPosition = Offset(480, 350);
       final document = CanvasDocument(
@@ -203,7 +202,7 @@ void main() {
       const delta = Offset(60, 30);
       final drag = await tester.startGesture(
         tester.getCenter(find.byKey(const ValueKey('media-url-panel'))),
-        kind: device,
+        kind: PointerDeviceKind.mouse,
       );
       await drag.moveBy(delta);
       await tester.pump();
@@ -234,7 +233,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(40, 520));
+    await tester.tapAt(const Offset(40, 520), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
@@ -270,13 +269,15 @@ void main() {
       tester.getCenter(
         find.byKey(const ValueKey('text-markdown-preview-surface')),
       ),
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
     await tester.tapAt(
       tester.getCenter(find.byKey(const ValueKey('code-block-surface'))),
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
-    await tester.tapAt(tester.getCenter(strokeFinder));
+    await tester.tapAt(tester.getCenter(strokeFinder), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
@@ -315,7 +316,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(40, 350));
+    await tester.tapAt(const Offset(40, 350), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
     await placeCodeBlock(tester, const Offset(120, 140));
@@ -330,10 +331,12 @@ void main() {
             find.byKey(const ValueKey('text-markdown-preview-surface')),
           ) +
           const Offset(32, 32),
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
     await tester.tapAt(
       tester.getCenter(find.byKey(const ValueKey('code-block-surface'))),
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
@@ -345,6 +348,7 @@ void main() {
     await tester.drag(
       find.byKey(const ValueKey('code-block-resize-handle')),
       const Offset(80, 60),
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
 
@@ -364,7 +368,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(40, 350));
+    await tester.tapAt(const Offset(40, 350), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
     await placeCodeBlock(tester, const Offset(120, 140));
@@ -385,6 +389,7 @@ void main() {
             find.byKey(const ValueKey('text-markdown-preview-surface')),
           ) +
           const Offset(32, 32),
+      kind: PointerDeviceKind.mouse,
     );
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
@@ -414,11 +419,11 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(40, 520));
+    await tester.tapAt(const Offset(40, 520), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(500, 520));
+    await tester.tapAt(const Offset(500, 520), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
     await tester.pump();
@@ -472,7 +477,7 @@ void main() {
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    await tester.tapAt(const Offset(640, 546));
+    await tester.tapAt(const Offset(640, 546), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(outsideText.selected, isTrue);
 
@@ -549,7 +554,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(120, 200));
+    await tester.tapAt(const Offset(120, 200), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
     final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;

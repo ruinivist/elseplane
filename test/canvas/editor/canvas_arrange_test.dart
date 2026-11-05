@@ -44,25 +44,25 @@ void main() {
   testWidgets('transform controls return after deleting the previous active object', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_editorDocument('code')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('code-block-preview-surface')));
+    await tester.tap(find.byKey(const ValueKey('code-block-preview-surface')), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('code-block-delete-control')));
     await tester.pumpAndSettle();
-    await tester.tapAt(const Offset(590, 440));
+    await tester.tapAt(const Offset(590, 440), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(find.byType(ElementTransformControls), findsOneWidget);
     expect(find.byKey(const ValueKey('shape-block-delete-control')).hitTestable(), findsOneWidget);
   });
 
   for (final kind in ['text', 'code', 'title']) {
-    for (final device in [PointerDeviceKind.mouse, if (kind != 'title') PointerDeviceKind.touch]) {
+    for (final device in [PointerDeviceKind.mouse]) {
       testWidgets('Auto active $kind $device tap promotes without restarting editing', (tester) async {
         final document = _autoDocument(kind).withElements(
           (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
         );
         final store = TestLibraryStore(document);
         await pumpCanvas(tester, store);
-        await tester.tapAt(_autoHitPoint(tester, kind));
+        await tester.tapAt(_autoHitPoint(tester, kind), kind: PointerDeviceKind.mouse);
         await tester.pumpAndSettle();
         final text = kind == 'text' ? tester.widget<TextElementView>(find.byType(TextElementView)).resources : null;
         final code = kind == 'text' ? null : tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
@@ -105,7 +105,7 @@ void main() {
         (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
       );
       await pumpCanvas(tester, TestLibraryStore(document));
-      await tester.tapAt(_autoHitPoint(tester, kind));
+      await tester.tapAt(_autoHitPoint(tester, kind), kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       final text = kind == 'text' ? tester.widget<TextElementView>(find.byType(TextElementView)).resources : null;
       final code = kind == 'text' ? null : tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
@@ -145,24 +145,18 @@ void main() {
   }
 
   for (final kind in ['text', 'code']) {
-    testWidgets('Auto active $kind canceled taps and touch navigation preserve saved order', (tester) async {
+    testWidgets('Auto active $kind canceled click preserves saved order', (tester) async {
       final document = _autoDocument(kind).withElements(
         (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
       );
       await pumpCanvas(tester, TestLibraryStore(document));
-      await tester.tapAt(_autoHitPoint(tester, kind));
+      await tester.tapAt(_autoHitPoint(tester, kind), kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       await _promoteOther(tester);
       final point = _activeEditorHitPoint(tester, kind);
-      final canceled = await tester.startGesture(point, pointer: 1);
+      final canceled = await tester.startGesture(point, kind: PointerDeviceKind.mouse);
       await canceled.cancel();
       await tester.pump();
-      expect(_canvas(tester).childOrder, ['editor', 'other']);
-      final first = await tester.startGesture(point, pointer: 2);
-      final second = await tester.startGesture(const Offset(700, 500), pointer: 3);
-      await second.up();
-      await first.up();
-      await tester.pumpAndSettle();
       expect(_canvas(tester).childOrder, ['editor', 'other']);
     });
   }
@@ -175,7 +169,7 @@ void main() {
     );
     final attachments = (await tester.runAsync(() async => _DelayedAttachmentStore()))!;
     await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
-    await tester.tapAt(_autoHitPoint(tester, 'text'));
+    await tester.tapAt(_autoHitPoint(tester, 'text'), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     model.controller.selection = const TextSelection.collapsed(offset: 0);
@@ -234,7 +228,7 @@ void main() {
                     .toRect()
                     .center;
           }
-          await tester.tapAt(point);
+          await tester.tapAt(point, kind: PointerDeviceKind.mouse);
           await tester.pumpAndSettle();
           expect(_canvas(tester).childOrder, auto ? ['other', 'editor'] : ['editor', 'other']);
           final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
@@ -250,7 +244,7 @@ void main() {
   }
 
   for (final kind in ['shape', 'text', 'code', 'title', 'media', 'pen', 'arrow']) {
-    for (final device in [PointerDeviceKind.mouse, PointerDeviceKind.touch]) {
+    for (final device in [PointerDeviceKind.mouse]) {
       testWidgets('Auto $kind $device click promotes permanently without changing activation rules', (tester) async {
         final document = _autoDocument(kind);
         final target = document.elements.first.id;
@@ -329,7 +323,7 @@ void main() {
     await pumpCanvas(tester, TestLibraryStore(_document(auto: true)));
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    await tester.tapAt(const Offset(305, 305));
+    await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
     expect(_canvas(tester).childOrder, ['b', 'c', 'd', 'a']);
@@ -351,7 +345,7 @@ void main() {
       final store = TestLibraryStore(_document(auto: true));
       await pumpCanvas(tester, store);
       if (direct) {
-        await tester.tapAt(const Offset(305, 305));
+        await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Arrange'));
         await tester.pumpAndSettle();
@@ -435,7 +429,7 @@ void main() {
   testWidgets('Auto switch applies to a mixed group and promotes immediately in one step', (tester) async {
     final document = _document().withElements((elements) => elements[2] = elements[2].copyWith(autoArrange: true));
     await pumpCanvas(tester, TestLibraryStore(document));
-    await tester.tapAt(const Offset(305, 305));
+    await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     _models(tester)['a']!.setSelected(value: true);
     _models(tester)['c']!.setSelected(value: true);
@@ -511,7 +505,7 @@ void main() {
 
   testWidgets('direct heading is noninteractive and navigation skips disabled commands', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document()));
-    await tester.tapAt(const Offset(375, 375));
+    await tester.tapAt(const Offset(375, 375), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Arrange'));
     await tester.pumpAndSettle();
@@ -535,7 +529,7 @@ void main() {
     final document = _document().withElements((elements) => elements.removeRange(1, 4));
     final store = TestLibraryStore(document);
     await pumpCanvas(tester, store);
-    await tester.tapAt(const Offset(305, 305));
+    await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Arrange'));
     await tester.pumpAndSettle();
@@ -556,7 +550,7 @@ void main() {
   for (final escape in [false, true]) {
     testWidgets('direct ${escape ? 'Escape preserves' : 'click-away clears'} single selection', (tester) async {
       await pumpCanvas(tester, TestLibraryStore(_document()));
-      await tester.tapAt(const Offset(305, 305));
+      await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       _models(tester)['c']!.setSelected(value: true);
       _models(tester)['d']!.setSelected(value: true);
@@ -566,7 +560,7 @@ void main() {
       if (escape) {
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       } else {
-        await tester.tapAt(const Offset(790, 590));
+        await tester.tapAt(const Offset(790, 590), kind: PointerDeviceKind.mouse);
       }
       await tester.pumpAndSettle();
       expect(find.byType(MenuSurface), findsNothing);
@@ -575,12 +569,12 @@ void main() {
     });
   }
 
-  for (final device in [PointerDeviceKind.mouse, PointerDeviceKind.touch]) {
+  for (final device in [PointerDeviceKind.mouse]) {
     for (final escape in [false, true]) {
       testWidgets('direct group $device Arrange restores selection and dismisses with Escape $escape', (tester) async {
         final store = TestLibraryStore(_document());
         await pumpCanvas(tester, store);
-        await tester.tapAt(const Offset(305, 305));
+        await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
         await tester.pumpAndSettle();
         final models = _models(tester);
         models['a']!.setSelected(value: true);
@@ -617,7 +611,7 @@ void main() {
     final document = _document().withElements((elements) => elements[2] = elements[2].copyWith(autoArrange: true));
     final store = TestLibraryStore(document);
     await pumpCanvas(tester, store);
-    await tester.tapAt(const Offset(305, 305));
+    await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     final models = _models(tester);
     models['a']!.setSelected(value: true);
@@ -653,7 +647,7 @@ void main() {
         'code' => find.byKey(const ValueKey('code-block-preview-surface')),
         _ => find.byKey(const ValueKey('media-url-field')),
       };
-      await tester.tapAt(tester.getCenter(surface));
+      await tester.tapAt(tester.getCenter(surface), kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       final focus = switch (editor) {
         'text' => tester.widget<TextElementView>(find.byType(TextElementView)).resources.focusNode,
@@ -682,7 +676,7 @@ void main() {
 
   testWidgets('direct shortcuts use captured targets and navigation dismisses the popover', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document()));
-    await tester.tapAt(const Offset(305, 305));
+    await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Arrange'));
     await tester.pumpAndSettle();
@@ -695,7 +689,7 @@ void main() {
     expect(_canvas(tester).childOrder, ['b', 'a', 'c', 'd']);
     expect(find.byType(MenuSurface), findsOneWidget);
     await _dismissMenu(tester);
-    await tester.tapAt(const Offset(305, 305));
+    await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Arrange'));
     await tester.pumpAndSettle();
@@ -730,7 +724,10 @@ void main() {
         );
         _canvas(tester).updateScalebyDelta(scale - 1, focalPoint: Offset.zero);
         await tester.pumpAndSettle();
-        await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('code-title-text'))));
+        await tester.tapAt(
+          tester.getCenter(find.byKey(const ValueKey('code-title-text'))),
+          kind: PointerDeviceKind.mouse,
+        );
         await tester.pumpAndSettle();
         final trigger = tester.renderObject<RenderBox>(find.byTooltip('Arrange'));
         final bounds = MatrixUtils.transformRect(trigger.getTransformTo(null), Offset.zero & trigger.size);
@@ -764,7 +761,7 @@ void main() {
           final store = TestLibraryStore(_document());
           await pumpCanvas(tester, store);
           if (direct) {
-            await tester.tapAt(const Offset(305, 305));
+            await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
             await tester.pumpAndSettle();
           }
           if (group) {
@@ -857,7 +854,7 @@ void main() {
           }
           final position = before[target]!.data.position + const Offset(5, 5);
           if (direct) {
-            await tester.tapAt(position);
+            await tester.tapAt(position, kind: PointerDeviceKind.mouse);
             await tester.pumpAndSettle();
             expect(before[target]!.active, isTrue);
             await tester.tap(find.byTooltip('Arrange'));
@@ -924,15 +921,18 @@ void main() {
       }
       await tester.pumpAndSettle();
       final surface = find.byKey(ValueKey(tool == 'media' ? 'media-image' : 'code-block-preview-surface'));
-      await tester.tap(surface);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      final surfaceCenter = tester.getCenter(surface);
+      await mouse.addPointer(location: surfaceCenter);
+      await mouse.down(surfaceCenter);
+      await mouse.up();
       await tester.pumpAndSettle();
       final model =
           (tool == 'media'
                   ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources
                   : tester.widget<CodeElementView>(find.byType(CodeElementView)).resources)
               as ElementResources;
-      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      await mouse.addPointer(location: const Offset(790, 590));
+      addTearDown(mouse.removePointer);
 
       Future<void> hoverArrange() async {
         await mouse.moveTo(tester.getCenter(find.byTooltip('Arrange')));
@@ -955,26 +955,27 @@ void main() {
       await hoverArrange();
       await mouse.moveTo(const Offset(790, 590));
       await tester.pumpAndSettle();
-      final transform = await tester.startGesture(
-        tester.getCenter(find.byKey(ValueKey('$tool-block-handle'))),
-        kind: PointerDeviceKind.mouse,
-      );
+      final transformStart = tester.getCenter(find.byKey(ValueKey('$tool-block-handle')));
+      await mouse.moveTo(transformStart);
+      await mouse.down(transformStart);
       final controls = tester.widget<ElementTransformControls>(find.byType(ElementTransformControls));
       controls.onMove(const Offset(20, -110));
       controls.onRotate!(math.pi / 6);
-      await transform.cancel();
+      await mouse.cancel();
       _canvas(tester).updateScalebyDelta(0.25, focalPoint: Offset.zero);
       await tester.pumpAndSettle();
       expectAttached();
       final resizeHandle = find.byKey(ValueKey(tool == 'media' ? 'media-resize-handle' : 'code-block-resize-handle'));
       final oldSize = model.canvasSize;
-      final resize = await tester.startGesture(tester.getCenter(resizeHandle), kind: PointerDeviceKind.mouse);
+      final resizeStart = tester.getCenter(resizeHandle);
+      await mouse.moveTo(resizeStart);
+      await mouse.down(resizeStart);
       for (var step = 0; step < 2; step++) {
-        await resize.moveBy(const Offset(15, 20));
+        await mouse.moveBy(const Offset(15, 20));
         await tester.pump();
         expectAttached();
       }
-      await resize.up();
+      await mouse.up();
       await tester.pumpAndSettle();
       expect(model.canvasSize.width, greaterThan(oldSize.width));
       await hoverArrange();
@@ -1034,18 +1035,18 @@ void main() {
     }
 
     await expectCovered(covered: true);
-    await tester.tapAt(title);
+    await tester.tapAt(title, kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(model.active, isFalse);
     expect(_models(tester)['other']!.active, isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    await tester.tapAt(const Offset(400, 350)); // Exposed code body.
+    await tester.tapAt(const Offset(400, 350), kind: PointerDeviceKind.mouse); // Exposed code body.
     await tester.pumpAndSettle();
     expect(model.active, isTrue);
     expect(tester.widget<LazyCanvas>(find.byType(LazyCanvas)).foregroundChildId, 'editor');
     await expectCovered(covered: false);
-    await tester.tapAt(title);
+    await tester.tapAt(title, kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(model.active, isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -1054,7 +1055,7 @@ void main() {
     await pumpPastSave(tester);
     expect(store.persisted, isNull);
 
-    await tester.tapAt(const Offset(400, 350));
+    await tester.tapAt(const Offset(400, 350), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     await _open(tester, title); // Capture lifted code before revealing the covering shape.
     expect(model.active, isFalse);
@@ -1067,7 +1068,7 @@ void main() {
     expect(canvas.childOrder, ['other', 'editor']);
     expect(model.active, isFalse);
     await _dismissMenu(tester);
-    await tester.tapAt(title);
+    await tester.tapAt(title, kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(model.active, isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -1119,7 +1120,10 @@ void main() {
       expect((model.data.position - original - delta / scale).distance, lessThan(0.001));
       expect(model.active, isFalse);
       expectGeometry();
-      await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('code-title-text'))));
+      await tester.tapAt(
+        tester.getCenter(find.byKey(const ValueKey('code-title-text'))),
+        kind: PointerDeviceKind.mouse,
+      );
       await tester.pumpAndSettle();
       expect(model.active, isTrue);
       final controls = tester.widget<ElementTransformControls>(find.byType(ElementTransformControls));
@@ -1130,6 +1134,7 @@ void main() {
       final oldSize = model.size;
       final resize = await tester.startGesture(
         tester.getCenter(find.byKey(const ValueKey('code-block-resize-handle'))),
+        kind: PointerDeviceKind.mouse,
       );
       final screenDelta =
           Offset(
@@ -1206,7 +1211,7 @@ void main() {
             model.setSelected(value: sameObject || multiple);
             other.setSelected(value: !sameObject || multiple);
             await _open(tester, sameObject ? point : const Offset(555, 405));
-            await tester.tapAt(point - const Offset(25, 0));
+            await tester.tapAt(point - const Offset(25, 0), kind: PointerDeviceKind.mouse);
             await tester.pumpAndSettle();
             expect(find.byType(MenuSurface), findsNothing);
             expect(model.active, isTrue);
@@ -1237,7 +1242,7 @@ void main() {
     await _open(tester, const Offset(355, 355));
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    await tester.tapAt(const Offset(330, 330));
+    await tester.tapAt(const Offset(330, 330), kind: PointerDeviceKind.mouse);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
     expect(find.byType(MenuSurface), findsNothing);
@@ -1248,7 +1253,11 @@ void main() {
 
     await _open(tester, const Offset(355, 355));
     final before = {for (final entry in models.entries) entry.key: entry.value.canvasPosition};
-    await tester.dragFrom(const Offset(305, 305), const Offset(-40, -20));
+    await tester.dragFrom(
+      const Offset(305, 305),
+      const Offset(-40, -20),
+      kind: PointerDeviceKind.mouse,
+    );
     await tester.pumpAndSettle();
     expect(find.byType(MenuSurface), findsNothing);
     for (final id in ['a', 'b', 'c']) {
@@ -1262,17 +1271,20 @@ void main() {
   testWidgets('menu padding stays inside and a toolbar click dismisses and clears selection', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document()));
     await _open(tester, const Offset(305, 305));
-    await tester.tapAt(tester.getTopLeft(find.byType(MenuSurface)) + const Offset(2, 2));
+    await tester.tapAt(
+      tester.getTopLeft(find.byType(MenuSurface)) + const Offset(2, 2),
+      kind: PointerDeviceKind.mouse,
+    );
     await tester.pumpAndSettle();
     expect(find.byType(MenuSurface), findsOneWidget);
     expect(_models(tester)['a']!.selected, isTrue);
     await _openArrange(tester);
     final submenu = find.byType(MenuSurface).last;
-    await tester.tapAt(tester.getTopLeft(submenu) + const Offset(2, 2));
+    await tester.tapAt(tester.getTopLeft(submenu) + const Offset(2, 2), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(find.byType(MenuSurface), findsNWidgets(2));
     expect(_models(tester)['a']!.selected, isTrue);
-    await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
+    await tester.tap(find.byKey(const ValueKey('toolbar-draw')), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(find.byType(MenuSurface), findsNothing);
     expect(_models(tester).values.every((model) => !model.selected), isTrue);
@@ -1291,14 +1303,14 @@ void main() {
   testWidgets('Arrange outside editor click clears selection and resumes editing', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_editorDocument('code')));
     final point = _autoHitPoint(tester, 'code');
-    await tester.tapAt(point);
+    await tester.tapAt(point, kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Arrange'));
     await tester.pumpAndSettle();
     final outside =
         tester.getTopRight(find.byKey(const ValueKey('code-block-preview-surface'))) + const Offset(-10, 100);
     expect(tester.getRect(find.byType(MenuSurface)).contains(outside), isFalse);
-    await tester.tapAt(outside);
+    await tester.tapAt(outside, kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     final model = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
     expect(find.byType(MenuSurface), findsNothing);
@@ -1309,7 +1321,7 @@ void main() {
 
   testWidgets('hover opens the submenu and click-away clears selection', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document()));
-    await tester.tapAt(const Offset(305, 305));
+    await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     final model = _models(tester)['a']!;
     expect(model.active, isTrue);
@@ -1319,7 +1331,7 @@ void main() {
     await mouse.moveTo(tester.getCenter(find.text('Arrange')));
     await tester.pumpAndSettle();
     expect(find.text('Bring Forward'), findsOneWidget);
-    await tester.tapAt(const Offset(790, 590));
+    await tester.tapAt(const Offset(790, 590), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(model.selected, isFalse);
     expect(model.active, isFalse);
@@ -1382,7 +1394,7 @@ void main() {
 
   testWidgets('empty-canvas right-click jitter ends activation and preserves selection', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document()));
-    await tester.tapAt(const Offset(305, 305));
+    await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     final model = _models(tester)['a']!..setSelected(value: true);
     final canvas = _canvas(tester);
@@ -1500,7 +1512,7 @@ void main() {
   for (final platform in [TargetPlatform.macOS, TargetPlatform.linux]) {
     testWidgets('$platform shortcuts support all commands, repeats, and active fallback', (tester) async {
       await pumpCanvas(tester, TestLibraryStore(_document()), platform: platform);
-      await tester.tapAt(const Offset(305, 305));
+      await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       final model = _models(tester)['a']!;
       final canvas = _canvas(tester);
@@ -1563,7 +1575,7 @@ void main() {
         'code' => find.byKey(const ValueKey('code-block-preview-surface')),
         _ => find.byKey(const ValueKey('media-url-field')),
       };
-      await tester.tapAt(tester.getCenter(surface));
+      await tester.tapAt(tester.getCenter(surface), kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       final focus = switch (editor) {
         'text' => tester.widget<TextElementView>(find.byType(TextElementView)).resources.focusNode,
@@ -1576,7 +1588,7 @@ void main() {
         'code' => find.byKey(const ValueKey('code-block-preview-surface')),
         _ => find.byKey(const ValueKey('media-url-field')),
       };
-      await tester.tap(editingSurface);
+      await tester.tap(editingSurface, kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       await _shortcut(tester, LogicalKeyboardKey.bracketRight, shift: true);
       expect(_canvas(tester).childOrder, ['editor', 'other']);
@@ -1614,7 +1626,7 @@ void main() {
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     await tester.runAsync(() => model.setDeviceImage(onePixelPngBytes, 'png'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('media-image')));
+    await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(model.active, isTrue);
     await _open(tester, tester.getCenter(find.byKey(const ValueKey('media-image'))));
@@ -1749,7 +1761,7 @@ void main() {
 
   testWidgets('target deletion and document replacement close menus', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document()));
-    await tester.tapAt(const Offset(305, 305));
+    await tester.tapAt(const Offset(305, 305), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(_models(tester)['a']!.active, isTrue);
     final controls = tester.widget<ElementTransformControls>(find.byType(ElementTransformControls));
@@ -1826,7 +1838,7 @@ void main() {
 
     expect(elementIds(), ['pen', 'arrow']);
 
-    await tester.tapAt(tester.getCenter(penFinder));
+    await tester.tapAt(tester.getCenter(penFinder), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(elementIds(), ['pen', 'arrow']);
     expect(pen.active, isFalse);
@@ -1849,7 +1861,7 @@ void main() {
           arrow.start.dx - arrow.bounds.left,
           arrow.start.dy - arrow.bounds.top,
         );
-    await tester.tapAt(arrowStart);
+    await tester.tapAt(arrowStart, kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(elementIds(), ['pen', 'arrow']);
     expect(pen.active, isFalse);
@@ -1858,12 +1870,12 @@ void main() {
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    await tester.tapAt(tester.getCenter(penFinder));
+    await tester.tapAt(tester.getCenter(penFinder), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(elementIds(), ['pen', 'arrow']);
     expect(pen.selected, isTrue);
 
-    await tester.tapAt(arrowStart);
+    await tester.tapAt(arrowStart, kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
@@ -1893,7 +1905,7 @@ class _DelayedAttachmentStore extends TestAttachmentStore {
 Future<void> _promoteOther(WidgetTester tester) async {
   await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
   await tester.pump();
-  await tester.tapAt(const Offset(555, 405));
+  await tester.tapAt(const Offset(555, 405), kind: PointerDeviceKind.mouse);
   await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
   await tester.pumpAndSettle();
   expect(_canvas(tester).childOrder, ['editor', 'other']);

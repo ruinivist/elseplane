@@ -138,7 +138,9 @@ void main() {
       await tester.pumpAndSettle();
       final titleBoundsBefore = tester.getRect(titleViewport);
       expect(titleBoundsBefore.width, originalTitle.width);
-      await tester.tapAt(Offset(titleBoundsBefore.right + 10, titleBoundsBefore.center.dy));
+      await tester.tapAt(
+        Offset(titleBoundsBefore.right + 10, titleBoundsBefore.center.dy),
+      );
       expect(canvasClicks, 1);
       canvasClicks = 0;
       final compactPitch = rect('tool-1').center.dx - rect('tool-0').center.dx;

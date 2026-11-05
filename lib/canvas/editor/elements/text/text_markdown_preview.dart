@@ -100,6 +100,11 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
       key: const ValueKey('text-markdown-preview-surface'),
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
+      supportedDevices: const {
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+      },
       onTap: widget.onEdit,
       onPanStart: (details) => _dragPosition = details.globalPosition,
       onPanUpdate: (details) {

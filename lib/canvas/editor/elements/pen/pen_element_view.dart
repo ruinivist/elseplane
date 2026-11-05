@@ -52,6 +52,11 @@ class _PenElementViewState extends State<PenElementView> {
           selected: widget.selected,
           child: GestureDetector(
             dragStartBehavior: DragStartBehavior.down,
+            supportedDevices: const {
+              PointerDeviceKind.mouse,
+              PointerDeviceKind.stylus,
+              PointerDeviceKind.invertedStylus,
+            },
             onTap: widget.onTap,
             onPanStart: (details) => _dragPosition = details.globalPosition,
             onPanUpdate: (details) {

@@ -158,6 +158,11 @@ class _ArrowPointHandleState extends State<_ArrowPointHandle> {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           dragStartBehavior: DragStartBehavior.down,
+          supportedDevices: const {
+            PointerDeviceKind.mouse,
+            PointerDeviceKind.stylus,
+            PointerDeviceKind.invertedStylus,
+          },
           onPanStart: (_) {
             _requestedPosition = widget.position;
             widget.onChangeStart();

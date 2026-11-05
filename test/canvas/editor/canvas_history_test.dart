@@ -243,7 +243,10 @@ void main() {
       await pumpCanvas(tester, TestLibraryStore(document));
       final text = media ? null : tester.widget<TextElementView>(find.byType(TextElementView)).resources;
       final image = media ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources : null;
-      await tester.tap(find.byKey(ValueKey(media ? 'media-url-panel' : 'text-markdown-preview')));
+      await tester.tap(
+        find.byKey(ValueKey(media ? 'media-url-panel' : 'text-markdown-preview')),
+        kind: PointerDeviceKind.mouse,
+      );
       await tester.pumpAndSettle();
       (media ? image!.controller : text!.controller).selection = const TextSelection.collapsed(offset: 8);
       final reader = Completer<ClipboardReader>();
@@ -607,7 +610,7 @@ void main() {
       if (tool == 'shape' || tool == 'arrow') {
         await _draw(tester);
       } else {
-        await tester.tapAt(const Offset(300, 250));
+        await tester.tapAt(const Offset(300, 250), kind: PointerDeviceKind.mouse);
         await tester.pumpAndSettle();
       }
       expect(find.byType(type), findsOneWidget);
@@ -630,28 +633,6 @@ void main() {
       expect(store.persisted!.elements, hasLength(1));
     });
   }
-
-  testWidgets('choosing touch Select from Pen is one reversible tool action', (tester) async {
-    final store = TestLibraryStore(_document());
-    await pumpCanvas(tester, store, platform: TargetPlatform.android);
-    final original = _stroke(tester)..setSelected(value: true);
-    await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('toolbar-select')));
-    await tester.pump();
-    expect(_toolSelected(tester, 'select'), isTrue);
-    expect(_toolSelected(tester, 'draw'), isFalse);
-    await _shortcut(tester);
-    expect(_toolSelected(tester, 'select'), isFalse);
-    expect(_toolSelected(tester, 'draw'), isTrue);
-    await _shortcut(tester, redo: true);
-    expect(_toolSelected(tester, 'select'), isTrue);
-    expect(_toolSelected(tester, 'draw'), isFalse);
-    expect(_stroke(tester), same(original));
-    expect(original.selected, isTrue);
-    await pumpPastSave(tester);
-    expect(store.persisted, isNull);
-  });
 
   testWidgets('transient model state does not persist', (tester) async {
     final store = TestLibraryStore(_document());
@@ -684,11 +665,10 @@ void main() {
         ],
       ),
     );
-    await pumpCanvas(tester, store, platform: TargetPlatform.android);
-    final select = find.byKey(const ValueKey('toolbar-select'));
-    await tester.tap(select);
+    await pumpCanvas(tester, store);
+    await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
     await tester.pump();
-    await tester.tap(select);
+    await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
     await tester.pump();
     final model = canvasElement(tester, tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data);
     final original = model.start;
@@ -697,14 +677,14 @@ void main() {
       kind: PointerDeviceKind.mouse,
     );
     await _shortcut(tester);
-    expect(_toolSelected(tester, 'select'), isTrue);
+    expect(_toolSelected(tester, 'draw'), isTrue);
     await gesture.moveBy(const Offset(60, 30));
     await gesture.up();
     await tester.pump();
     expect(model.start, original);
     expect(canvasElement(tester, tester.widget<ArrowElementView>(find.byType(ArrowElementView)).data), equals(model));
     await _shortcut(tester, redo: true);
-    expect(_toolSelected(tester, 'select'), isFalse);
+    expect(_toolSelected(tester, 'draw'), isFalse);
     await pumpPastSave(tester);
     expect(store.persisted, isNull);
 
@@ -756,6 +736,7 @@ void main() {
 
     final gesture = await tester.startGesture(
       tester.getCenter(find.byType(PenElementView)),
+      kind: PointerDeviceKind.mouse,
     );
     await gesture.moveBy(const Offset(30, 10));
     await gesture.moveBy(const Offset(40, 20));
@@ -783,7 +764,7 @@ void main() {
     await pumpCanvas(tester, TestLibraryStore(_textDocument()));
     final original = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
 
-    await tester.tap(find.byKey(const ValueKey('text-markdown-preview')));
+    await tester.tap(find.byKey(const ValueKey('text-markdown-preview')), kind: PointerDeviceKind.mouse);
     await tester.pump();
     original.controller.text = 'changed';
     await tester.pump();
@@ -806,7 +787,10 @@ void main() {
     code.session.setSelection([code.data.id]);
     code.controller.text = 'before resize';
     final token = code.session.captureEdit(code.data.id);
-    final resize = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('code-block-resize-handle'))));
+    final resize = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('code-block-resize-handle'))),
+      kind: PointerDeviceKind.mouse,
+    );
     await resize.moveBy(const Offset(20, 20));
     await resize.moveBy(const Offset(20, 20));
     await resize.up();
@@ -834,9 +818,16 @@ void main() {
     final code = tool.resources;
     final original = code.data.source;
     code.controller.text = 'before navigation';
-    final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas));
-    canvas.onTouchNavigationChanged!(true);
-    canvas.onTouchNavigationChanged!(false);
+    final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
+    final navigation = await tester.startGesture(
+      const Offset(700, 550),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await navigation.moveBy(const Offset(80, 40));
+    await navigation.up();
+    await tester.pump();
+    expect(canvas.offset, isNot(Offset.zero));
     code.controller.text = 'after navigation';
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await _shortcut(tester);
@@ -849,7 +840,7 @@ void main() {
     await pumpCanvas(tester, store);
     TextEditorResources model() => tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     final savedFamily = model().style.fontFamily;
-    await tester.tap(find.byKey(const ValueKey('text-markdown-preview')));
+    await tester.tap(find.byKey(const ValueKey('text-markdown-preview')), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('searchable-select-trigger')));
     await tester.pumpAndSettle();
@@ -891,7 +882,7 @@ void main() {
       expect((store.persisted!.elements.single as TextElementData).style.background, background);
     }
 
-    await tester.tap(find.byKey(const ValueKey('text-markdown-preview')));
+    await tester.tap(find.byKey(const ValueKey('text-markdown-preview')), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     await choose('Card');
     expect(model().active, isTrue);
@@ -951,7 +942,7 @@ void main() {
       expect((store.persisted!.elements.last as CodeElementData).background, BlockBackgroundKind.card);
     }
 
-    await tester.tap(find.byKey(const ValueKey('code-block-preview-surface')).first);
+    await tester.tap(find.byKey(const ValueKey('code-block-preview-surface')).first, kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     await choose('Card');
     await pumpPastSave(tester);

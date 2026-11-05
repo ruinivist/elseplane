@@ -2,6 +2,8 @@
 
 Implement the [target architecture](ARCHITECTURE.md) in the order below. Each stage must leave a runnable web app and remove the superseded implementation. This roadmap is migration work; the architecture document holds the lasting rules.
 
+**Historical record:** The completed-stage summaries and verification results below describe the refactor at that time; they do not verify the current interaction policy. The former touch-preservation requirements are superseded by the [interaction model](Interaction%20model.md): supported canvas editing uses mouse, keyboard, touchpad, and stylus; ordinary Flutter touch navigation and native control/editor interaction are best effort, and finger input must not start competing Plane canvas edits.
+
 ## Baseline and constraints
 
 The source review found ownership problems across four areas:
@@ -11,7 +13,7 @@ The source review found ownership problems across four areas:
 - Mutable element models combine saved content, interaction state, Flutter resources, and asynchronous work.
 - Tool libraries use shared-private `part` files, and production controls repeat styles despite preview-only shared buttons.
 
-Preserve the [interaction model](Interaction%20model.md) and its [paste cancellation decision](adr/0001-cancel-unfinished-pastes.md), including tool history, per-object Auto arrangement, independent activation/selection/editing, touch navigation, and focused editors' local undo. Retain existing element types, library hierarchy, clipboard workflows, and project/backup formats during structural migration unless an explicit format change is necessary. Backward compatibility with historical versions is not required; unreadable data must still fail visibly without being overwritten.
+Preserve the [interaction model](Interaction%20model.md) and its [paste cancellation decision](adr/0001-cancel-unfinished-pastes.md), including tool history, per-object Auto arrangement, independent activation/selection/editing, and focused editors' local undo. The former touch-navigation and touch-editing guarantees are superseded by the current interaction model. Retain existing element types, library hierarchy, clipboard workflows, and project/backup formats during structural migration unless an explicit format change is necessary. Backward compatibility with historical versions is not required; unreadable data must still fail visibly without being overwritten.
 
 Keep current dependencies and browser storage initially. Shared code must isolate browser APIs; native storage implementation and non-web verification are separate work. Self-hosting, collaboration, extensions, LSP, and additional media types do not belong to this refactor.
 
@@ -77,10 +79,10 @@ Workspace owns `EditorSession`, which publishes immutable documents through name
 - Move pointer arbitration into `CanvasInput` and focus-aware keyboard handling into `CanvasShortcuts`. Use explicit gesture transitions and preserve native browser clipboard-event access.
 - Finish separating creation tools from persisted element views. Creation callbacks already produce values and session operations commit them; move their remaining presentation and pointer responsibilities to the intended owners.
 - Preserve the read-only arrangement query introduced in stage 4. Keep measured overlap calculations in the grid and saved order in the session as CanvasView takes over projection.
-- Keep generic navigation mechanics in the grid. Improve its public navigation lifecycle if necessary to remove application dependence on callback ordering; keep tool/selection policy in the app.
+- Keep generic navigation mechanics in the grid. Ordinary Flutter touch navigation is best effort, and Plane must not start custom finger-driven canvas edits alongside it. Do not depend on touch takeover or ownership callbacks.
 - Remove old shared-private tool libraries and model wrappers as their callers migrate.
 
-**Exit:** document geometry/order has one authority. Undo and culling preserve surviving resources. Two-finger takeover and cancellation cannot restart interrupted gestures or apply stale edits.
+**Exit:** document geometry/order has one authority. Undo and culling preserve surviving resources. Cancellation cannot restart interrupted gestures or apply stale edits.
 
 CanvasView now owns document projection, the grid controller, and resources retained by element ID/type. Text, code, media, and pen retain only their required resources; shape and arrow views read immutable values directly. CanvasInput owns pointer arbitration and explicit gesture transitions, CanvasShortcuts handles focus-aware commands, and CanvasClipboard owns canvas clipboard edits. Element clipboard and device-image workflows live with their editors. Controllers and loaded images survive culling, removal invalidates image loads before deferred disposal, and session replacement preserves the viewport while starting fresh resource and input lifetimes. Code blocks hardcode wrapping off with a reminder that enabling it reintroduces the re_editor 0.10.0 scroll-restoration defect. The unsupported wrapped-code regression was removed; ordinary resource culling coverage remains. Creation tools and element presentation use ordinary imports under the editor; the old tool parts and model wrappers are removed. The grid now exposes the read-only `overlappingChildren` query for measured, rotated layout rectangles. CanvasView converts marquee bounds into canvas coordinates and delegates overlap calculations to the grid; selection policy remains in CanvasInput. CanvasClipboard serializes captured targets in document stacking order for both Copy and Cut.
 
@@ -116,7 +118,7 @@ Reuse existing tests and move them with their owners. Add focused cases for new 
 | Resources       | Stable controllers, scrolling, images, and measured geometry across restoration and culling; source changes reload normally.                                                |
 | Async work      | Delayed clipboard reads/uploads after field changes, editing exit, dialogs, undo, removal, disposal, switching, and replacement; stale completion cannot alter restored content; canceled writes attempt cleanup. |
 | Durability      | Save failures and retries, overlapping revisions, captured file targets, failed flushes, staged import/restore failures, preservation of existing attachments.              |
-| Input/UI        | Zoom/rotation transforms, pointer thresholds and cancellation, two-finger takeover, menu/keyboard priority, native clipboard access, bounded scrolling, accessibility.      |
+| Input/UI        | Zoom/rotation transforms, pointer thresholds and cancellation, best-effort ordinary touch and native control/editor behavior, menu/keyboard priority, native clipboard access, bounded scrolling, accessibility. |
 | Boundaries      | A small import check rejects document-to-presentation, library-to-editor, shared-UI-to-feature, and browser-implementation imports from shared logic.                       |
 
 Run browser-dependent tests with `CHROME_EXECUTABLE=/usr/bin/chromium flutter test --platform chrome <test-file>`. Check analysis and `flutter build web` for migrated code. Use focused checks while extracting; run the full Chrome test suite once before committing feature/fix work. The documentation stage needs link, diagram, and diff review only.

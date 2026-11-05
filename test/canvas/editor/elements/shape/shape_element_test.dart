@@ -81,17 +81,17 @@ void main() {
     );
 
     final rect = tester.getRect(find.byType(ShapeElementView));
-    await tester.tapAt(rect.center + const Offset(60, 0));
+    await tester.tapAt(rect.center + const Offset(60, 0), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(shapeTaps, 1);
     expect(backgroundTaps, 0);
 
-    await tester.tapAt(rect.center);
+    await tester.tapAt(rect.center, kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(topTaps, 1);
     expect(shapeTaps, 1);
 
-    await tester.tapAt(rect.topLeft + const Offset(2, 2));
+    await tester.tapAt(rect.topLeft + const Offset(2, 2), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(shapeTaps, 1);
     expect(backgroundTaps, 1);
@@ -179,7 +179,7 @@ void main() {
     final blue = presetColors.firstWhere((swatch) => swatch.label == 'Blue').color;
     expect(tester.widget<ColorControl>(fill).color, blue);
 
-    await tester.dragFrom(const Offset(100, 180), const Offset(140, 100));
+    await tester.dragFrom(const Offset(100, 180), const Offset(140, 100), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     ElementFixture<ShapeElementData> model() =>
         canvasElement(tester, tester.widget<ShapeElementView>(find.byType(ShapeElementView)).data);
@@ -303,7 +303,7 @@ void main() {
     );
     final originalPosition = first.data.position;
     final originalSize = first.data.size;
-    await tester.tapAt(tester.getCenter(firstFinder));
+    await tester.tapAt(tester.getCenter(firstFinder), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(first.active, isTrue);
     expect(first.selected, isFalse);
@@ -368,14 +368,14 @@ void main() {
         canvasElement(tester, tester.widget<ShapeElementView>(find.byType(ShapeElementView)).data);
 
     final originalPosition = model().data.position;
-    await tester.drag(find.byType(ShapeElementView), const Offset(60, 40));
+    await tester.drag(find.byType(ShapeElementView), const Offset(60, 40), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(model().data.position, isNot(originalPosition));
     expect(model().active, isFalse);
     expect(model().selected, isFalse);
     expect(find.byKey(const ValueKey('shape-settings-panel')), findsNothing);
 
-    await tester.tap(find.byType(ShapeElementView));
+    await tester.tap(find.byType(ShapeElementView), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(model().active, isTrue);
     expect(model().selected, isFalse);
@@ -413,7 +413,7 @@ void main() {
     expect(store.persisted!.elements.single.toJson(), edited.data.toJson());
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.tap(find.byType(ShapeElementView));
+    await tester.tap(find.byType(ShapeElementView), kind: PointerDeviceKind.mouse);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
     expect(model().active, isTrue);
@@ -421,14 +421,14 @@ void main() {
     expect(find.byKey(const ValueKey('shape-settings-panel')), findsOneWidget);
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.tap(find.byType(ShapeElementView));
+    await tester.tap(find.byType(ShapeElementView), kind: PointerDeviceKind.mouse);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
     expect(model().active, isTrue);
     expect(model().selected, isFalse);
     expect(find.byKey(const ValueKey('shape-settings-panel')), findsOneWidget);
 
-    await tester.tapAt(const Offset(40, 120));
+    await tester.tapAt(const Offset(40, 120), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(model().active, isFalse);
 

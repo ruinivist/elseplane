@@ -7,7 +7,7 @@ import 'package:elseplane/canvas/document/canvas_document.dart';
 
 enum CanvasTool { select, text, code, media, shape, pen, arrow, eraser }
 
-typedef EditorSnapshot = ({CanvasDocument document, CanvasTool tool, bool touchSelectionEnabled});
+typedef EditorSnapshot = ({CanvasDocument document, CanvasTool tool});
 
 // ---------- History ----------
 

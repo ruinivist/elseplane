@@ -111,7 +111,6 @@ class EditorSession extends ChangeNotifier {
   String? _activeId;
   EditorContext? _editing;
   CanvasTool _tool = CanvasTool.select;
-  bool _touchSelectionEnabled = false;
   bool _live = true;
   int _editGeneration = 0;
   int _restorationGeneration = 0;
@@ -124,11 +123,10 @@ class EditorSession extends ChangeNotifier {
   String? get activeId => _activeId;
   EditorContext? get editing => _editing;
   CanvasTool get tool => _tool;
-  bool get touchSelectionEnabled => _touchSelectionEnabled;
   bool get isLive => _live;
   int get editGeneration => _editGeneration;
   int get restorationGeneration => _restorationGeneration;
-  EditorSnapshot get _snapshot => (document: document, tool: tool, touchSelectionEnabled: touchSelectionEnabled);
+  EditorSnapshot get _snapshot => (document: document, tool: tool);
 
   CanvasElementData? element(String id) => _byId[id];
   Object? elementLifetime(String id) => _lifetimes[id];
@@ -187,19 +185,18 @@ class EditorSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  void chooseTool(CanvasTool value, {bool touchSelectionEnabled = false}) {
+  void chooseTool(CanvasTool value) {
     if (!_live) return;
     finishOperation();
-    _applyTool(value, touchSelectionEnabled: touchSelectionEnabled);
+    _applyTool(value);
     finishOperation();
   }
 
-  void _applyTool(CanvasTool value, {bool touchSelectionEnabled = false}) {
+  void _applyTool(CanvasTool value) {
     invalidatePendingEdits();
     _editing = null;
     _activeId = null;
     _tool = value;
-    _touchSelectionEnabled = touchSelectionEnabled;
     notifyListeners();
   }
 
@@ -218,7 +215,6 @@ class EditorSession extends ChangeNotifier {
     _activeId = null;
     _editing = null;
     _tool = snapshot.tool;
-    _touchSelectionEnabled = snapshot.touchSelectionEnabled;
     if (changed) _selectedIds.clear();
     _setDocument(snapshot.document);
     notifyListeners();
@@ -234,7 +230,6 @@ class EditorSession extends ChangeNotifier {
     finishOperation();
     if (returnToSelect) {
       _tool = CanvasTool.select;
-      _touchSelectionEnabled = false;
     }
     _publish(next);
     finishOperation();

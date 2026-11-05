@@ -62,7 +62,7 @@ void main() {
     expect(controller.getInfo(model.data.id).gsPosition, model.canvasPosition);
 
     // The rotated left end lies above the unrotated layout rectangle.
-    await tester.tapAt(const Offset(320, 190));
+    await tester.tapAt(const Offset(320, 190), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(model.active, isTrue);
     expect(model.editing, isTrue);
@@ -227,7 +227,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
-    await tester.tapAt(const Offset(120, 200));
+    await tester.tapAt(const Offset(120, 200), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
     final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
@@ -291,7 +291,7 @@ void main() {
     tester,
   ) async {
     await _addTextBlock(tester, const Offset(120, 200));
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas));
@@ -342,7 +342,7 @@ void main() {
     final block = find.byType(TextElementView);
     final model = tester.widget<TextElementView>(block).resources..rotate(math.pi / 2);
     await tester.pump();
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     final originalPosition = model.node.position;
@@ -442,7 +442,7 @@ void main() {
         const ValueKey('text-block-resize-handle'),
       );
 
-      await tester.drag(resizeHandle, const Offset(80, 40));
+      await tester.drag(resizeHandle, const Offset(80, 40), kind: PointerDeviceKind.mouse);
       await tester.pump();
 
       expect(model.node.width, originalWidth + 80);
@@ -453,7 +453,7 @@ void main() {
       expect(model.node.markdown, source);
       expect(model.node.style, same(style));
 
-      await tester.drag(resizeHandle, const Offset(-1000, -1000));
+      await tester.drag(resizeHandle, const Offset(-1000, -1000), kind: PointerDeviceKind.mouse);
       await tester.pump();
 
       expect(model.node.width, textNodeMinimumWidth);
@@ -470,7 +470,7 @@ void main() {
       expect(model.node.markdown, source);
       expect(model.node.style, same(style));
 
-      await tester.tapAt(const Offset(700, 500));
+      await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
       await tester.pump();
       expect(tester.getSize(block).height, textNodeMinimumHeight);
       expect(model.scrollController.position.maxScrollExtent, greaterThan(0));
@@ -523,7 +523,7 @@ void main() {
           (model.node.width - handleSize.width / 2) * canvas.controller.scale,
           (blockSize.height - handleSize.height / 2) * canvas.controller.scale,
         );
-    await tester.dragFrom(handlePosition, const Offset(80, 40));
+    await tester.dragFrom(handlePosition, const Offset(80, 40), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     expect(canvas.controller.scale, 2);
@@ -542,7 +542,7 @@ void main() {
     final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
     expect(model.node.markdown, source);
 
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
     final preview = tester.widget<MarkdownBody>(
       find.byKey(const ValueKey('text-markdown-preview')),
@@ -551,6 +551,7 @@ void main() {
 
     await tester.tap(
       find.byKey(const ValueKey('text-markdown-preview-surface')),
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
     await tester.pumpAndSettle();
@@ -570,7 +571,7 @@ void main() {
     await tester.pump();
     expect(model.node.markdown, editedSource);
 
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(
       tester
@@ -611,7 +612,7 @@ x+y
       find.byKey(const ValueKey('text-markdown-editor')),
       source,
     );
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     expect(find.text('Heading', findRichText: true), findsOneWidget);
@@ -836,7 +837,7 @@ x+y
       find.byKey(const ValueKey('text-markdown-editor')),
       source,
     );
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     final preview = tester.widget<MarkdownBody>(
@@ -877,7 +878,7 @@ x+y
       find.byKey(const ValueKey('text-markdown-editor')),
       '![failed](https://example.com/fails.png)',
     );
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     final image = tester.widget<Image>(find.byType(Image));
@@ -911,7 +912,7 @@ x+y
       '![stored]($path)',
     );
 
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
 
@@ -936,7 +937,7 @@ x+y
       '![missing]($path)',
     );
 
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pump();
 
@@ -956,7 +957,7 @@ x+y
       find.byKey(const ValueKey('text-markdown-editor')),
       '[safe](https://example.com) [unsafe](javascript:alert(1))',
     );
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
@@ -976,13 +977,13 @@ x+y
             .toRect()
             .center;
 
-    await tester.tapAt(linkPoint(0, 4));
+    await tester.tapAt(linkPoint(0, 4), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(launcher.launched, ['https://example.com']);
     expect(model.focusNode.hasFocus, isFalse);
     expect(find.byType(TextField), findsNothing);
 
-    await tester.tapAt(linkPoint(5, 11));
+    await tester.tapAt(linkPoint(5, 11), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(launcher.launched, ['https://example.com']);
     expect(model.focusNode.hasFocus, isFalse);
@@ -998,7 +999,7 @@ x+y
       find.byKey(const ValueKey('text-markdown-editor')),
       '[![linked](https://example.com/image.png "title")](https://example.com/image)',
     );
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
@@ -1019,7 +1020,7 @@ x+y
     tester,
   ) async {
     await _addTextBlock(tester, const Offset(120, 200));
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     final block = find.byType(TextElementView);
@@ -1027,6 +1028,7 @@ x+y
 
     await tester.tap(
       find.byKey(const ValueKey('text-markdown-preview-surface')),
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
     expect(find.byKey(const ValueKey('text-markdown-editor')), findsOneWidget);
@@ -1103,7 +1105,10 @@ x+y
       expect(tester.getSize(_selectTrigger('text-font-select')).width, panelWidth);
       expect(tester.getSize(_selectTrigger('text-background-select')).width, panelWidth);
       for (final background in BlockBackgroundKind.values) {
-        await tester.tap(find.byKey(const ValueKey('text-markdown-preview-surface')));
+        await tester.tap(
+          find.byKey(const ValueKey('text-markdown-preview-surface')),
+          kind: PointerDeviceKind.mouse,
+        );
         await tester.pumpAndSettle();
         expect(model.editing, isTrue);
         await _chooseBackground(tester, background);
@@ -1193,7 +1198,10 @@ x+y
     expect(model.focusNode.hasFocus, isFalse);
     expect(border(), BorderSide.none);
 
-    await tester.tap(find.byKey(const ValueKey('text-markdown-preview-surface')));
+    await tester.tap(
+      find.byKey(const ValueKey('text-markdown-preview-surface')),
+      kind: PointerDeviceKind.mouse,
+    );
     await tester.pumpAndSettle();
     expect(model.editing, isTrue);
     expect(tester.widget<Material>(surface).type, MaterialType.transparency);
@@ -1206,7 +1214,7 @@ x+y
     );
     expect(border(), isNot(BorderSide.none));
 
-    await tester.tapAt(const Offset(700, 500));
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     expect(model.editing, isFalse);
@@ -1251,14 +1259,17 @@ x+y
         expect(find.descendant(of: block, matching: find.byType(ImageFiltered)), findsNothing);
       }
 
-      await tester.tap(find.byKey(const ValueKey('text-markdown-preview-surface')));
+      await tester.tap(
+        find.byKey(const ValueKey('text-markdown-preview-surface')),
+        kind: PointerDeviceKind.mouse,
+      );
       await tester.pumpAndSettle();
       await _chooseBackground(tester, BlockBackgroundKind.glass);
       expect(model.active, isTrue);
       expect(model.editing, isFalse);
       expectGlass();
 
-      await tester.tapAt(const Offset(700, 500));
+      await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       expect(model.active, isFalse);
       expectGlass();
@@ -1270,7 +1281,10 @@ x+y
       expect(tester.widget<Material>(surface).color, isNot(previewColor));
       expect((tester.widget<Material>(surface).shape! as RoundedRectangleBorder).side, isNot(BorderSide.none));
 
-      await tester.tap(find.byKey(const ValueKey('text-markdown-preview-surface')));
+      await tester.tap(
+        find.byKey(const ValueKey('text-markdown-preview-surface')),
+        kind: PointerDeviceKind.mouse,
+      );
       await tester.pumpAndSettle();
       expect(model.editing, isTrue);
       expectGlass();
@@ -1298,7 +1312,7 @@ x+y
     expect(model.editing, isFalse);
     expect(find.byKey(const ValueKey('code-block-handle')), findsOneWidget);
 
-    await tester.tapAt(const Offset(24, 550));
+    await tester.tapAt(const Offset(24, 550), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.pumpAndSettle();
     expect(model.editing, isFalse);
@@ -1308,7 +1322,10 @@ x+y
   for (final picker in ['text-font-select', 'text-background-select']) {
     testWidgets('$picker owns Escape before the active canvas block', (tester) async {
       await pumpCanvas(tester, TestLibraryStore(_rendererDocument()));
-      await tester.tap(find.byKey(const ValueKey('text-markdown-preview-surface')));
+      await tester.tap(
+        find.byKey(const ValueKey('text-markdown-preview-surface')),
+        kind: PointerDeviceKind.mouse,
+      );
       await tester.pumpAndSettle();
       final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
       expect(model.active, isTrue);
@@ -1351,6 +1368,7 @@ x+y
 
     await tester.tap(
       find.byKey(const ValueKey('text-markdown-preview-surface')).first,
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pumpAndSettle();
     expect(
@@ -1423,7 +1441,7 @@ x+y
 
     await _chooseBackground(tester, BlockBackgroundKind.transparent);
 
-    await tester.tapAt(const Offset(150, 220));
+    await tester.tapAt(const Offset(150, 220), kind: PointerDeviceKind.mouse);
     await tester.pump();
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump();
@@ -1512,7 +1530,7 @@ Future<TextEditorResources> _placeTextBlock(
 ) async {
   await tester.tap(find.byKey(const ValueKey('toolbar-text')));
   await tester.pump();
-  await tester.tapAt(position);
+  await tester.tapAt(position, kind: PointerDeviceKind.mouse);
   await tester.pump();
   await tester.pump();
   return tester.widget<TextElementView>(find.byType(TextElementView).last).resources;

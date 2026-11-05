@@ -345,7 +345,11 @@ void main() {
       final surface = tester.getRect(
         find.byKey(const ValueKey('code-block-surface')),
       );
-      await tester.tapAt(surface.topLeft + const Offset(40, 20));
+      final start = surface.topLeft + const Offset(40, 20);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: start);
+      await mouse.down(start);
+      await mouse.up();
       await tester.pump();
       await tester.pump();
 
@@ -356,8 +360,6 @@ void main() {
         const CodeLineSelection.collapsed(index: 0, offset: 2),
       );
 
-      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      await mouse.addPointer(location: surface.center);
       expect(
         RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
         SystemMouseCursors.text,

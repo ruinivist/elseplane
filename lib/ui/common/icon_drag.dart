@@ -11,7 +11,13 @@ GestureRecognizerFactoryWithHandlers<ImmediateMultiDragGestureRecognizer> immedi
   GestureMultiDragStartCallback onStart,
 ) {
   return GestureRecognizerFactoryWithHandlers<ImmediateMultiDragGestureRecognizer>(
-    ImmediateMultiDragGestureRecognizer.new,
+    () => ImmediateMultiDragGestureRecognizer(
+      supportedDevices: const {
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+      },
+    ),
     (recognizer) => recognizer.onStart = onStart,
   );
 }

@@ -65,6 +65,7 @@ void main() {
     final curvePoint = model.start * 0.25 + model.controls.single * 0.5 + model.end * 0.25;
     await tester.tapAt(
       tester.getTopLeft(arrowFinder) + curvePoint - model.bounds.topLeft,
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
 
@@ -197,7 +198,7 @@ void main() {
     expect(model.selected, isFalse);
     expect(canvas.childOrder, order);
     model.setSelected(value: true);
-    await tester.tapAt(model.start);
+    await tester.tapAt(model.start, kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(model.active, isTrue);
     expect(model.selected, isFalse);
@@ -238,7 +239,7 @@ void main() {
       }
 
       await openMenu();
-      await tester.tapAt(first.start);
+      await tester.tapAt(first.start, kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       expect(find.byType(MenuSurface), findsNothing);
       expect(first.active, isTrue);
@@ -248,7 +249,7 @@ void main() {
       final modifier = platform == TargetPlatform.macOS ? LogicalKeyboardKey.metaLeft : LogicalKeyboardKey.controlLeft;
       await tester.sendKeyDownEvent(modifier);
       await tester.pump();
-      await tester.tapAt(first.start);
+      await tester.tapAt(first.start, kind: PointerDeviceKind.mouse);
       await tester.sendKeyUpEvent(modifier);
       await tester.pumpAndSettle();
       expect(find.byType(MenuSurface), findsNothing);
@@ -257,7 +258,7 @@ void main() {
       await openMenu();
       final starts = models.map((model) => model.start).toList();
       const delta = Offset(30, 20);
-      await tester.dragFrom(first.start, delta);
+      await tester.dragFrom(first.start, delta, kind: PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
       expect(find.byType(MenuSurface), findsNothing);
       for (var index = 0; index < models.length; index++) {
@@ -336,7 +337,7 @@ void main() {
           first.start.dx - first.bounds.left,
           first.start.dy - first.bounds.top,
         );
-    await tester.tapAt(startPoint);
+    await tester.tapAt(startPoint, kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(first.active, isTrue);
     expect(first.selected, isFalse);

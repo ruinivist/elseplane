@@ -30,7 +30,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
     await tester.pump();
     await tester.dragFrom(const Offset(100, 200), const Offset(80, 40), kind: PointerDeviceKind.mouse);
-    await tester.dragFrom(const Offset(100, 300), const Offset(80, 40));
+    await tester.dragFrom(const Offset(100, 300), const Offset(80, 40), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     expect(find.byType(PenElementView), findsNWidgets(2));
@@ -50,7 +50,7 @@ void main() {
     expect(find.byKey(const ValueKey('draw-settings-panel')), findsNothing);
     expect(find.byKey(const ValueKey('pen-preview')), findsNothing);
 
-    await tester.dragFrom(const Offset(100, 200), const Offset(80, 40));
+    await tester.dragFrom(const Offset(100, 200), const Offset(80, 40), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     expect(find.byType(PenElementView), findsNothing);
@@ -92,7 +92,7 @@ void main() {
       ShowValueIndicator.onDrag,
     );
 
-    await tester.dragFrom(const Offset(100, 300), const Offset(80, 40));
+    await tester.dragFrom(const Offset(100, 300), const Offset(80, 40), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(tester.widget<ColorControl>(find.byType(ColorControl)).enableAlpha, isTrue);
     await tester.tap(find.byKey(const ValueKey('color-preset-Red')));
@@ -104,7 +104,7 @@ void main() {
       '9',
     );
     expect(tester.widget<Slider>(smoothingSlider).label, '3');
-    await tester.dragFrom(const Offset(100, 450), const Offset(80, 40));
+    await tester.dragFrom(const Offset(100, 450), const Offset(80, 40), kind: PointerDeviceKind.mouse);
     await tester.pump();
 
     final strokes = tester
@@ -162,7 +162,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
     await tester.pump();
-    await tester.dragFrom(const Offset(40, 300), const Offset(60, 60));
+    await tester.dragFrom(const Offset(40, 300), const Offset(60, 60), kind: PointerDeviceKind.mouse);
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
     await tester.pump();
@@ -174,11 +174,11 @@ void main() {
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    await tester.tapAt(strokeTopLeft + Offset(strokeSize.width - 2, 2));
+    await tester.tapAt(strokeTopLeft + Offset(strokeSize.width - 2, 2), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(stroke.selected, isFalse);
 
-    await tester.tapAt(tester.getCenter(strokeFinder));
+    await tester.tapAt(tester.getCenter(strokeFinder), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(stroke.selected, isTrue);
     final selectedStrokePosition = tester.getTopLeft(strokeFinder);
@@ -189,7 +189,7 @@ void main() {
     );
     await tester.pump();
     expect(tester.getTopLeft(strokeFinder), selectedStrokePosition);
-    await tester.tapAt(tester.getCenter(strokeFinder));
+    await tester.tapAt(tester.getCenter(strokeFinder), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(stroke.selected, isTrue);
     expect(
@@ -205,20 +205,21 @@ void main() {
     await placeCodeBlock(tester, const Offset(120, 140));
     await tester.tapAt(
       tester.getCenter(find.byKey(const ValueKey('code-block-surface'))),
+      kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
     final code = tester.widget<CodeElementView>(find.byType(CodeElementView)).resources;
     expect(stroke.selected, isTrue);
     expect(code.selected, isTrue);
 
-    await tester.tapAt(tester.getCenter(strokeFinder));
+    await tester.tapAt(tester.getCenter(strokeFinder), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(stroke.selected, isFalse);
     expect(code.selected, isTrue);
 
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    await tester.tapAt(const Offset(20, 220));
+    await tester.tapAt(const Offset(20, 220), kind: PointerDeviceKind.mouse);
     await tester.pump();
     expect(code.selected, isFalse);
 
