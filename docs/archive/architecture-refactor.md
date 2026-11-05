@@ -1,8 +1,10 @@
-# Refactor roadmap
+# Completed architecture refactor
 
-Implement the [target architecture](ARCHITECTURE.md) in the order below. Each stage must leave a runnable web app and remove the superseded implementation. This roadmap is migration work; the architecture document holds the lasting rules.
+Status: complete; historical migration record.
 
-**Historical record:** The completed-stage summaries and verification results below describe the refactor at that time; they do not verify the current interaction policy. The former touch-preservation requirements are superseded by the [interaction model](Interaction%20model.md): supported canvas editing uses mouse, keyboard, touchpad, and stylus; ordinary Flutter touch navigation and native control/editor interaction are best effort, and finger input must not start competing Plane canvas edits.
+Implement the [target architecture](../arch/README.md) in the order below. Each stage must leave a runnable web app and remove the superseded implementation. This archived roadmap records completed migration work; the architecture documents hold the lasting rules.
+
+**Historical record:** The completed-stage summaries and verification results below describe the refactor at that time; they do not verify the current interaction policy. The former touch-preservation requirements are superseded by the [interaction model](../specs/interaction-model.md): supported canvas editing uses mouse, keyboard, touchpad, and stylus; ordinary Flutter touch navigation and native control/editor interaction are best effort, and finger input must not start competing Plane canvas edits.
 
 ## Baseline and constraints
 
@@ -13,7 +15,7 @@ The source review found ownership problems across four areas:
 - Mutable element models combine saved content, interaction state, Flutter resources, and asynchronous work.
 - Tool libraries use shared-private `part` files, and production controls repeat styles despite preview-only shared buttons.
 
-Preserve the [interaction model](Interaction%20model.md) and its [paste cancellation decision](adr/0001-cancel-unfinished-pastes.md), including tool history, per-object Auto arrangement, independent activation/selection/editing, and focused editors' local undo. The former touch-navigation and touch-editing guarantees are superseded by the current interaction model. Retain existing element types, library hierarchy, clipboard workflows, and project/backup formats during structural migration unless an explicit format change is necessary. Backward compatibility with historical versions is not required; unreadable data must still fail visibly without being overwritten.
+Preserve the [interaction model](../specs/interaction-model.md) and its [paste cancellation decision](../adr/0001-cancel-unfinished-pastes.md), including tool history, per-object Auto arrangement, independent activation/selection/editing, and focused editors' local undo. The former touch-navigation and touch-editing guarantees are superseded by the current interaction model. Retain existing element types, library hierarchy, clipboard workflows, and project/backup formats during structural migration unless an explicit format change is necessary. Backward compatibility with historical versions is not required; unreadable data must still fail visibly without being overwritten.
 
 Keep current dependencies and browser storage initially. Shared code must isolate browser APIs; native storage implementation and non-web verification are separate work. Self-hosting, collaboration, extensions, LSP, and additional media types do not belong to this refactor.
 
@@ -21,7 +23,7 @@ Keep current dependencies and browser storage initially. Shared code must isolat
 
 **Status:** complete.
 
-- Publish the [architectural constitution](ARCHITECTURE.md) and link it and this roadmap from root `AGENTS.md`.
+- Publish the [architectural constitution](../arch/README.md) and link it and this roadmap from root `AGENTS.md`.
 - Clearly distinguish target ownership from the current implementation.
 - Treat the interaction model as the behavioral authority; older notes do not override it.
 
@@ -49,7 +51,7 @@ Document values, enums, and private codec helpers now share one immutable docume
 - Establish `LibraryController` as the library owner and single persistence-queue owner. Make `LibraryStore` an injectable snapshot read/write contract, without a mutable public library.
 - Capture file identity, revision, and immutable content for every save. Keep failures visible and preserve dirty state until its corresponding revision is durable.
 - Move create, rename, move, delete, import, export, backup, and restore orchestration out of canvas/file-picker widgets. Widgets own inline drafts, navigation, focus, and confirmations.
-- Use the [staged import protocol](ARCHITECTURE.md#operations-and-correctness). Preserve path, byte-size, archive-entry, image, and attachment-reference validation. Attachment preparation must not overwrite bytes reachable from the existing library.
+- Use the [staged import protocol](../arch/persistence.md#staged-import-protocol). Preserve path, byte-size, archive-entry, image, and attachment-reference validation. Attachment preparation must not overwrite bytes reachable from the existing library.
 - Let Workspace connect outgoing editor snapshots to the library. Cancel unfinished pastes and uploads, then flush completed edits before switching; failed flushes preserve the open editor and completed data for retry. Navigation never waits for canceled work.
 
 **Exit:** file widgets never write storage directly. Failed saves or transfers preserve current content and existing attachment bytes. Late saves cannot target a subsequently selected file.

@@ -2,15 +2,17 @@
 
 What this repo does: Elseplane is a Flutter infinite canvas for Markdown, code, shapes, and media. This audit assumes one person using the web app with a pointer and keyboard.
 
-Reviewed revision: `c3476a8`. Three subagents reviewed shared UI and theme, canvas presentation, and settings/library presentation. The scan focused on local styles or custom controls that bypass shared interaction states. It found **seven categories**, grouped by cause rather than counting every affected widget.
+Historical source audit; its findings are unverified behavior candidates, not confirmed bugs or accepted requirements.
 
-The baseline is [the shared action style](../lib/theme/starless.dart), lines 273–292: ordinary buttons use `surfaceHover` for hover and focus, `surfacePressed` for press, a `focusRing` outline for keyboard focus, and `textMuted` when disabled. Their overlay is transparent, so feedback is painted once. [UI guidance](../lib/ui/AGENTS.md) says ordinary actions inherit these states. Component layout and selection markers can remain local.
+Reviewed revision: `c3476a8`. The scan focused on local styles or custom controls that bypass shared interaction states across shared UI and theme, canvas presentation, and settings/library presentation. It found **seven categories**, grouped by cause rather than counting every affected widget.
+
+The baseline is [the shared action style](../../lib/theme/starless.dart), lines 273–292: ordinary buttons use `surfaceHover` for hover and focus, `surfacePressed` for press, a `focusRing` outline for keyboard focus, and `textMuted` when disabled. Their overlay is transparent, so feedback is painted once. [UI guidance](../../lib/ui/AGENTS.md) says ordinary actions inherit these states. Component layout and selection markers can remain local.
 
 ## Must fix
 
 ### 1. Dropdown triggers lose keyboard focus styling
 
-Locations: [select.dart](../lib/ui/common/select.dart), lines 66–96 and 192–196. Affected controls include Canvas Background, appearance selectors, font, and language.
+Locations: [select.dart](../../lib/ui/common/select.dart), lines 66–96 and 192–196. Affected controls include Canvas Background, appearance selectors, font, and language.
 
 - **What this is:** `Select` and `SearchableSelect` replace the button background, border, and foreground rules.
 - **Problem:** Tab to a closed dropdown: its style has no focused background or border branch, so it looks idle. Disabled labels also use a separate opacity rule while the explicitly colored chevron stays at full strength. The font selector has a real disabled state while loading a font.
@@ -19,7 +21,7 @@ Locations: [select.dart](../lib/ui/common/select.dart), lines 66–96 and 192–
 
 ### 2. Arrange and Delete bypass themed buttons entirely
 
-Locations: [element_transform_controls.dart](../lib/canvas/editor/widgets/element_transform_controls.dart), lines 79–124; [canvas_view.dart](../lib/canvas/editor/canvas_view.dart), lines 445–448 and 1114–1123.
+Locations: [element_transform_controls.dart](../../lib/canvas/editor/widgets/element_transform_controls.dart), lines 79–124; [canvas_view.dart](../../lib/canvas/editor/canvas_view.dart), lines 445–448 and 1114–1123.
 
 - **What this is:** These two click actions use `MouseRegion`, `GestureDetector`, and manually colored icons instead of buttons.
 - **Problem:** Hover and press produce no shared button feedback. Tab cannot reach either action, so Enter and Space cannot activate them, unlike toolbar and settings actions.
@@ -30,7 +32,7 @@ Locations: [element_transform_controls.dart](../lib/canvas/editor/widgets/elemen
 
 ### 3. The current file row covers its own interaction feedback
 
-Location: [file_tree_popup.dart](../lib/library/widgets/file_tree_popup.dart), lines 327–364.
+Location: [file_tree_popup.dart](../../lib/library/widgets/file_tree_popup.dart), lines 327–364.
 
 - **What this is:** File rows use `InkWell` feedback and a child `Container` for the current-file or editing background.
 - **Problem:** The opaque child background paints above the ancestor Material's ink. It hides hover, focus, and pressed feedback on those rows, while transparent rows show it. The current-file marker and keyboard focus are supposed to be independent.
@@ -39,7 +41,7 @@ Location: [file_tree_popup.dart](../lib/library/widgets/file_tree_popup.dart), l
 
 ### 4. Dropdown options receive an extra Flutter overlay
 
-Locations: [select.dart](../lib/ui/common/select.dart), lines 121–141; comparison: [menu_surface.dart](../lib/ui/common/menu_surface.dart), lines 31–54.
+Locations: [select.dart](../../lib/ui/common/select.dart), lines 121–141; comparison: [menu_surface.dart](../../lib/ui/common/menu_surface.dart), lines 31–54.
 
 - **What this is:** Dropdown options set their own hover, pressed, selected, and search-highlight backgrounds.
 - **Problem:** Their style leaves `overlayColor` unset. `MenuItemButton` does not inherit `TextButtonTheme`; Flutter adds its default foreground tint over the background. Context-menu rows explicitly control their overlay. Searchable dropdown keyboard highlighting can also differ from mouse hover because only the latter adds the native hover tint.
@@ -48,7 +50,7 @@ Locations: [select.dart](../lib/ui/common/select.dart), lines 121–141; compari
 
 ### 5. Selection borders override keyboard focus borders
 
-Locations: [color_picker.dart](../lib/ui/common/color_picker.dart), lines 57–65; [shape_tool_settings.dart](../lib/canvas/editor/elements/shape/shape_tool_settings.dart), lines 89–97.
+Locations: [color_picker.dart](../../lib/ui/common/color_picker.dart), lines 57–65; [shape_tool_settings.dart](../../lib/canvas/editor/elements/shape/shape_tool_settings.dart), lines 89–97.
 
 - **What this is:** Color swatches and No fill assign a fixed `side` based only on selection.
 - **Problem:** That border replaces the theme's state-aware focus border. An unselected focused control keeps a transparent border, while a selected unfocused control displays the same ring color used for focus. The inherited focus background still works; focus feedback is reduced, not completely absent.
@@ -57,7 +59,7 @@ Locations: [color_picker.dart](../lib/ui/common/color_picker.dart), lines 57–6
 
 ### 6. Canvas title and Settings navigation recreate partial button states
 
-Locations: [canvas_title.dart](../lib/library/widgets/canvas_title.dart), lines 69–78; [settings_dialog.dart](../lib/settings/settings_dialog.dart), lines 267–275.
+Locations: [canvas_title.dart](../../lib/library/widgets/canvas_title.dart), lines 69–78; [settings_dialog.dart](../../lib/settings/settings_dialog.dart), lines 267–275.
 
 - **What this is:** Both click actions use `InkWell` directly and bypass the theme's button styles.
 - **Problem:** Canvas title uses the global focus color as a filled highlight instead of the shared focus outline. Settings navigation locally specifies a focus fill without that outline. Both leave the pressed highlight to Flutter's default `highlightColor`; setting `splashColor` does not set the pressed highlight, and the app disables splashes with `NoSplash`.
@@ -68,7 +70,7 @@ Locations: [canvas_title.dart](../lib/library/widgets/canvas_title.dart), lines 
 
 ### 7. Some panels omit the shared smooth pointer scrolling
 
-Locations: [settings_dialog.dart](../lib/settings/settings_dialog.dart), lines 166–169 and 185–202; [surface_dialog.dart](../lib/ui/common/surface_dialog.dart), line 51; [canvas_chrome.dart](../lib/canvas/editor/widgets/canvas_chrome.dart), lines 45–49.
+Locations: [settings_dialog.dart](../../lib/settings/settings_dialog.dart), lines 166–169 and 185–202; [surface_dialog.dart](../../lib/ui/common/surface_dialog.dart), line 51; [canvas_chrome.dart](../../lib/canvas/editor/widgets/canvas_chrome.dart), lines 45–49.
 
 - **What this is:** Settings, confirmation content, and the title's horizontal overflow use bare `SingleChildScrollView` widgets.
 - **Problem:** When dialog content overflows a short viewport, wheel scrolling uses Flutter's default behavior. An overflowing canvas title has the same difference with Shift + mouse wheel or horizontal wheel input. File-picker rows, menu content, and tool options use the installed `scroll_animator` pattern. Project guidance requires `scroll_animator` 0.3.0 with `ChromiumEaseInOut`.

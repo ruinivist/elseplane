@@ -1,4 +1,26 @@
-# Interaction Model
+# Interaction model
+
+Status: accepted.
+
+## Scope
+
+This specification governs supported canvas editing, controls, history,
+stacking, and file workflows. Ordinary touch navigation and native control or
+editor interactions are best effort; full touchscreen canvas editing is not a
+supported workflow.
+
+## Acceptance criteria
+
+- Keep activation, selection, and editing independent, with the per-object and
+  group operations described below.
+- Keep supported mouse, keyboard, touchpad, and stylus workflows consistent
+  across creation, editing, history, menus, and arrangement.
+- Cancel asynchronous edits at the documented logical-context boundaries,
+  preserve completed edits, and follow the accepted paste-cancellation ADR.
+- Keep file switching and import/restore behavior consistent with the
+  persistence and failure rules below.
+
+## Behavior
 
 Text, code, and media blocks share three independent interaction states.
 
@@ -18,7 +40,7 @@ Text can remain active without being edited. For code, active currently also mea
 
 Shapes follow the same state separation: clicking or creating a shape makes it active without selecting it. Ctrl-click, Cmd-click, or marquee selection can select a shape without making it active. An active shape may also be selected, but changing either state does not change the other.
 
-## Appearance
+### Appearance
 
 - New users start in Dark theme and Glass surface style.
 - Compile-time flags independently control theme and surface-style selection. With a flag disabled, the app uses Dark or Glass and omits that selector. With both disabled, Settings omits the Appearance section. Enabling a flag restores its selector and normal preference persistence.
@@ -26,7 +48,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - The first color preset is White, matching the Dark theme’s body-text shade. New text, pen strokes, shape outlines, and arrows default to this fixed color; shapes start without a fill. Existing objects retain their saved colors.
 - App-wide surface style controls the backgrounds of future text and code blocks. Existing and pasted blocks retain their backgrounds and per-block options.
 
-## Text blocks
+### Text blocks
 
 - In Select, primary mouse double-click on the canvas creates a transparent text block at the second press position, above existing objects, and immediately focuses its Markdown editor. This works over objects as well as empty canvas. Normal Text-tool placement keeps its app-wide background default.
 - Quick insertion preserves immediate single-click activation. Eligibility belongs to the first press: activating an inactive block on that press does not prevent insertion on the second. Gestures starting inside an already focused text, code, title, or media field retain native editing behavior. Menus, toolbars, option panels, transform controls, modifier selection, Space panning, and stylus input do not trigger insertion. Dragging, navigation, interruption, and tool or document changes cancel pending recognition.
@@ -39,7 +61,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Text options control font, color, and background. New text blocks use the first color preset for both headings and body text; picking a color applies that fixed color to both. Saved blocks without an explicit color continue to use the theme’s heading and body colors. Existing saved custom colors remain fixed when switching themes. The Background dropdown offers Transparent, Card, and Glass; new text blocks use Glass in app-wide Glass mode and Card in Solid mode. Changing the app mode affects only future blocks; existing and pasted blocks retain their backgrounds. Transparent hides the surface, shadow, and preview border while preserving editing borders and selection highlighting. Glass blurs the canvas behind its rounded bounds and retains a translucent surface, fine border, and faint exterior shadow during preview, activation, and editing. Selected Glass keeps its blur and translucency with an accent tint and outline.
 - Saved font names remain valid when a font is unavailable or absent from the current catalog. The picker preserves the saved name, and previews render the bundled font until the requested font can load.
 
-## Code blocks
+### Code blocks
 
 - Code lines never wrap; long lines scroll horizontally. Wrapping is fixed off and has no user option.
 - Clicking the read-only code surface or title activates the block and makes its source and title editable.
@@ -49,7 +71,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Moving or rotating through the floating controls keeps the block active and editable.
 - Clicking away or pressing Escape returns the block to its read-only preview. An empty title is hidden while inactive. The title belongs to the block's layout and stacking layer; its strip remains reserved when hidden without changing the body's position, dimensions, or rotation pivot.
 
-## Media blocks
+### Media blocks
 
 - Media does not switch between separate preview and editor surfaces: the image remains visible in both inactive and active states.
 - Clicking an image activates it and reveals its URL panel, resize handle, and top-left transform controls, including Arrange. Dragging an inactive image moves it without activating it.
@@ -58,18 +80,18 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Moving, rotating, or resizing keeps the block active. Resizing preserves the image aspect ratio and follows the element's rotated axes.
 - Clicking empty canvas or another block, changing tools, or pressing Escape deactivates the block and hides its active controls.
 
-## Pen strokes
+### Pen strokes
 
 - The pen remains enabled after each stroke until it is toggled off, another tool is chosen, or Escape is pressed.
 - Persisted strokes have no active state, options, or transform controls. Pen options apply only to newly drawn strokes.
 - Primary-button dragging moves a stroke directly. Modifier-click and marquee selection are the only ways to select strokes.
 - Selected strokes participate in group movement and keyboard deletion.
 
-## Undo and redo
+### Undo and redo
 
 - Document undo and redo clear selection, activation, and editing while preserving surviving objects of the same ID and type, their controllers, scroll positions, and loaded images. Changed image sources and restored deleted objects load normally. File switching and imports replace the document completely.
 
-- [Unfinished pastes belong to their original input context](adr/0001-cancel-unfinished-pastes.md). Selecting another field or object, explicitly ending editing, changing tools (including tool-only undo or redo), opening an app dialog or file picker, document restoration, replacement, removal, and disposal cancel affected pending pastes and image uploads. Code source and title are separate contexts; returning to a field does not revive canceled work. Temporary browser focus loss, clipboard permission prompts, and the device image picker do not cancel work. Ordinary typing, caret movement, and transforms that keep the same editor open preserve the context and use its live selection. Canceled writes attempt cleanup of their new unpublished attachment paths. Cancellation is silent; current-context failures remain visible. Ordinary image loads continue when their source is unchanged.
+- [Unfinished pastes belong to their original input context](../adr/0001-cancel-unfinished-pastes.md). Selecting another field or object, explicitly ending editing, changing tools (including tool-only undo or redo), opening an app dialog or file picker, document restoration, replacement, removal, and disposal cancel affected pending pastes and image uploads. Code source and title are separate contexts; returning to a field does not revive canceled work. Temporary browser focus loss, clipboard permission prompts, and the device image picker do not cancel work. Ordinary typing, caret movement, and transforms that keep the same editor open preserve the context and use its live selection. Canceled writes attempt cleanup of their new unpublished attachment paths. Cancellation is silent; current-context failures remain visible. Ordinary image loads continue when their source is unchanged.
 
 - Canvas history groups text and code changes by logical field. Moving between code source and title, ending editing, or starting another document operation closes the group. Temporary browser focus loss does not split it. A placement is separate from subsequent typing; its automatic return to Select remains part of placement.
 
@@ -79,7 +101,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Tool-only undo and redo preserve canvas contents and object selection without saving the document. Drawing defaults, object selection, and activation are not history operations.
 - New tool choices or document edits clear redo. Tool choices share the latest 50 operations with document edits; switching files or replacing a document resets history and tools.
 
-## Arrows
+### Arrows
 
 - Drawing an arrow makes it active and returns to the select tool.
 - Arrow options set the color, solid or dashed shaft style, and width for newly drawn arrows.
@@ -91,7 +113,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - An active arrow shows its start, all control handles, and arrowhead with Bézier guides. Primary-button dragging a point reshapes only that arrow and forms one undoable operation. Secondary dragging by itself still pans the canvas.
 - Dashed gaps remain part of the arrow's pointer target.
 
-## Drag and selection rules
+### Drag and selection rules
 
 - Dragging an inactive, unselected block moves only that block and clears any unrelated selection.
 - Dragging any member of a selected group moves the whole group.
@@ -105,7 +127,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Dropdowns, context menus, and submenus absorb pointer scrolling over their contents, search fields, and padding, including at either scroll limit or when no scrolling is needed.
 - Primary-button gestures perform block activation, editing, and movement. In the Select tool, a secondary click opens the object menu; secondary dragging still pans. Drawing tools retain their secondary-button gestures.
 
-## Stacking order
+### Stacking order
 
 - Document order runs from back to front. New and pasted objects append at the front; pasted objects preserve their internal order.
 - Activation temporarily brings the whole block, including its title, above the stack for painting and pointer targeting. Clicking away, Escape, or changing tools removes this lift. Moving, rotating, or resizing an active block keeps its lift.
@@ -122,7 +144,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Each successful Arrange command saves the order and Auto settings together as one undo step. Commands that cannot change order are disabled regardless of Auto; their shortcuts leave order and Auto unchanged and make no history entry. Use the Auto switch to disable Auto without changing order. If an object's layout size is not known, overlap commands are disabled; stack-end commands remain available when they can change order.
 - Cmd on macOS, or Ctrl elsewhere, plus `]` brings forward and `[` sends backward. Adding Shift brings to front or sends to back. Shortcuts target the selection, falling back to the active object, and support key repeat. A fallback object becomes selected before deactivation so repeated shortcuts retain their target. Focused editors keep these keys while the menu is closed.
 
-## Object context menu
+### Object context menu
 
 - In the Select tool, secondary-button release on an object opens a menu containing Cut, Copy, Paste, Arrange, and Delete when movement stays within 4 logical pixels of the press position. The canvas stays still within that distance; crossing it commits to panning, even if the pointer returns to the press position. Right-clicking empty canvas opens a Paste-only menu, preserves selection, and ends editing and activation.
 - Right-clicking a selected object targets its selected group. Right-clicking an unselected object makes it the sole selection. Neither activates an object nor enters editing.
@@ -132,13 +154,13 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Paste retains canvas objects, images, and media URL support. Inserted content is centered at the captured location and becomes selected. Pointer movement during a clipboard read does not change the destination; leaving the logical canvas context cancels pending insertion or cutting. Clipboard menu actions are disabled when direct clipboard access is unavailable, while browser clipboard events retain native shortcut access.
 - Outside clicks dismiss object menus and the standalone Arrange popover and continue through normal interactions. Ordinary clicks clear all canvas selection and activate or edit the clicked block; empty-canvas clicks clear activation too. Ctrl-click and Cmd-click retain selection toggling, and dragging a selected object still moves its group without activating it. Outside clicks on page controls clear selection and perform the control action. Escape dismisses the current menu level while preserving selection. Navigation, tool changes, file-picker opening, target deletion, document replacement, and leaving the page close menus.
 
-## Touch and supported input
+### Touch and supported input
 
 - Canvas editing is supported with mouse, keyboard, touchpad, and stylus.
 - Ordinary Flutter touch navigation and native control/editor interactions are best effort, not a supported canvas-editing workflow. Do not globally block touch on buttons, menus, text fields, scrolling, or accessibility surfaces.
 - Finger input must not independently start Plane's custom canvas edits while Grid handles touch navigation. There is no touch-only Select mode or discovery, custom touch pan or marquee, finger drawing or erasing, object/control manipulation, touch-release placement, finger double-tap text insertion, or guaranteed two-finger takeover, anchoring, or frame behavior. Mouse double-click text insertion remains supported.
 
-## Canvas files
+### Canvas files
 
 - Clicking the canvas title or pressing Cmd+P on macOS, Ctrl+P elsewhere, opens the file picker, including while editing. Opening blocks new canvas input, cancels unfinished clipboard and image edits, and saves completed edits before showing the picker. It does not wait for canceled work. Failed saves leave the current canvas open for retry; dismissing the picker or retrying a save does not revive canceled work. Hovering the title reveals its folder path. The shortcut saves and ends editing just like clicking the title; open dropdowns and modal dialogs retain keyboard priority.
 - The picker initially focuses the current canvas and scrolls it into view. Up and Down move through visible rows without wrapping or switching files. Right expands a folder or enters its first child; Left collapses a folder or moves to its parent. Enter opens the focused canvas or toggles the focused folder. Keyboard focus is separate from the current-file marker; focused rows stay visible. Name fields retain normal editing keys, and menus and confirmation dialogs own keyboard navigation. Tree navigation is disabled while saving.

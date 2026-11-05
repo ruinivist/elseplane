@@ -2,40 +2,15 @@
 
 https://elseplane.ruiny.de/
 
-Infinite canvas with first-class support for code and Markdown.
+Elseplane is an infinite canvas with first-class support for Markdown, code,
+shapes, and media.
 
-## Why?
+Canvas editing supports mouse, keyboard, touchpad, and stylus. Ordinary Flutter
+touch navigation and native control/editor interactions are best effort, not a
+full touchscreen editing workflow. Flutter makes the app cross-platform, but
+only web is currently tested.
 
-Code and markdown are not at all supported in excalidraw.
-Tldraw default doesn't as well, you can extend it via their SDK but the license
-is too restrictive.
-
-## Features
-
-- code and markdown support
-- a little bit nice ui
-- more intuitive controls ( hopefully )
-- less bloat ( focus is on keeping the ui out of the way )
-- Flutter enables cross-platform availability, but only web is tested. Canvas editing supports mouse, keyboard, touchpad, and stylus; ordinary touch navigation and native controls are best effort, not full touchscreen editing.
-- self host with sharing ( planned )
-
-## Feature flags
-
-Edit the `static const` values in `lib/app/feature_flags.dart` and rebuild the app.
-`themeSelection` and `surfaceStyleSelection` default to `false`: the app uses
-Dark and Glass, and hides their settings. Enable either flag to restore its
-selector. New users start in Dark and Glass even when selection is enabled.
-
-App composition owns these flags and supplies appearance callbacks to Settings.
-Settings shows only the controls it receives callbacks for. Future tool flags
-must guard activation and keyboard shortcuts as well as toolbar buttons.
-
-## TODO
-
-a vague list
-
-- self host docker image
-- more comprehensive file switching support
-- LSP integration
-- better media player support for videos etc
-- perf issues on draw
+See the [documentation map](docs/README.md) for accepted behavior and
+architecture, development instructions, active work, and historical research.
+Reported work and open hardware verification are collected in the
+[backlog](docs/backlog.md).

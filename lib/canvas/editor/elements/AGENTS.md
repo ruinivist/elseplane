@@ -1,11 +1,26 @@
 # Element presentation
 
-- Views receive immutable element values and session-derived interaction flags. Request saved changes through EditorSession operations.
-- CanvasView retains resources by ID and type outside lazily culled widgets. Text, code, media, and pen have resource owners; shapes and arrows render directly from values.
-- Inline Markdown attachment and HTTPS image loads belong to retained text resources. Load lazily, retain surviving sources across culling and restoration, and keep storage reads out of preview widgets.
-- Removal invalidates resources immediately. Dispose controllers and focus nodes only after their consumers detach.
-- Keep clipboard and device-image edit workflows with their editor. Resource owners retain controllers, drafts, image display loads, and geometry caches.
-- Keep element option panels and presentation mappings beside their element. CanvasPage binds current values, creation defaults, and session edit callbacks; shared stroke controls belong in ../widgets/.
-- Keep annotated panel and shared-control previews in ../previews/.
-- Use ordinary imports and keep component geometry local. Put shared canvas controls in ../widgets/ and app-wide Flutter primitives in lib/ui/common/.
-- Keep element presentation, resource, and editor tests under test/canvas/editor/elements/ by element type. Test cross-element selection, history, navigation, and clipboard policy with their editor owner instead.
+- Follow [editor lifecycle ownership](../../../../docs/arch/editor-lifecycles.md),
+  [UI ownership](../../../../docs/arch/ui.md), the
+  [interaction model](../../../../docs/specs/interaction-model.md), and the
+  [documentation map](../../../../docs/README.md).
+- Views receive immutable element values and session-derived interaction flags.
+  Request saved changes through `EditorSession` operations.
+- `CanvasView` retains resources by ID and type outside lazily culled widgets.
+  Text, code, media, and pen have resource owners; shapes and arrows render
+  directly from values. Removal invalidates resources immediately; dispose
+  controllers and focus nodes after consumers detach.
+- Inline Markdown attachments and HTTPS image loads belong to retained text
+  resources. Load lazily, retain surviving sources across culling and
+  restoration, and keep storage reads out of preview widgets.
+- Keep clipboard and device-image edit workflows with their editor. Resource
+  owners retain controllers, drafts, image display loads, and geometry caches.
+- Keep element option panels and presentation mappings beside their element.
+  `CanvasPage` binds current values, creation defaults, and session edit
+  callbacks; shared stroke controls belong in `../widgets/`.
+- Keep annotated panel and shared-control previews in `../previews/`. Use
+  ordinary imports and component-local geometry; shared canvas controls belong
+  in `../widgets/`, app-wide Flutter primitives in `lib/ui/common/`.
+- Keep element presentation, resource, and editor tests under
+  `test/canvas/editor/elements/` by element type. Test cross-element selection,
+  history, navigation, and clipboard policy with their editor owner.

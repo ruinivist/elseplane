@@ -1,6 +1,6 @@
 # Grid migration checklist
 
-Status: implemented and automated verification complete. Physical touchpad/stylus checks remain open. The [interaction model](Interaction%20model.md) and [architecture](ARCHITECTURE.md) define the updated behavior.
+Status: active. Implementation and automated verification are complete; physical touchpad/stylus checks remain open. The [interaction model](../specs/interaction-model.md) and [architecture](../arch/README.md) define the updated behavior.
 
 ## Baseline
 
@@ -31,10 +31,10 @@ Dropping a support guarantee does not require disabling every native touch event
 
 Do this before implementing the changed interaction policy.
 
-- [x] Replace the detailed Touch navigation section in `docs/Interaction model.md` with the supported-input policy. Remove touch Select history, finger double-tap insertion, release-to-place, and takeover promises elsewhere in the document.
-- [x] Update `docs/ARCHITECTURE.md`: remove touch-selection mode from history snapshots and mandatory two-finger takeover from input ownership. Keep shared cancellation and lifetime rules.
-- [x] Mark the old touch-preservation requirements in `docs/REFACTOR_PLAN.md` as superseded. Keep historical verification results identified as historical.
-- [x] Delete `docs/touch requirements.md` and its links; its custom frame-by-frame acceptance contract no longer applies.
+- [x] Replace the detailed touch-navigation section in the interaction specification with the supported-input policy. Remove touch Select history, finger double-tap insertion, release-to-place, and takeover promises elsewhere in the document.
+- [x] Update architecture guidance: remove touch-selection mode from history snapshots and mandatory two-finger takeover from input ownership. Keep shared cancellation and lifetime rules.
+- [x] Mark the former touch-preservation requirements in the archived refactor record as superseded. Keep historical verification results identified as historical.
+- [x] Remove the superseded touch requirements and their links; the custom frame-by-frame acceptance contract no longer applies.
 - [x] Remove the touch replay section from `README.md` and qualify the cross-platform claim so it does not promise full touchscreen support.
 
 ## 3. Remove Plane's custom touch layer

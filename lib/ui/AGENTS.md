@@ -1,17 +1,18 @@
-# UI Guidance
+# Shared UI instructions
 
-- Keep app-wide Flutter primitives in `common/`; standalone extraction is not a design goal.
-- Keep feature-specific widgets with their owning feature.
-- Read semantic values from `BTheme.of(context)` internally.
-- Keep concrete palettes, fonts, and syntax themes out of `ui/`.
-- Expose behavior parameters needed by current call sites, but no speculative visual overrides.
-- Ordinary icon and text actions inherit app-theme button states. Use SurfaceIconButton when an action needs its own raised surface; keep feature layout and selection local.
-- Retain shared primitives only when they have production consumers.
-- Prefer small, composable widgets and Flutter platform primitives over broad abstractions.
-- Give every reusable UI widget its own annotated preview in `previews/`.
-- Keep shared primitive and preview behavior tests under test/ui/. Canvas-specific controls and their tests belong to the canvas editor widgets owner.
-
-## Naming convention
-
-- Name shared widgets by their role, such as `SurfaceIconButton` or `LabeledSwitch`.
-- Use an import alias when a real name collision occurs.
+- Read the [UI architecture](../../docs/arch/ui.md) and
+  [documentation map](../../docs/README.md); the accepted
+  [interaction model](../../docs/specs/interaction-model.md) governs behavior.
+- Keep app-wide Flutter primitives in `common/`; feature-specific widgets stay
+  with their owner. Standalone extraction is not a design goal.
+- Read semantic values from `BTheme.of(context)` internally. Keep concrete
+  palettes, fonts, and syntax themes in `theme/`.
+- Expose behavior parameters required by current callers, not speculative
+  visual overrides. Ordinary icon/text actions inherit app-theme button states;
+  use `SurfaceIconButton` when an action needs its own raised surface.
+- Retain shared primitives only with production consumers. Give reusable UI
+  widgets annotated previews in `previews/`; shared primitive and preview tests
+  belong under `test/ui/`. Canvas-specific controls and tests belong to the
+  canvas editor widgets owner.
+- Name shared widgets by role (for example `SurfaceIconButton` or
+  `LabeledSwitch`); use an import alias only for a real name collision.
