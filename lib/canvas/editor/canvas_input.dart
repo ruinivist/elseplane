@@ -541,8 +541,9 @@ class CanvasInputTarget {
 
   void pointerDown(PointerDownEvent event, {bool control = false}) {
     if (!attached || !_supportsCanvasEditing(event.kind)) return;
-    input._observeDown(event);
-    if (control) input.cancelQuickText();
+    input
+      .._observeDown(event)
+      ..cancelQuickText();
     if (!input.canHandle(event) || !attached) return;
     if (input._gesture case _ObjectGesture(pointer: final pointer, id: final target)
         when pointer == event.pointer && target == id) {

@@ -122,8 +122,8 @@ void main() {
     });
   }
 
-  for (final surface in ['empty', 'shape', 'text', 'code', 'media']) {
-    testWidgets('mouse quick text over $surface keeps focus', (tester) async {
+  for (final surface in ['empty', 'shape', 'text', 'code', 'media', 'arrow', 'pen']) {
+    testWidgets('mouse quick text over $surface follows target routing', (tester) async {
       SharedPreferencesAsyncWeb.registerWith(null);
       final elements = <CanvasElementData>[
         if (surface == 'shape') session.document.elements.first,
@@ -153,6 +153,39 @@ void main() {
             width: 300,
             url: '',
           ),
+        if (surface == 'arrow')
+          ArrowElementData(
+            id: 'existing',
+            start: const Offset(20, 40),
+            controls: const [Offset(60, 40)],
+            end: const Offset(100, 40),
+            color: const Color(0xff000000),
+            strokeStyle: ArrowStrokeStyle.solid,
+            strokeWidth: 3,
+          ),
+        if (surface == 'pen') ...[
+          PenElementData(
+            id: 'stroke',
+            position: Offset.zero,
+            size: const Size(120, 100),
+            hitSlop: 8,
+            color: const Color(0xff000000),
+            width: 3,
+            points: const [
+              PenPointData(Offset(10, 50), pressure: 1),
+              PenPointData(Offset(110, 50), pressure: 1),
+            ],
+          ),
+          ShapeElementData(
+            id: 'behind',
+            position: const Offset(300, 0),
+            size: const Size(100, 100),
+            kind: ShapeKind.rectangle,
+            strokeColor: const Color(0xff000000),
+            strokeWidth: 2,
+            fillColor: null,
+          ),
+        ],
       ];
       await pumpCanvas(
         tester,
@@ -168,30 +201,88 @@ void main() {
         ..updateScalebyDelta(0.25, focalPoint: Offset.zero)
         ..scrollBy(const Offset(-160, -180));
       await tester.pumpAndSettle();
-      final position = surface == 'empty'
-          ? const Offset(520, 400)
-          : (const Offset(40, 40) - canvas.offset) * canvas.scale;
-      final expected = canvas.offset + position / canvas.scale;
+      final canvasPosition = switch (surface) {
+        'arrow' => const Offset(60, 40),
+        'pen' => const Offset(60, 50),
+        _ => const Offset(40, 40),
+      };
+      final position = surface == 'empty' ? const Offset(520, 400) : (canvasPosition - canvas.offset) * canvas.scale;
       await _doubleClick(tester, position, PointerDeviceKind.mouse);
-      expect(editor.document.elements.length, elements.length + 1);
-      final value = editor.document.elements.last as TextElementData;
-      expect(value.position, expected);
-      expect(value.style.background, BlockBackgroundKind.transparent);
-      expect(editor.activeId, value.id);
-      expect(editor.editing, (id: value.id, field: EditorField.markdown));
-      final view = tester
-          .widgetList<TextElementView>(find.byType(TextElementView))
-          .firstWhere((view) => view.data.id == value.id);
-      expect(view.resources.focusNode.hasFocus, isTrue);
-      await tester.enterText(find.byKey(const ValueKey('text-markdown-editor')), 'Quick text');
-      editor
-        ..editField(null)
-        ..undo();
-      expect((editor.element(value.id)! as TextElementData).markdown, '');
-      editor.undo();
-      expect(editor.element(value.id), isNull);
-      editor.redo();
-      expect((editor.element(value.id)! as TextElementData).style.background, BlockBackgroundKind.transparent);
+      if (surface == 'empty') {
+        expect(editor.document.elements.length, elements.length + 1);
+        final value = editor.document.elements.last as TextElementData;
+        expect(value.position, canvas.offset + position / canvas.scale);
+        expect(value.style.background, BlockBackgroundKind.transparent);
+        expect(editor.activeId, value.id);
+        expect(editor.editing, (id: value.id, field: EditorField.markdown));
+        final view = tester
+            .widgetList<TextElementView>(find.byType(TextElementView))
+            .firstWhere((view) => view.data.id == value.id);
+        expect(view.resources.focusNode.hasFocus, isTrue);
+        await tester.enterText(find.byKey(const ValueKey('text-markdown-editor')), 'Quick text');
+        editor
+          ..editField(null)
+          ..undo();
+        expect((editor.element(value.id)! as TextElementData).markdown, '');
+        editor.undo();
+        expect(editor.element(value.id), isNull);
+        editor.redo();
+        expect((editor.element(value.id)! as TextElementData).style.background, BlockBackgroundKind.transparent);
+      } else {
+        expect(editor.document.elements, hasLength(elements.length));
+        expect(editor.document.elements.map((element) => element.id).toSet(), {
+          for (final element in elements) element.id,
+        });
+        if (surface == 'pen') {
+          expect(editor.activeId, isNull);
+          expect(editor.selectedIds, isEmpty);
+          expect(editor.document.elements.map((element) => element.id), ['behind', 'stroke']);
+        } else {
+          final id = surface == 'shape' ? 'a' : 'existing';
+          expect(editor.activeId, id);
+        }
+        if (surface == 'text') {
+          expect(editor.editing, (id: 'existing', field: EditorField.markdown));
+          expect((editor.element('existing')! as TextElementData).markdown, 'Existing text');
+        }
+        if (surface == 'code') {
+          expect((editor.element('existing')! as CodeElementData).source, 'final value = 1;');
+        }
+      }
+    });
+  }
+
+  for (final objectFirst in [true, false]) {
+    testWidgets('mixed ${objectFirst ? 'object-empty' : 'empty-object'} clicks do not insert text', (
+      tester,
+    ) async {
+      SharedPreferencesAsyncWeb.registerWith(null);
+      await pumpCanvas(
+        tester,
+        TestLibraryStore(
+          CanvasDocument(
+            background: CanvasBackgroundKind.plain,
+            elements: [session.document.elements.first],
+          ),
+        ),
+      );
+      final editor = tester.widget<CanvasView>(find.byType(CanvasView)).session;
+      final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller
+        ..updateScalebyDelta(0.25, focalPoint: Offset.zero)
+        ..scrollBy(const Offset(-160, -180));
+      await tester.pumpAndSettle();
+      final objectPosition = (const Offset(95, 50) - canvas.offset) * canvas.scale;
+      final emptyPosition = (const Offset(105, 50) - canvas.offset) * canvas.scale;
+      expect((objectPosition - emptyPosition).distance, lessThanOrEqualTo(kDoubleTapSlop));
+      await _doubleClick(
+        tester,
+        objectFirst ? objectPosition : emptyPosition,
+        PointerDeviceKind.mouse,
+        secondPosition: objectFirst ? emptyPosition : objectPosition,
+      );
+      expect(editor.document.elements, hasLength(1));
+      expect(editor.document.elements.single, isA<ShapeElementData>());
+      expect(editor.activeId, objectFirst ? isNull : 'a');
     });
   }
 
@@ -595,13 +686,19 @@ class _Viewport implements CanvasInputViewport {
   void endPan(Velocity velocity) => ends++;
 }
 
-Future<void> _doubleClick(WidgetTester tester, Offset position, PointerDeviceKind kind, {int start = 100}) async {
+Future<void> _doubleClick(
+  WidgetTester tester,
+  Offset position,
+  PointerDeviceKind kind, {
+  int start = 100,
+  Offset? secondPosition,
+}) async {
   final first = await tester.createGesture(kind: kind);
   await first.down(position, timeStamp: Duration(milliseconds: start));
   await first.up(timeStamp: Duration(milliseconds: start + 20));
   await tester.pump(const Duration(milliseconds: 80));
   final second = await tester.createGesture(kind: kind);
-  await second.down(position, timeStamp: Duration(milliseconds: start + 100));
+  await second.down(secondPosition ?? position, timeStamp: Duration(milliseconds: start + 100));
   await second.up(timeStamp: Duration(milliseconds: start + 120));
   await tester.pumpAndSettle();
 }
