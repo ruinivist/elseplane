@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:archive/archive.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
@@ -41,13 +42,18 @@ void main() {
     );
     await _openCanvasSettings(tester);
     await tester.tap(find.byKey(const ValueKey('canvas-export-button')));
-    await tester.pumpAndSettle();
+    await pumpUntil(tester, () => files.saved != null);
 
     expect(files.saved, isNotNull);
-    final root = jsonDecode(utf8.decode(files.saved!)) as Map<String, dynamic>;
-    expect(root['format'], 'elseplane-canvas');
-    expect(root['document'], document.toJson());
-    expect(root['attachments'], {_path0: base64Encode(onePixelPngBytes)});
+    expect(files.savedName, 'canvas.elseplane.zip');
+    expect(files.savedMime, 'application/zip');
+    final archive = ZipDecoder().decodeBytes(files.saved!);
+    expect(archive.map((entry) => entry.name), ['document.json', _path0]);
+    expect(
+      jsonDecode(utf8.decode(archive.find('document.json')!.readBytes()!)),
+      document.toJson(),
+    );
+    expect(archive.find(_path0)!.readBytes(), onePixelPngBytes);
     expect(find.text('Canvas exported'), findsOneWidget);
   });
 
@@ -190,9 +196,11 @@ void main() {
     final attachments = _FakeAttachmentStore({_path0: onePixelPngBytes});
     final libraryStore = _FakeLibraryStore(oldDocument);
     final files = _FakeProjectFiles()
-      ..opened = await encodeCanvasProject(
-        newDocument,
-        _FakeAttachmentStore({_path0: _newBytes}),
+      ..opened = await tester.runAsync(
+        () => encodeCanvasProject(
+          newDocument,
+          _FakeAttachmentStore({_path0: _newBytes}),
+        ),
       );
 
     await pumpElseplaneApp(
@@ -280,9 +288,11 @@ void main() {
       final attachments = _FakeAttachmentStore({_path0: onePixelPngBytes});
       final libraryStore = _FakeLibraryStore(oldDocument);
       final files = _FakeProjectFiles()
-        ..opened = await encodeCanvasProject(
-          newDocument,
-          _FakeAttachmentStore({_path0: _newBytes}),
+        ..opened = await tester.runAsync(
+          () => encodeCanvasProject(
+            newDocument,
+            _FakeAttachmentStore({_path0: _newBytes}),
+          ),
         );
 
       await pumpElseplaneApp(
@@ -328,9 +338,10 @@ void main() {
       );
 
       await tester.tap(find.byKey(const ValueKey('canvas-export-button')));
-      await tester.pumpAndSettle();
-      final root = jsonDecode(utf8.decode(files.saved!)) as Map<String, dynamic>;
-      final exportedDocument = root['document'] as Map<String, dynamic>;
+      await pumpUntil(tester, () => files.saved != null);
+      final archive = ZipDecoder().decodeBytes(files.saved!);
+      final exportedDocument =
+          jsonDecode(utf8.decode(archive.find('document.json')!.readBytes()!)) as Map<String, dynamic>;
       expect(exportedDocument['background'], CanvasBackgroundKind.plain.name);
     },
   );
@@ -402,9 +413,11 @@ void main() {
     final attachments = _FakeAttachmentStore({_path0: onePixelPngBytes});
     final libraryStore = _FakeLibraryStore(oldDocument)..failSaves = true;
     final files = _FakeProjectFiles()
-      ..opened = await encodeCanvasProject(
-        newDocument,
-        _FakeAttachmentStore({_path0: _newBytes}),
+      ..opened = await tester.runAsync(
+        () => encodeCanvasProject(
+          newDocument,
+          _FakeAttachmentStore({_path0: _newBytes}),
+        ),
       );
 
     await pumpElseplaneApp(

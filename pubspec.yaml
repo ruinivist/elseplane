@@ -58,6 +58,7 @@ flutter:
     - assets/icons/arrow-dashed.svg
     - assets/icons/arrow-solid.svg
     - assets/icons/resize.svg
+    - assets/demo/canvas.elseplane.zip
     - assets/fonts/jetbrains-mono/OFL.txt
   fonts:
     - family: JetBrains Mono

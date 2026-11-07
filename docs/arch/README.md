@@ -8,7 +8,8 @@ resources. Storage owns durability.**
 This architecture defines implemented ownership and allowed dependencies. The
 [interaction model](../specs/interaction-model.md) defines product behavior;
 the accepted [paste cancellation ADR](../adr/0001-cancel-unfinished-pastes.md)
-records its rationale and consequences. Older notes, research, and migration
+and [canvas document and media ADR](../adr/0002-separate-documents-and-media.md)
+record their rationale and consequences. Older notes, research, and migration
 records do not override these authorities. Update the relevant contract when an
 intentional design decision changes.
 

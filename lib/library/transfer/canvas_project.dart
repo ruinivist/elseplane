@@ -4,6 +4,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/image_import.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
@@ -13,7 +14,6 @@ import 'package:markdown/markdown.dart' as md;
 // ---------- Limits ----------
 
 const int canvasProjectMaximumBytes = 140 * 1024 * 1024;
-const int _maximumEncodedAttachmentLength = ((attachmentMaximumBytes + 2) ~/ 3) * 4;
 
 // ---------- Validation ----------
 
@@ -69,30 +69,30 @@ CanvasDocument rebaseCanvasDocumentAttachments(CanvasDocument source, Map<String
   );
 }
 
-/// Encodes a document and its referenced attachments as a portable project.
+/// Encodes a document and its referenced attachments as a portable ZIP project.
 /// Used by the canvas export flow before saving to the host file system.
 Future<Uint8List> encodeCanvasProject(
   CanvasDocument document,
   AttachmentStore store,
 ) async {
   final paths = canvasAttachmentPaths(document).toList()..sort();
-  final attachments = <String, String>{};
+  final archive = Archive();
+  final documentBytes = Uint8List.fromList(
+    utf8.encode(const JsonEncoder.withIndent('  ').convert(document.toJson())),
+  );
+  var totalBytes = documentBytes.length;
+  validateCanvasProjectSize(totalBytes);
+  archive.add(ArchiveFile.bytes('document.json', documentBytes));
 
   for (final path in paths) {
     final bytes = await store.read(path);
-    validateAttachmentSize(bytes.length, 'Attachment exceeds 10 MiB: $path');
-    attachments[path] = base64Encode(bytes);
+    await validateCanvasAttachment(path, bytes);
+    totalBytes += bytes.length;
+    validateCanvasProjectSize(totalBytes);
+    archive.add(ArchiveFile.bytes(path, bytes));
   }
 
-  final bytes = Uint8List.fromList(
-    utf8.encode(
-      jsonEncode(<String, Object>{
-        'format': 'elseplane-canvas',
-        'document': document.toJson(),
-        'attachments': attachments,
-      }),
-    ),
-  );
+  final bytes = ZipEncoder().encodeBytes(archive);
   validateCanvasProjectSize(bytes.length);
   return bytes;
 }
@@ -102,62 +102,174 @@ Future<Uint8List> encodeCanvasProject(
 Future<CanvasProject> decodeCanvasProject(Uint8List bytes) async {
   validateCanvasProjectSize(bytes.length);
 
-  final decoded = jsonDecode(utf8.decode(bytes, allowMalformed: false));
-
-  final root = _jsonObject(
-    decoded,
-    'project',
-    allowedKeys: const {'format', 'document', 'attachments'},
-  );
-  if (root['format'] != 'elseplane-canvas') {
-    throw const FormatException('project.format must be elseplane-canvas');
+  late final ZipDirectory directory;
+  try {
+    directory = ZipDirectory()..read(InputMemoryStream(bytes));
+  } on Object catch (error) {
+    throw FormatException('Invalid project ZIP: $error');
+  }
+  if (directory.filePosition < 0 ||
+      directory.numberOfThisDisk != 0 ||
+      directory.diskWithTheStartOfTheCentralDirectory != 0 ||
+      directory.totalCentralDirectoryEntriesOnThisDisk != directory.totalCentralDirectoryEntries ||
+      directory.fileHeaders.length != directory.totalCentralDirectoryEntries) {
+    throw const FormatException('Invalid project ZIP');
   }
 
-  final document = CanvasDocument.fromJson(root['document']);
-  final encodedAttachments = _jsonMap(
-    root['attachments'],
-    'project.attachments',
-  );
-  final attachments = <String, Uint8List>{};
+  final headers = <String, ZipFileHeader>{};
+  var documentCount = 0;
+  var totalBytes = 0;
+  for (final header in directory.fileHeaders) {
+    final name = header.filename;
+    final file = header.file;
+    if (file == null ||
+        file.filename != name ||
+        header.generalPurposeBitFlag != file.flags ||
+        header.compressionMethod !=
+            switch (file.compressionMethod) {
+              CompressionType.none => 0,
+              CompressionType.deflate => 8,
+              CompressionType.bzip2 => 12,
+            } ||
+        header.crc32 != file.crc32 ||
+        header.generalPurposeBitFlag & 0x1 != 0 ||
+        (header.versionMadeBy >> 8 == 3 && ((header.externalFileAttributes >> 28) & 0xf) == 0xa)) {
+      throw const FormatException('Invalid ZIP entry');
+    }
+    if (header.compressionMethod != 0 && header.compressionMethod != 8 && header.compressionMethod != 12) {
+      throw const FormatException('Unsupported ZIP compression');
+    }
+    if (name != 'document.json' && !attachmentPathPattern.hasMatch(name)) {
+      throw FormatException('Unexpected ZIP entry: $name');
+    }
+    if (headers.containsKey(name)) throw const FormatException('Duplicate ZIP entry');
+    if (name == 'document.json') documentCount++;
+    if (header.uncompressedSize < 0 || header.compressedSize < 0) {
+      throw const FormatException('Invalid ZIP entry size');
+    }
+    if (name != 'document.json') {
+      validateAttachmentSize(header.uncompressedSize, 'Attachment exceeds 10 MiB: $name');
+    }
+    if (header.uncompressedSize > canvasProjectMaximumBytes - totalBytes) {
+      throw const FormatException('Project exceeds 140 MiB uncompressed');
+    }
+    totalBytes += header.uncompressedSize;
+    headers[name] = header;
+  }
+  if (documentCount != 1) throw const FormatException('ZIP must contain one document.json');
 
-  for (final entry in encodedAttachments.entries) {
-    if (!attachmentPathPattern.hasMatch(entry.key)) {
-      throw FormatException('Invalid attachment path: ${entry.key}');
-    }
-    final encoded = entry.value;
-    if (encoded is! String) {
-      throw FormatException('Attachment value must be base64: ${entry.key}');
-    }
-    if (encoded.length > _maximumEncodedAttachmentLength) {
-      throw FormatException('Attachment exceeds 10 MiB: ${entry.key}');
-    }
+  late final Archive archive;
+  try {
+    archive = ZipDecoder().decodeBytes(bytes);
+  } on Object catch (error) {
+    throw FormatException('Invalid project ZIP: $error');
+  }
+  if (archive.length != headers.length) throw const FormatException('Duplicate ZIP entry');
 
-    late final Uint8List attachment;
-    try {
-      attachment = base64Decode(encoded);
-    } on FormatException {
-      throw FormatException('Invalid base64 attachment: ${entry.key}');
-    }
-    validateAttachmentSize(
-      attachment.length,
-      'Attachment exceeds 10 MiB: ${entry.key}',
-    );
-    if (base64Encode(attachment) != encoded) {
-      throw FormatException('Invalid base64 attachment: ${entry.key}');
-    }
-    attachments[entry.key] = attachment;
+  final documentEntry = archive.find('document.json');
+  if (documentEntry == null || !documentEntry.isFile || documentEntry.isSymbolicLink) {
+    throw const FormatException('ZIP must contain one document.json');
+  }
+  final documentBytes = _checkedZipBytes(documentEntry, headers['document.json']!);
+  late final CanvasDocument document;
+  try {
+    document = CanvasDocument.fromJson(jsonDecode(utf8.decode(documentBytes, allowMalformed: false)));
+  } on FormatException {
+    rethrow;
+  } on Object catch (error) {
+    throw FormatException('Invalid document.json: $error');
   }
 
   final referencedPaths = canvasAttachmentPaths(document);
-  if (attachments.length != referencedPaths.length || !referencedPaths.containsAll(attachments.keys)) {
-    throw const FormatException('Attachment references do not match the map');
+  final archiveImagePaths = headers.keys.where((name) => name != 'document.json').toSet();
+  if (archiveImagePaths.length != referencedPaths.length || !referencedPaths.containsAll(archiveImagePaths)) {
+    throw const FormatException('Attachment references do not match the ZIP');
   }
 
-  for (final path in referencedPaths) {
-    await validateCanvasAttachment(path, attachments[path]!);
+  final attachments = <String, Uint8List>{};
+  var actualTotalBytes = documentBytes.length;
+  for (final entry in archive) {
+    if (entry.name == 'document.json') continue;
+    if (!entry.isFile || entry.isSymbolicLink) throw const FormatException('Invalid ZIP entry');
+    final attachment = _checkedZipBytes(entry, headers[entry.name]!);
+    validateAttachmentSize(attachment.length, 'Attachment exceeds 10 MiB: ${entry.name}');
+    await validateCanvasAttachment(entry.name, attachment);
+    actualTotalBytes += attachment.length;
+    validateCanvasProjectSize(actualTotalBytes);
+    attachments[entry.name] = attachment;
   }
 
   return CanvasProject(document: document, attachments: attachments);
+}
+
+Uint8List _checkedZipBytes(ArchiveFile entry, ZipFileHeader header) {
+  final output = _CanvasProjectOutput(header.uncompressedSize);
+  try {
+    if (header.compressionMethod == 8) {
+      Inflate.stream(header.file!.getStream(decompress: false), output: output);
+    } else {
+      entry.decompress(output);
+    }
+  } on Object catch (error) {
+    throw FormatException('Damaged ZIP entry: ${entry.name} ($error)');
+  }
+  final bytes = output.getBytes();
+  if (bytes.length != header.uncompressedSize || getCrc32(bytes) != header.crc32) {
+    throw FormatException('Damaged ZIP entry: ${entry.name}');
+  }
+  return bytes;
+}
+
+final class _CanvasProjectOutput extends OutputStream {
+  _CanvasProjectOutput(this.maximumBytes) : _output = OutputMemoryStream(), super(byteOrder: ByteOrder.littleEndian);
+
+  final int maximumBytes;
+  final OutputMemoryStream _output;
+
+  @override
+  int get length => _output.length;
+
+  @override
+  void clear() => _output.clear();
+
+  @override
+  void flush() => _output.flush();
+
+  @override
+  void writeByte(int value) {
+    _check(1);
+    _output.writeByte(value);
+  }
+
+  @override
+  void writeBytes(List<int> bytes, {int? length}) {
+    _check(length ?? bytes.length);
+    _output.writeBytes(bytes, length: length);
+  }
+
+  @override
+  void writeStream(InputStream stream) {
+    _check(stream.length);
+    _output.writeStream(stream);
+  }
+
+  @override
+  void writeBackReference(int distance, int count) {
+    _check(count);
+    _output.writeBackReference(distance, count);
+  }
+
+  @override
+  Uint8List subset(int start, [int? end]) => _output.subset(start, end);
+
+  @override
+  Uint8List getBytes() => _output.getBytes();
+
+  void _check(int additionalBytes) {
+    if (additionalBytes > maximumBytes - length) {
+      throw const FormatException('ZIP entry exceeds its declared size');
+    }
+  }
 }
 
 // ---------- Private helpers ----------
@@ -202,33 +314,4 @@ String _rebaseMarkdownAttachments(String source, Map<String, String> replacement
   }
   rebased.write(source.substring(cursor));
   return rebased.toString();
-}
-
-Map<String, Object?> _jsonObject(
-  Object? value,
-  String field, {
-  required Set<String> allowedKeys,
-}) {
-  final result = _jsonMap(value, field);
-  for (final key in result.keys) {
-    if (!allowedKeys.contains(key)) {
-      throw FormatException('$field has unknown key: $key');
-    }
-  }
-  return result;
-}
-
-Map<String, Object?> _jsonMap(Object? value, String field) {
-  if (value is! Map) {
-    throw FormatException('$field must be an object');
-  }
-  final result = <String, Object?>{};
-  for (final entry in value.entries) {
-    if (entry.key is! String) {
-      throw FormatException('$field must have string keys');
-    }
-    final key = entry.key as String;
-    result[key] = entry.value;
-  }
-  return result;
 }

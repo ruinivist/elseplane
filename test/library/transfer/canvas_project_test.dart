@@ -4,6 +4,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/library/transfer/canvas_project.dart';
@@ -32,9 +33,15 @@ void main() {
     });
 
     final encoded = await encodeCanvasProject(document, store);
-    final root = jsonDecode(utf8.decode(encoded)) as Map<String, dynamic>;
-    final attachmentMap = root['attachments'] as Map<String, dynamic>;
-    expect(attachmentMap.keys, [_path(0), _path(1), _path(2)]);
+    final archive = ZipDecoder().decodeBytes(encoded);
+    expect(archive.map((entry) => entry.name), ['document.json', _path(0), _path(1), _path(2)]);
+    expect(
+      utf8.decode(archive.find('document.json')!.readBytes()!),
+      const JsonEncoder.withIndent('  ').convert(document.toJson()),
+    );
+    expect(archive.find(_path(0))!.readBytes(), first);
+    expect(archive.find(_path(1))!.readBytes(), second);
+    expect(archive.find(_path(2))!.readBytes(), third);
 
     final project = await decodeCanvasProject(encoded);
     expect(project.document.toJson(), document.toJson());
@@ -258,45 +265,60 @@ Suffix ${_path(1)}
     );
   });
 
-  test('root, format, and document validation is strict', () async {
-    final unknownRootKey = _validProjectJson()..['extra'] = true;
-    await expectLater(_decodeJson(unknownRootKey), throwsFormatException);
+  test('rejects malformed ZIPs, unsafe paths, duplicate entries, and symlinks', () async {
+    await expectLater(decodeCanvasProject(Uint8List.fromList([1, 2, 3])), throwsFormatException);
 
-    final wrongFormat = _validProjectJson()..['format'] = 'other';
-    await expectLater(_decodeJson(wrongFormat), throwsFormatException);
+    final unexpectedPath = _projectArchive(_document(markdown: ''))..add(ArchiveFile.bytes('../outside', Uint8List(0)));
+    await expectLater(decodeCanvasProject(_encode(unexpectedPath)), throwsFormatException);
 
-    final wrongVersion = _validProjectJson()
-      ..['document'] = {
-        'version': 1,
-        'background': 'dotGrid',
-        'elements': <Object?>[],
-      };
-    await expectLater(_decodeJson(wrongVersion), throwsFormatException);
+    final valid = _encode(_projectArchive(_document(markdown: '')));
+    await expectLater(decodeCanvasProject(_duplicateFirstCentralEntry(valid)), throwsFormatException);
+    await expectLater(decodeCanvasProject(_markFirstEntryAsSymlink(valid)), throwsFormatException);
   });
 
-  test('invalid paths, base64, image data, and attachment sets fail', () async {
-    final invalidPath = _validProjectJson()..['attachments'] = {'attachments/not-a-uuid.png': 'AAAA'};
-    await expectLater(_decodeJson(invalidPath), throwsFormatException);
-
-    final invalidBase64 = _validProjectJson()..['attachments'] = {_path(0): 'not base64'};
-    await expectLater(_decodeJson(invalidBase64), throwsFormatException);
-
-    final malformedImage = _validProjectJson()
-      ..['document'] = _document(markdown: '![corrupt](${_path(0)})').toJson()
-      ..['attachments'] = {
-        _path(0): base64Encode(<int>[1, 2, 3]),
-      };
+  test('rejects invalid documents, checksums, and attachment sets', () async {
     await expectLater(
-      _decodeJson(malformedImage),
-      throwsA(isA<FormatException>().having((error) => error.message, 'message', contains('Invalid encoded image'))),
+      decodeCanvasProject(_encode(_projectArchive(_document(markdown: ''), documentJson: '{}'))),
+      throwsFormatException,
+    );
+    await expectLater(
+      decodeCanvasProject(_encode(_projectArchive(_document(markdown: ''), documentJson: 'not JSON'))),
+      throwsFormatException,
+    );
+    await expectLater(
+      decodeCanvasProject(_corruptFirstEntryChecksum(_encode(_projectArchive(_document(markdown: ''))))),
+      throwsFormatException,
     );
 
-    final missingAttachment = _validProjectJson()
-      ..['document'] = _document(markdown: '![missing](${_path(0)})').toJson();
-    await expectLater(_decodeJson(missingAttachment), throwsFormatException);
+    final missing = _document(markdown: '![missing](${_path(0)})');
+    await expectLater(decodeCanvasProject(_encode(_projectArchive(missing))), throwsFormatException);
 
-    final extraAttachment = _validProjectJson()..['attachments'] = {_path(0): base64Encode(onePixelPngBytes)};
-    await expectLater(_decodeJson(extraAttachment), throwsFormatException);
+    final unreferenced = _projectArchive(_document(markdown: ''))..add(ArchiveFile.bytes(_path(0), onePixelPngBytes));
+    await expectLater(decodeCanvasProject(_encode(unreferenced)), throwsFormatException);
+
+    final corruptImage = _projectArchive(
+      _document(markdown: '![corrupt](${_path(0)})'),
+      attachments: {
+        _path(0): Uint8List.fromList([1, 2, 3]),
+      },
+    );
+    await expectLater(
+      decodeCanvasProject(_encode(corruptImage)),
+      throwsA(isA<FormatException>().having((error) => error.message, 'message', contains('Invalid encoded image'))),
+    );
+  });
+
+  test('deflate output limits stop inflation before the compressed entry ends', () {
+    final source = Uint8List(1024 * 1024)..fillRange(0, 1024 * 1024, 0x41);
+    final archive = Archive()..add(ArchiveFile.bytes('payload', source)..compression = CompressionType.deflate);
+    final encoded = _encode(archive);
+    final header = (ZipDirectory()..read(InputMemoryStream(encoded))).fileHeaders.single;
+    final input = header.file!.getStream(decompress: false);
+    final output = _LimitedOutput(32);
+
+    expect(() => Inflate.stream(input, output: output), throwsFormatException);
+    expect(output.length, allOf(greaterThan(0), lessThanOrEqualTo(32)));
+    expect(input.isEOS, isFalse);
   });
 
   test('attachment and project size limits reject only overages', () async {
@@ -309,17 +331,46 @@ Suffix ${_path(1)}
       throwsFormatException,
     );
 
-    final document = _document(markdown: '![image](${_path(0)})');
-    final atLimit = TestAttachmentStore({
-      _path(0): Uint8List(attachmentMaximumBytes),
-    });
-    await encodeCanvasProject(document, atLimit);
+    expect(
+      () => validateAttachmentSize(attachmentMaximumBytes, 'over limit'),
+      returnsNormally,
+    );
+    expect(
+      () => validateAttachmentSize(attachmentMaximumBytes + 1, 'over limit'),
+      throwsFormatException,
+    );
 
+    final document = _document(markdown: '![image](${_path(0)})');
     final overLimit = TestAttachmentStore({
       _path(0): Uint8List(attachmentMaximumBytes + 1),
     });
     await expectLater(
       encodeCanvasProject(document, overLimit),
+      throwsFormatException,
+    );
+
+    final oversizedDocument = _encode(_projectArchive(_document(markdown: '')));
+    await expectLater(
+      decodeCanvasProject(_setFirstEntryDeclaredSize(oversizedDocument, canvasProjectMaximumBytes + 1)),
+      throwsFormatException,
+    );
+
+    final oversizedAttachment = _encode(
+      _projectArchive(
+        _document(markdown: '![large](${_path(0)})'),
+        attachments: {_path(0): Uint8List.fromList(onePixelPngBytes)},
+      ),
+    );
+    await expectLater(
+      decodeCanvasProject(_setEntryDeclaredSize(oversizedAttachment, _path(0), attachmentMaximumBytes + 1)),
+      throwsFormatException,
+    );
+
+    final underdeclared = _encode(
+      _projectArchive(_document(markdown: ''), documentJson: jsonEncode({'padding': List.filled(100000, 'x')})),
+    );
+    await expectLater(
+      decodeCanvasProject(_corruptFirstEntryChecksum(_setFirstEntryDeclaredSize(underdeclared, 0))),
       throwsFormatException,
     );
   });
@@ -337,10 +388,148 @@ class _CountingAttachmentStore extends TestAttachmentStore {
   }
 }
 
+class _LimitedOutput extends OutputMemoryStream {
+  _LimitedOutput(this.maximumBytes) : super(size: maximumBytes);
+
+  final int maximumBytes;
+
+  void _check(int additionalBytes) {
+    if (additionalBytes > maximumBytes - length) {
+      throw const FormatException('Output limit exceeded');
+    }
+  }
+
+  @override
+  void writeByte(int value) {
+    _check(1);
+    super.writeByte(value);
+  }
+
+  @override
+  void writeBytes(List<int> bytes, {int? length}) {
+    _check(length ?? bytes.length);
+    super.writeBytes(bytes, length: length);
+  }
+
+  @override
+  void writeStream(InputStream stream) {
+    _check(stream.length);
+    super.writeStream(stream);
+  }
+
+  @override
+  void writeBackReference(int distance, int count) {
+    _check(count);
+    super.writeBackReference(distance, count);
+  }
+}
+
 // ---------- Test helpers ----------
 
-Future<CanvasProject> _decodeJson(Map<String, Object?> value) =>
-    decodeCanvasProject(Uint8List.fromList(utf8.encode(jsonEncode(value))));
+Archive _projectArchive(
+  CanvasDocument document, {
+  String? documentJson,
+  Map<String, Uint8List> attachments = const {},
+}) {
+  final archive = Archive()
+    ..add(
+      ArchiveFile.string(
+        'document.json',
+        documentJson ?? const JsonEncoder.withIndent('  ').convert(document.toJson()),
+      ),
+    );
+  for (final entry in attachments.entries) {
+    archive.add(ArchiveFile.bytes(entry.key, entry.value));
+  }
+  return archive;
+}
+
+Uint8List _encode(Archive archive) => ZipEncoder().encodeBytes(archive);
+
+int _eocdOffset(Uint8List bytes) {
+  for (var offset = bytes.length - 22; offset >= 0; offset--) {
+    if (_readUint32(bytes, offset) == 0x06054b50) return offset;
+  }
+  throw StateError('No ZIP end record');
+}
+
+int _readUint16(Uint8List bytes, int offset) => bytes[offset] | (bytes[offset + 1] << 8);
+
+int _readUint32(Uint8List bytes, int offset) =>
+    bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24);
+
+void _writeUint16(Uint8List bytes, int offset, int value) {
+  bytes[offset] = value & 0xff;
+  bytes[offset + 1] = (value >> 8) & 0xff;
+}
+
+void _writeUint32(Uint8List bytes, int offset, int value) {
+  for (var byte = 0; byte < 4; byte++) {
+    bytes[offset + byte] = (value >> (8 * byte)) & 0xff;
+  }
+}
+
+Uint8List _duplicateFirstCentralEntry(Uint8List source) {
+  final eocd = _eocdOffset(source);
+  final central = _readUint32(source, eocd + 16);
+  final recordLength =
+      46 + _readUint16(source, central + 28) + _readUint16(source, central + 30) + _readUint16(source, central + 32);
+  final result = Uint8List(source.length + recordLength)
+    ..setRange(0, eocd, source)
+    ..setRange(eocd, eocd + recordLength, source, central)
+    ..setRange(eocd + recordLength, source.length + recordLength, source, eocd);
+  final updatedEocd = eocd + recordLength;
+  _writeUint16(result, updatedEocd + 8, _readUint16(source, eocd + 8) + 1);
+  _writeUint16(result, updatedEocd + 10, _readUint16(source, eocd + 10) + 1);
+  _writeUint32(result, updatedEocd + 12, _readUint32(source, eocd + 12) + recordLength);
+  return result;
+}
+
+Uint8List _markFirstEntryAsSymlink(Uint8List source) {
+  final bytes = Uint8List.fromList(source);
+  final central = _readUint32(bytes, _eocdOffset(bytes) + 16);
+  _writeUint16(bytes, central + 4, (3 << 8) | 20);
+  _writeUint32(bytes, central + 38, 0xa1ff0000);
+  return bytes;
+}
+
+Uint8List _corruptFirstEntryChecksum(Uint8List source) {
+  final bytes = Uint8List.fromList(source);
+  final central = _readUint32(bytes, _eocdOffset(bytes) + 16);
+  final local = _readUint32(bytes, central + 42);
+  _writeUint32(bytes, central + 16, 0);
+  _writeUint32(bytes, local + 14, 0);
+  return bytes;
+}
+
+Uint8List _setFirstEntryDeclaredSize(Uint8List source, int size) {
+  final bytes = Uint8List.fromList(source);
+  final central = _readUint32(bytes, _eocdOffset(bytes) + 16);
+  return _setEntryDeclaredSize(bytes, _readZipName(bytes, central), size);
+}
+
+Uint8List _setEntryDeclaredSize(Uint8List source, String name, int size) {
+  final bytes = Uint8List.fromList(source);
+  final eocd = _eocdOffset(bytes);
+  var central = _readUint32(bytes, eocd + 16);
+  final entries = _readUint16(bytes, eocd + 10);
+  for (var index = 0; index < entries; index++) {
+    final recordLength =
+        46 + _readUint16(bytes, central + 28) + _readUint16(bytes, central + 30) + _readUint16(bytes, central + 32);
+    if (_readZipName(bytes, central) == name) {
+      _writeUint32(bytes, central + 24, size);
+      _writeUint32(bytes, _readUint32(bytes, central + 42) + 22, size);
+      return bytes;
+    }
+    central += recordLength;
+  }
+  throw StateError('No ZIP entry $name');
+}
+
+String _readZipName(Uint8List bytes, int centralHeader) {
+  final length = _readUint16(bytes, centralHeader + 28);
+  return utf8.decode(bytes.sublist(centralHeader + 46, centralHeader + 46 + length));
+}
 
 CanvasDocument _document({required String markdown}) => CanvasDocument(
   background: CanvasBackgroundKind.plain,
@@ -392,11 +581,5 @@ MediaElementData _media(String url) => MediaElementData(
   width: 400,
   url: url,
 );
-
-Map<String, Object?> _validProjectJson() => {
-  'format': 'elseplane-canvas',
-  'document': _document(markdown: '').toJson(),
-  'attachments': <String, Object?>{},
-};
 
 String _path(int index) => 'attachments/0000000$index-0000-4000-8000-000000000000.png';

@@ -12,7 +12,8 @@ then read the authority relevant to the work. Do not create a separate
   [persistence](arch/persistence.md), and [UI](arch/ui.md).
 - [Interaction model](specs/interaction-model.md) is the accepted product
   behavior contract. The accepted [paste cancellation decision](adr/0001-cancel-unfinished-pastes.md)
-  records its own rationale and consequences.
+  and [canvas document and media decision](adr/0002-separate-documents-and-media.md)
+  record their rationale and consequences.
 - [Backlog](backlog.md) contains reported defects, proposals, and open
   verification. Entries are not accepted behavior or architecture.
 - [Plans](plans/) track active migration work and its checks; they do not

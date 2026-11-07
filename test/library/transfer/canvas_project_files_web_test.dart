@@ -13,7 +13,7 @@ import 'package:web/web.dart' as web;
 
 void main() {
   for (final (name, mimeType, contents) in [
-    ('canvas.elseplane.json', 'application/json', <int>[123, 125]),
+    ('canvas.elseplane.zip', 'application/zip', <int>[80, 75, 3, 4]),
     ('library.elseplane.zip', 'application/zip', <int>[80, 75, 3, 4]),
   ]) {
     test('downloads $name without requesting a native save location', () async {

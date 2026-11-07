@@ -167,7 +167,7 @@ class LibraryController extends ChangeNotifier {
   Future<bool> exportCanvas(String fileId) async {
     final document = snapshot.file(fileId).document!;
     final bytes = await encodeCanvasProject(document, _attachments);
-    return await _files.save(bytes, suggestedName: 'canvas.elseplane.json', mimeType: 'application/json');
+    return await _files.save(bytes, suggestedName: 'canvas.elseplane.zip', mimeType: 'application/zip');
   }
 
   Future<bool> backup() async {
