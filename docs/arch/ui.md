@@ -26,6 +26,13 @@
   arrangement calculation there; commit its result through editor operations.
 - Use the `flutter_markdown_plus` fork's exposed styling API first. Modify the
   fork when its rendering mechanics cannot achieve required styling.
+- `lib/canvas/editor/elements/media/media_element_view.dart` owns one private
+  `_MediaBody` for shared tap, drag, cancellation, device filtering, sizing, and
+  resize animation. Image content keeps its image clip and selection border;
+  `MediaLinkCard` remains the link content, with only the keyboard and semantics
+  wrapper around the shared body. Media resources stay with their existing
+  resource owner. Do not add provider-specific widgets or a generic media
+  framework.
 - Isolate platform implementations and reuse installed dependencies.
 
 ## Previews and tests

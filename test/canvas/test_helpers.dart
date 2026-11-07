@@ -25,6 +25,7 @@ import 'package:elseplane/theme/starless.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 
 class TestLibraryStore implements LibraryStore {
   TestLibraryStore([this.initial]) : library = CanvasLibrary.initial(initial);
@@ -184,8 +185,8 @@ TextMarkdownImages testMarkdownImages([String source = '']) {
 }
 
 CodeEditorResources testCodeModel(CodeElementData data) => CodeEditorResources(_elementSession(data), data);
-MediaResources testMediaModel(MediaElementData data, AttachmentStore store) =>
-    MediaResources(_elementSession(data), data, store);
+MediaResources testMediaModel(MediaElementData data, AttachmentStore store, {http.Client? previewClient}) =>
+    MediaResources(_elementSession(data), data, store, previewClient: previewClient);
 ElementFixture<ShapeElementData> testShapeFixture(ShapeElementData data) =>
     ElementFixture(_elementSession(data), data.id);
 PenResources testPenModel(PenElementData data) => PenResources(_elementSession(data), data);

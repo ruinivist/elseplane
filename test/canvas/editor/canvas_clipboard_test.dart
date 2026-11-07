@@ -35,6 +35,19 @@ void main() {
     expect(restored.map((element) => element.autoArrange), document.elements.map((element) => element.autoArrange));
   });
 
+  test('clipboard preserves a media source without saved presentation state', () {
+    final media = MediaElementData(
+      id: 'link',
+      position: Offset.zero,
+      width: 480,
+      url: 'https://example.com/article',
+    );
+    final restored = decodeCanvasClipboard(encodeCanvasClipboard([media]))!.single as MediaElementData;
+    expect(restored.url, media.url);
+    expect(restored.toJson(), isNot(contains('kind')));
+    expect(restored, media);
+  });
+
   test(
     'clipboard payload round-trips and rejects recognized malformed data',
     () {
@@ -91,6 +104,54 @@ void main() {
             )!.single
             as ShapeElementData;
     expect(restored.toJson(), shape.toJson());
+  });
+
+  test('serialized media sources validate before clipboard insertion', () async {
+    final invalidSources = [
+      'javascript:alert(1)',
+      'https://user:secret@example.com/path',
+      'https://example.com/${List.filled(2049, 'x').join()}',
+    ];
+    for (final source in invalidSources) {
+      final payload = encodeCanvasClipboard([
+        MediaElementData(id: 'media', position: Offset.zero, width: 480, url: source),
+      ]);
+      expect(() => decodeCanvasClipboard(payload), throwsFormatException, reason: source);
+
+      final session = testSession(CanvasDocument(background: CanvasBackgroundKind.plain, elements: []));
+      var errors = 0;
+      final clipboard = CanvasClipboard(
+        session: session,
+        attachments: TestAttachmentStore(),
+        enabled: () => true,
+        menuOpen: () => false,
+        editing: () => false,
+        pointerPosition: () => null,
+        scale: () => 1,
+        screenToCanvas: (position) => position,
+        viewportSize: () => const Size(800, 600),
+        boundsOf: (_) => Rect.zero,
+        mediaWidth: 480,
+        clearEditing: () {},
+        onError: (_) => errors++,
+        readClipboard: () async => (text: payload, image: null),
+      );
+      await clipboard.paste(null);
+      expect(session.document.elements, isEmpty);
+      expect(errors, 1);
+    }
+
+    for (final source in [
+      '',
+      'attachments/11111111-1111-4111-8111-111111111111.png',
+      'https://example.com/image.JPEG?download=1',
+      'https://example.com/article',
+    ]) {
+      final payload = encodeCanvasClipboard([
+        MediaElementData(id: 'media', position: Offset.zero, width: 480, url: source),
+      ]);
+      expect((decodeCanvasClipboard(payload)!.single as MediaElementData).url, source);
+    }
   });
 
   for (final cut in [false, true]) {
@@ -711,10 +772,16 @@ void main() {
       tester.widget<MediaElementView>(find.byType(MediaElementView)).resources.data.url,
       'https://example.com/image.png',
     );
+    expect(tester.widget<MediaElementView>(find.byType(MediaElementView)).resources.isLink, isFalse);
+
+    clipboard = (text: 'https://example.com/articles/design', image: null);
+    await _shortcut(tester, LogicalKeyboardKey.keyV);
+    await tester.pump();
+    expect(tester.widgetList<MediaElementView>(find.byType(MediaElementView)).last.resources.isLink, isTrue);
 
     clipboard = (text: 'ordinary text', image: null);
     await _shortcut(tester, LogicalKeyboardKey.keyV);
-    expect(find.byType(MediaElementView), findsOneWidget);
+    expect(find.byType(MediaElementView), findsNWidgets(2));
 
     clipboard = (
       text: 'https://example.com/ignored.png',

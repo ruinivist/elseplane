@@ -95,6 +95,29 @@ void main() {
     archive.add(ArchiveFile.bytes('library/Canvas.json', content));
     await expectLater(decodeCanvasLibraryArchive(ZipEncoder().encodeBytes(archive)), throwsFormatException);
   });
+
+  test('library archive decoding validates incoming media sources', () async {
+    for (final source in [
+      'javascript:alert(1)',
+      'https://user:secret@example.com/path',
+      'https://example.com/${List.filled(2049, 'x').join()}',
+    ]) {
+      await expectLater(decodeCanvasLibraryArchive(await _mediaArchive([source])), throwsFormatException);
+    }
+
+    final sources = [
+      '',
+      _path,
+      'https://example.com/image.JPEG?download=1',
+      'https://example.com/article',
+    ];
+    final decoded = await decodeCanvasLibraryArchive(await _mediaArchive(sources));
+    expect(
+      decoded.library.current.document!.elements.whereType<MediaElementData>().map((element) => element.url),
+      sources,
+    );
+    expect(decoded.attachments[_path], onePixelPngBytes);
+  });
 }
 
 // ---------- Fixtures ----------
@@ -107,3 +130,18 @@ CanvasDocument _document(String id) => CanvasDocument(
     MediaElementData(id: id, position: Offset.zero, width: 120, url: _path),
   ],
 );
+
+Future<Uint8List> _mediaArchive(List<String> sources) {
+  final document = CanvasDocument(
+    background: CanvasBackgroundKind.plain,
+    elements: [
+      for (var index = 0; index < sources.length; index++)
+        MediaElementData(id: 'media-$index', position: Offset.zero, width: 120, url: sources[index]),
+    ],
+  );
+  final library = CanvasLibrary(
+    files: [CanvasFile(id: 'canvas', name: 'Canvas', document: document)],
+    currentId: 'canvas',
+  );
+  return encodeCanvasLibraryArchive(library, TestAttachmentStore({_path: onePixelPngBytes}));
+}

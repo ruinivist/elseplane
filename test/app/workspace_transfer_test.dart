@@ -482,6 +482,46 @@ void main() {
     completer.complete(null);
     await tester.pumpAndSettle();
   });
+
+  testWidgets('unsafe media import preserves the live document, attachments, and history', (tester) async {
+    final oldDocument = _document(markdown: '![old]($_path0)');
+    final attachments = _FakeAttachmentStore({_path0: onePixelPngBytes});
+    final libraryStore = _FakeLibraryStore(oldDocument);
+    final unsafeDocument = _document(markdown: 'incoming').withElements(
+      (elements) => elements.add(
+        MediaElementData(
+          id: 'unsafe-media',
+          position: Offset.zero,
+          width: 480,
+          url: 'javascript:alert(1)',
+        ),
+      ),
+    );
+    final files = _FakeProjectFiles()..opened = await encodeCanvasProject(unsafeDocument, _FakeAttachmentStore());
+
+    await pumpElseplaneApp(
+      tester,
+      libraryStore: libraryStore,
+      attachmentStore: attachments,
+      projectFiles: files,
+    );
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.session
+      ..setBackground(CanvasBackgroundKind.dotGrid)
+      ..finishOperation();
+    final session = tester.widget<TextElementView>(find.byType(TextElementView)).resources.session;
+    await pumpPastSave(tester);
+    final liveDocument = session.document;
+    await _openCanvasSettings(tester);
+    await tester.tap(find.byKey(const ValueKey('canvas-import-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not import canvas'), findsOneWidget);
+    expect(session.document, liveDocument);
+    expect(attachments.files, {_path0: onePixelPngBytes});
+    expect(attachments.writeCalls, 0);
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.session.undo();
+    expect(session.document, oldDocument);
+  });
 }
 
 Future<void> _openCanvasSettings(WidgetTester tester) async {

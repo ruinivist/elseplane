@@ -41,8 +41,13 @@ values and grant no mutation rights.
   resource objects only when needed. Text and code scroll controllers retain
   offsets across detachment; culling does not retire resources. Inline Markdown
   images load lazily and retain source-keyed reads and image streams with text
-  resources; preview widgets only render those resources. Menus, hover, and
-  picker expansion stay local to presentation.
+  resources; preview widgets only render those resources. Media loads only
+  accepted local attachment references and valid external image sources;
+  arbitrary invalid legacy sources remain unresolved and are never requested or
+  opened. Provider metadata and thumbnail requests start when visible and retain
+  source-keyed runtime results across culling. Source changes, removal, and
+  document replacement invalidate them; stale completions are ignored. Menus,
+  hover, and picker expansion stay local to presentation.
 - **CanvasPage:** composes page chrome and dialogs. CanvasView retains the grid
   and element resources. Replacing a session creates fresh input, clipboard,
   and resource lifetimes while preserving the viewport.
@@ -96,7 +101,8 @@ values and grant no mutation rights.
 - Async edits capture session and target lifetime tokens and follow the
   [paste cancellation decision](../adr/0001-cancel-unfinished-pastes.md).
   Logical field changes, editing exit, tool changes, app dialogs, restoration,
-  replacement, removal, and disposal invalidate affected edits. Browser focus
+  replacement, removal, and disposal invalidate affected edits. Media metadata
+  and thumbnail completions also check source and document lifetime. Browser focus
   loss, permission prompts, device selection, and ordinary edits in the same
   context do not. Navigation cancels unfinished work and flushes completed
   snapshots without waiting for clipboard reads or uploads. Image display loads

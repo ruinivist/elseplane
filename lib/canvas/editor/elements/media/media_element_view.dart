@@ -2,12 +2,13 @@
 // Used by the canvas media tool and persisted media elements.
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/image_import.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/document/media_url.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
+import 'package:elseplane/canvas/editor/elements/media/media_link_card.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_resources.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
 import 'package:elseplane/theme/theme.dart';
@@ -16,8 +17,10 @@ import 'package:elseplane/ui/common/surface.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:super_clipboard/super_clipboard.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 const _imageTypes = XTypeGroup(
@@ -83,8 +86,20 @@ class _MediaElementViewState extends State<MediaElementView> {
     super.initState();
     _clipboardEvents?.registerPasteEventListener(_onWebPaste);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _portalController.show();
+      if (!mounted) return;
+      _portalController.show();
+      widget.resources.loadLinkPreview();
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant MediaElementView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data.url != widget.data.url) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.resources.loadLinkPreview();
+      });
+    }
   }
 
   @override
@@ -148,11 +163,16 @@ class _MediaElementViewState extends State<MediaElementView> {
       listenable: widget.resources,
       builder: (context, _) {
         final model = widget.resources;
+        final showUrlPanel = model.hasImage || model.isLink;
         return Semantics(
           container: true,
           image: model.hasImage,
           selected: widget.selected,
-          label: model.hasImage ? 'Image media' : 'Image URL',
+          label: model.isLink
+              ? 'Link card'
+              : model.hasImage
+              ? 'Image media'
+              : 'Image URL',
           child: OverlayPortal.overlayChildLayoutBuilder(
             controller: _portalController,
             overlayChildBuilder: (context, layout) {
@@ -171,14 +191,14 @@ class _MediaElementViewState extends State<MediaElementView> {
                     child: SizedBox(
                       width: panelWidth,
                       child: IgnorePointer(
-                        ignoring: !widget.active || !model.hasImage,
+                        ignoring: !widget.active || !showUrlPanel,
                         child: AnimatedSwitcher(
                           duration: const Duration(milliseconds: 260),
                           reverseDuration: const Duration(milliseconds: 180),
                           switchInCurve: Curves.easeOutCubic,
                           switchOutCurve: Curves.easeOutCubic,
                           transitionBuilder: _mediaTransition,
-                          child: widget.active && model.hasImage
+                          child: widget.active && showUrlPanel
                               ? TapRegion(
                                   groupId: model,
                                   child: Listener(
@@ -203,13 +223,12 @@ class _MediaElementViewState extends State<MediaElementView> {
                 ),
               );
             },
-            child: model.hasImage
+            child: model.hasImage || model.isLink
                 ? TapRegion(
                     groupId: model,
                     onTapOutside: (_) => widget.onDeactivate(),
-                    child: _MediaImage(
+                    child: _MediaBody(
                       resources: model,
-                      data: widget.data,
                       selected: widget.selected,
                       active: widget.active,
                       onActivate: widget.onActivate,
@@ -236,15 +255,9 @@ class _MediaElementViewState extends State<MediaElementView> {
   }
 }
 
-// Renders a loaded media image with selection and resize affordances.
-// Used internally by the media tool after image resolution succeeds.
-
-// ---------- Image ----------
-
-class _MediaImage extends StatefulWidget {
-  const _MediaImage({
+class _MediaBody extends StatefulWidget {
+  const _MediaBody({
     required this.resources,
-    required this.data,
     required this.selected,
     required this.active,
     required this.onActivate,
@@ -255,7 +268,6 @@ class _MediaImage extends StatefulWidget {
   });
 
   final MediaResources resources;
-  final MediaElementData data;
   final bool selected;
   final bool active;
   final VoidCallback onActivate;
@@ -265,10 +277,10 @@ class _MediaImage extends StatefulWidget {
   final ValueChanged<Offset> onResize;
 
   @override
-  State<_MediaImage> createState() => _MediaImageState();
+  State<_MediaBody> createState() => _MediaBodyState();
 }
 
-class _MediaImageState extends State<_MediaImage> {
+class _MediaBodyState extends State<_MediaBody> {
   Offset? _dragPosition;
 
   @override
@@ -276,8 +288,28 @@ class _MediaImageState extends State<_MediaImage> {
     final theme = BTheme.of(context);
     final colors = theme.colors;
     final model = widget.resources;
-    final image = model.image!;
-    return SizedBox.fromSize(
+    final content = model.hasImage
+        ? Positioned.fill(
+            child: ClipRRect(
+              borderRadius: theme.geo.radiusSmall,
+              clipBehavior: Clip.antiAliasWithSaveLayer,
+              child: Image(
+                key: const ValueKey('media-image'),
+                image: model.image!,
+                fit: BoxFit.cover,
+              ),
+            ),
+          )
+        : MediaLinkCard(
+            url: model.data.url,
+            width: model.data.width,
+            target: model.linkTarget,
+            metadata: model.linkMetadata,
+            thumbnail: model.thumbnailImage,
+            thumbnailFailed: model.thumbnailFailed,
+            selected: widget.selected,
+          );
+    Widget body = SizedBox.fromSize(
       size: model.canvasSize,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -304,19 +336,10 @@ class _MediaImageState extends State<_MediaImage> {
           widget.onChangeEnd?.call();
         },
         child: Stack(
+          fit: StackFit.expand,
           children: [
-            Positioned.fill(
-              child: ClipRRect(
-                borderRadius: theme.geo.radiusSmall,
-                clipBehavior: Clip.antiAliasWithSaveLayer,
-                child: Image(
-                  key: const ValueKey('media-image'),
-                  image: image,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-            if (widget.selected)
+            content,
+            if (model.hasImage && widget.selected)
               Positioned.fill(
                 child: IgnorePointer(
                   child: DecoratedBox(
@@ -350,9 +373,7 @@ class _MediaImageState extends State<_MediaImage> {
                             ),
                           },
                         )
-                      : const SizedBox(
-                          key: ValueKey('media-resize-handle-hidden'),
-                        ),
+                      : const SizedBox(key: ValueKey('media-resize-handle-hidden')),
                 ),
               ),
             ),
@@ -360,6 +381,30 @@ class _MediaImageState extends State<_MediaImage> {
         ),
       ),
     );
+    if (model.isLink) {
+      final title = model.linkMetadata?.title ?? Uri.tryParse(model.data.url)?.host ?? 'Link card';
+      body = Focus(
+        key: const ValueKey('media-link-card-focus'),
+        focusNode: model.cardFocusNode,
+        onKeyEvent: (_, event) {
+          if (event is KeyDownEvent &&
+              (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.space)) {
+            widget.onActivate();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Semantics(
+          container: true,
+          button: true,
+          selected: widget.selected,
+          label: 'Link card: $title',
+          onTap: widget.onActivate,
+          child: body,
+        ),
+      );
+    }
+    return body;
   }
 }
 
@@ -395,6 +440,17 @@ class _MediaUrlPanel extends StatefulWidget {
 
 class _MediaUrlPanelState extends State<_MediaUrlPanel> {
   Offset? _dragPosition;
+
+  Future<void> _openLink() async {
+    final url = widget.resources.data.url;
+    try {
+      if (await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) return;
+    } on Exception {
+      // The same feedback covers unavailable and failed platform launchers.
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open link')));
+  }
 
   void _edit() {
     widget.onActivate();
@@ -454,21 +510,33 @@ class _MediaUrlPanelState extends State<_MediaUrlPanel> {
                           widget.resources.session.invalidatePendingEdits();
                           widget.resources.commitUrl();
                         },
+                        onChanged: (_) => widget.resources.clearUrlValidationError(),
                         minLines: 1,
                         maxLines: 3,
                         keyboardType: TextInputType.url,
                         textInputAction: TextInputAction.done,
                         cursorColor: colors.accent,
                         style: theme.typo.body.copyWith(color: colors.textPrimary),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: 'Paste link',
+                          errorText: widget.resources.hasInvalidUrlDraft ? 'Enter a valid HTTPS URL' : null,
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         ),
                       ),
                     ),
                   ),
                 ),
+                if (widget.active && widget.resources.isLink)
+                  TextFieldTapRegion(
+                    groupId: widget.resources,
+                    child: IconButton(
+                      key: const ValueKey('media-open-link'),
+                      tooltip: 'Open link',
+                      onPressed: isSupportedMediaUrl(widget.resources.data.url) ? _openLink : null,
+                      icon: const Icon(Icons.open_in_new, size: 20),
+                    ),
+                  ),
                 TextFieldTapRegion(
                   groupId: widget.resources,
                   child: IconButton(

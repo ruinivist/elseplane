@@ -11,12 +11,13 @@ then read the authority relevant to the work. Do not create a separate
   [ownership](arch/ownership.md), [editor lifecycles](arch/editor-lifecycles.md),
   [persistence](arch/persistence.md), and [UI](arch/ui.md).
 - [Interaction model](specs/interaction-model.md) is the accepted product
-  behavior contract. The accepted [paste cancellation decision](adr/0001-cancel-unfinished-pastes.md)
-  and [canvas document and media decision](adr/0002-separate-documents-and-media.md)
+  behavior contract. The accepted [paste cancellation decision](adr/0001-cancel-unfinished-pastes.md),
+  [canvas document and media decision](adr/0002-separate-documents-and-media.md),
+  and [media link cards decision](adr/0003-media-link-cards-without-embeds.md)
   record their rationale and consequences.
 - [Backlog](backlog.md) contains reported defects, proposals, and open
   verification. Entries are not accepted behavior or architecture.
-- [Plans](plans/) track active migration work and its checks; they do not
+- [Plans](plans/) track active work and its checks; they do not
   override architecture or accepted specifications. Completed plans belong in
   [archive](archive/).
 - [Playbooks](playbooks/) contain practical setup and development commands.

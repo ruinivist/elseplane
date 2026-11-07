@@ -1,19 +1,25 @@
-// Defines accepted image formats, media geometry limits, and URL validation.
-// Used by media selection, loading, layout, and import flows.
+// Classifies media sources and defines URL-panel geometry.
+// Used by media loading, layout, and editor validation.
+
+import 'package:elseplane/attachments/attachment_store.dart';
+import 'package:elseplane/canvas/document/media_url.dart';
 
 // ---------- Limits and formats ----------
 
 const mediaUrlPanelMinimumWidth = 480.0;
 const mediaUrlPanelCanvasHeight = 48.0;
+
 // ---------- Validation ----------
 
-/// Accepts secure, absolute image URLs without encoded hosts or whitespace.
-/// Used before the media model attempts a network image load.
-bool isSupportedMediaUrl(String source) {
+bool isValidMediaSource(String source) =>
+    source.isEmpty || attachmentPathPattern.hasMatch(source) || isSupportedMediaUrl(source);
+
+bool isImageMediaSource(String source) {
+  if (attachmentPathPattern.hasMatch(source)) return true;
   final uri = Uri.tryParse(source);
-  return uri != null &&
-      uri.scheme == 'https' &&
-      uri.host.isNotEmpty &&
-      !uri.host.contains('%') &&
-      !RegExp(r'\s').hasMatch(source);
+  return isSupportedMediaUrl(source) &&
+      uri != null &&
+      RegExp(r'\.(png|jpe?g|gif|webp)$', caseSensitive: false).hasMatch(uri.path);
 }
+
+bool isLinkMediaSource(String source) => isSupportedMediaUrl(source) && !isImageMediaSource(source);

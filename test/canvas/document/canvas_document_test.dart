@@ -160,6 +160,7 @@ void main() {
     expect(media.width, 400);
     expect(media.url, 'https://example.com/image.png');
     expect(media.rotation, math.pi / 4);
+    expect(media.toJson(), isNot(contains('kind')));
 
     final shape = elements[5] as ShapeElementData;
     expect(shape.kind, ShapeKind.ellipse);
@@ -186,6 +187,12 @@ void main() {
       (snapshot.elements[2] as PenElementData).points,
       same((document.elements[2] as PenElementData).points),
     );
+  });
+
+  test('media serialization stores only source and geometry', () {
+    final media = _encodedMedia();
+    expect(media, isNot(contains('kind')));
+    expect(() => MediaElementData.fromJson({...media, 'kind': 'link'}), throwsFormatException);
   });
 
   test('snapshots freeze incoming collections and share unchanged immutable values', () {

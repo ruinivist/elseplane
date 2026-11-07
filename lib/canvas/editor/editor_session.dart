@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/editor_history.dart';
+import 'package:elseplane/canvas/editor/media_source.dart';
 import 'package:elseplane/canvas/geometry/element_geometry.dart';
 import 'package:flutter/foundation.dart';
 
@@ -293,8 +294,16 @@ class EditorSession extends ChangeNotifier {
       _change([id], (a) => (a as CodeElementData).copyWith(background: background));
   void setLineNumbers(String id, {required bool value}) =>
       _change([id], (a) => (a as CodeElementData).copyWith(showLineNumbers: value));
-  void setMediaUrl(String id, String url) =>
-      _change([id], (a) => (a as MediaElementData).copyWith(url: url), promote: true);
+  bool setMediaUrl(String id, String url) {
+    if (!_live || !isValidMediaSource(url)) return false;
+    _change(
+      [id],
+      (a) => (a as MediaElementData).copyWith(url: url),
+      promote: true,
+    );
+    return true;
+  }
+
   void setShapeOptions(
     String id, {
     ShapeKind? kind,

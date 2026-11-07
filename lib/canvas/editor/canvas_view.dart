@@ -17,6 +17,7 @@ import 'package:elseplane/canvas/editor/elements/code/code_editor_resources.dart
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_layout.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/media/media_link_preview.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_resources.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_preview.dart';
@@ -193,7 +194,9 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       boundsOf: (value) => elementBounds(
         value,
         codeTitleHeight: codeTitleHeight,
-        mediaSize: const Size(mediaUrlPanelMinimumWidth, mediaUrlPanelCanvasHeight),
+        mediaSize: value is MediaElementData && isLinkMediaSource(value.url)
+            ? mediaLinkCardSize(value.url, value.width)
+            : const Size(mediaUrlPanelMinimumWidth, mediaUrlPanelCanvasHeight),
       ),
       mediaWidth: mediaNodeDefaultWidth,
       clearEditing: () {
@@ -891,7 +894,9 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     codeTitleHeight: codeTitleHeight,
     mediaSize: value is MediaElementData
         ? (_resources[value.id] as MediaResources?)?.canvasSize ??
-              const Size(mediaUrlPanelMinimumWidth, mediaUrlPanelCanvasHeight)
+              (isLinkMediaSource(value.url)
+                  ? mediaLinkCardSize(value.url, value.width)
+                  : const Size(mediaUrlPanelMinimumWidth, mediaUrlPanelCanvasHeight))
         : Size.zero,
   );
   double _rotation(CanvasElementData value) => switch (value) {
@@ -900,10 +905,11 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     MediaElementData(:final rotation) => rotation,
     _ => 0,
   };
-  bool _canRotate(CanvasElementData value) =>
-      value is TextElementData ||
-      value is CodeElementData ||
-      value is MediaElementData && (_resources[value.id]! as MediaResources).hasImage;
+  bool _canRotate(CanvasElementData value) => switch (value) {
+    TextElementData() || CodeElementData() => true,
+    MediaElementData() => (_resources[value.id]! as MediaResources).canRotate,
+    _ => false,
+  };
   void _syncGeometry(CanvasElementData value) {
     final bounds = _bounds(value);
     _canvasController.update(

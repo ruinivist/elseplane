@@ -13,6 +13,7 @@ lib/
     document/
       canvas_document.dart           # Immutable ordered document
       canvas_element.dart             # Sealed element values and saved enums
+      media_url.dart                  # Pure external media URL policy
       document_codec.dart             # Encoding, decoding, boundary validation
     geometry/                        # Paths, bounds, hit tests, transforms
     editor/
@@ -73,6 +74,10 @@ elements and stroke samples may be shared between snapshots. `Offset`, `Size`,
 `Rect`, and `Color` are suitable value types. Saved enums belong to the
 document; background builders and syntax-highlighting mappings belong to
 presentation. Font-download availability does not determine document validity.
+The pure media URL policy belongs to `document/media_url.dart`; it has no widget,
+network, or storage dependencies. Editor input, clipboard handling, project
+import, and library restore share it at their trust boundaries. The library uses
+the document policy without importing the editor.
 
 Keep one in-memory representation per concept. Convert JSON and color formats
 at boundaries, validate external input, and enforce invariants on edits.

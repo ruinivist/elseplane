@@ -17,12 +17,24 @@ import '../../canvas/test_helpers.dart';
 
 void main() {
   test('mixed projects round-trip with deterministic attachments', () async {
-    final document = _document(
-      markdown: '''
+    final document =
+        _document(
+          markdown: '''
 ![first](attachments/00000000-0000-4000-8000-000000000000.png)
 ![second](attachments/00000001-0000-4000-8000-000000000000.png)
 ''',
-    ).withElements((elements) => elements.add(_media(_path(2))));
+        ).withElements(
+          (elements) => elements
+            ..add(_media(_path(2)))
+            ..add(
+              MediaElementData(
+                id: 'link-media',
+                position: const Offset(40, 50),
+                width: 480,
+                url: 'https://example.com/articles/design?tracking=kept',
+              ),
+            ),
+        );
     final first = onePixelPngBytes;
     final second = Uint8List.fromList(onePixelPngBytes);
     final third = Uint8List.fromList(onePixelPngBytes);
@@ -374,6 +386,37 @@ Suffix ${_path(1)}
       throwsFormatException,
     );
   });
+
+  test('project decoding validates incoming media sources before returning', () async {
+    for (final source in [
+      'javascript:alert(1)',
+      'https://user:secret@example.com/path',
+      'https://example.com/${List.filled(2049, 'x').join()}',
+    ]) {
+      final document = CanvasDocument(
+        background: CanvasBackgroundKind.plain,
+        elements: [_mediaSource('unsafe', source)],
+      );
+      await expectLater(decodeCanvasProject(_encode(_projectArchive(document))), throwsFormatException, reason: source);
+    }
+
+    final attachment = _path(3);
+    final sources = [
+      '',
+      attachment,
+      'https://example.com/image.JPEG?download=1',
+      'https://example.com/article',
+    ];
+    final document = CanvasDocument(
+      background: CanvasBackgroundKind.plain,
+      elements: [for (var index = 0; index < sources.length; index++) _mediaSource('media-$index', sources[index])],
+    );
+    final project = await decodeCanvasProject(
+      _encode(_projectArchive(document, attachments: {attachment: onePixelPngBytes})),
+    );
+    expect(project.document.elements.whereType<MediaElementData>().map((element) => element.url), sources);
+    expect(project.attachments[attachment], onePixelPngBytes);
+  });
 }
 
 class _CountingAttachmentStore extends TestAttachmentStore {
@@ -578,6 +621,13 @@ CanvasDocument _document({required String markdown}) => CanvasDocument(
 MediaElementData _media(String url) => MediaElementData(
   id: 'media-1',
   position: const Offset(20, 30),
+  width: 400,
+  url: url,
+);
+
+MediaElementData _mediaSource(String id, String url) => MediaElementData(
+  id: id,
+  position: Offset.zero,
   width: 400,
   url: url,
 );

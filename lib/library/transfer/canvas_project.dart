@@ -8,6 +8,7 @@ import 'package:archive/archive.dart';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/image_import.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/document/media_url.dart';
 import 'package:flutter_markdown_plus/latex.dart';
 import 'package:markdown/markdown.dart' as md;
 
@@ -178,6 +179,12 @@ Future<CanvasProject> decodeCanvasProject(Uint8List bytes) async {
     rethrow;
   } on Object catch (error) {
     throw FormatException('Invalid document.json: $error');
+  }
+  if (document.elements.whereType<MediaElementData>().any(
+    (element) =>
+        element.url.isNotEmpty && !attachmentPathPattern.hasMatch(element.url) && !isSupportedMediaUrl(element.url),
+  )) {
+    throw const FormatException('Invalid media source in document.json');
   }
 
   final referencedPaths = canvasAttachmentPaths(document);
