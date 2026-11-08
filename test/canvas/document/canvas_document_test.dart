@@ -195,6 +195,18 @@ void main() {
     expect(() => MediaElementData.fromJson({...media, 'kind': 'link'}), throwsFormatException);
   });
 
+  test('canvas documents keep saved media at the 120px minimum width', () {
+    final document = CanvasDocument(
+      background: CanvasBackgroundKind.plain,
+      elements: [
+        MediaElementData(id: 'media-120', position: Offset.zero, width: 120, url: 'https://example.com'),
+      ],
+    );
+
+    final restored = CanvasDocument.fromJson(jsonDecode(jsonEncode(document.toJson())));
+    expect((restored.elements.single as MediaElementData).width, 120);
+  });
+
   test('snapshots freeze incoming collections and share unchanged immutable values', () {
     final controls = [const Offset(40, 5)];
     final arrow = ArrowElementData(

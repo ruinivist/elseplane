@@ -64,11 +64,12 @@ HTML. Use a five-second timeout with no retries. Start requests only when a card
 is visible and retain source-keyed runtime resources across culling. Ignore
 results for a changed source, removed card, or replaced document.
 
-Provider cards have a default 480 by 360 footprint; generic links use 480 by 112.
-Keep each footprint fixed through loading and failure. Metadata must not change
-saved geometry or create history entries. Use the same card components and
-transform behavior for providers. Do not add provider-specific widgets or custom
-transforms.
+Provider cards have a default 480 by 360 footprint; generic links use 480 by 80.
+Both footprints scale proportionally with width and remain fixed through loading
+and failure. Metadata must not change saved geometry or create history entries.
+Use the same card components and transform behavior for providers. Do not add
+provider-specific widgets or custom transforms. Resizing has a 200px minimum
+width, while persisted media down to 120px remains valid.
 
 An inactive link card activates on click and moves on drag, like an image; its
 body does not navigate. The active card exposes an accessible Open link action

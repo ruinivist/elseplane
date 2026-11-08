@@ -422,7 +422,7 @@ void main() {
       ),
     );
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
-    expect(model.canvasSize, const Size(480, 112));
+    expect(model.canvasSize, const Size(480, 80));
     expect(find.byType(MediaLinkCard), findsOneWidget);
     expect(find.textContaining('tracking'), findsNothing);
     expect(find.textContaining('#details'), findsNothing);
@@ -488,7 +488,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(model.data.width, greaterThan(width));
-    expect(model.canvasSize.height / model.canvasSize.width, closeTo(112 / 480, 0.0001));
+    expect(model.canvasSize.height / model.canvasSize.width, closeTo(80 / 480, 0.0001));
 
     await tester.tap(find.byKey(const ValueKey('media-open-link')));
     await tester.pump();

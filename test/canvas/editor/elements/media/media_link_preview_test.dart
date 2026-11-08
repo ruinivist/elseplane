@@ -372,7 +372,8 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(mediaLinkCardSize(richLink.url, richLink.width), const Size(480, 360));
-    expect(mediaLinkCardSize(generic.url, generic.width), const Size(480, 112));
+    expect(mediaLinkCardSize(generic.url, generic.width), const Size(480, 80));
+    expect(mediaLinkCardSize(generic.url, 240), const Size(240, 40));
     expect(recognizeMediaLink(generic.url), isNull);
     expect(requestCount, 0);
   });

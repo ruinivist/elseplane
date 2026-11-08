@@ -28,7 +28,7 @@ Widget mediaRichLinkCardPreview() => ColoredBox(
   ),
 );
 
-@Preview(name: 'Media generic link card', size: Size(520, 160), theme: previewTheme)
+@Preview(name: 'Media generic link card', size: Size(520, 120), theme: previewTheme)
 Widget mediaGenericLinkCardPreview() => const Center(
   child: MediaLinkCard(
     url: 'https://example.com/articles/canvas-design?tracking=ignored',

@@ -40,6 +40,8 @@ Rect elementBounds(CanvasElementData value, {required double codeTitleHeight, re
 
 // ---------- Resizing and arrow editing ----------
 
+const _mediaResizeMinimumWidth = 200.0;
+
 TextElementData resizeTextElement(TextElementData value, Size renderedSize, Offset delta) => value.copyWith(
   width: math.max(textNodeMinimumWidth, value.width + delta.dx),
   height: math.max(textNodeMinimumHeight, (value.height ?? renderedSize.height) + delta.dy),
@@ -52,7 +54,7 @@ CodeElementData resizeCodeElement(CodeElementData value, Size size) => value.cop
 MediaElementData resizeMediaElement(MediaElementData value, Offset delta, double aspectRatio) {
   final inverseRatio = 1 / aspectRatio;
   final widthDelta = (delta.dx + delta.dy * inverseRatio) / (1 + inverseRatio * inverseRatio);
-  return value.copyWith(width: math.max(mediaNodeMinimumWidth, value.width + widthDelta));
+  return value.copyWith(width: math.max(_mediaResizeMinimumWidth, value.width + widthDelta));
 }
 
 ShapeElementData resizeShapeElement(ShapeElementData value, Offset delta) => value.copyWith(

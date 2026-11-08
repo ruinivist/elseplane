@@ -14,7 +14,7 @@ const int _maximumMediaPreviewUrlLength = 2048;
 
 Size mediaLinkCardSize(String url, double width) => Size(
   width,
-  width * (recognizeMediaLink(url) == null ? 112 / 480 : 3 / 4),
+  width * (recognizeMediaLink(url) == null ? 80 / 480 : 3 / 4),
 );
 
 enum MediaLinkProvider { youtube, vimeo, spotify, soundCloud }

@@ -39,7 +39,7 @@ link-card content distinct. Link content adds only its keyboard and semantics
 wrapper. Retain source-keyed resource lifetimes and the shared provider loader:
 only exact YouTube, Vimeo, Spotify, and SoundCloud hosts receive metadata
 requests; every other link remains generic and receives no network or image-type
-probe. Preserve the fixed 480 by 360 enriched-provider and 480 by 112 generic
+probe. Preserve the fixed 480 by 360 enriched-provider and 480 by 80 generic
 link footprints, five-second timeout, bounded metadata, and runtime-only
 metadata and thumbnails.
 

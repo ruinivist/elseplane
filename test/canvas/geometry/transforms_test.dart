@@ -3,6 +3,8 @@
 
 import 'dart:math' as math;
 
+import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/geometry/element_geometry.dart';
 import 'package:elseplane/canvas/geometry/hit_test.dart';
 import 'package:elseplane/canvas/geometry/transforms.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,5 +23,19 @@ void main() {
     expect(distanceToSegmentSquared(const Offset(-3, 4), Offset.zero, const Offset(10, 0)), 25);
     expect(distanceToSegmentSquared(const Offset(5, 4), Offset.zero, const Offset(10, 0)), 16);
     expect(distanceToSegmentSquared(const Offset(3, 4), Offset.zero, Offset.zero), 25);
+  });
+
+  test('media resizing clamps images and links at 200px and allows growth', () {
+    for (final url in ['https://example.com/image.png', 'https://example.com/article']) {
+      final shrunk = resizeMediaElement(
+        MediaElementData(id: url, position: Offset.zero, width: 300, url: url),
+        const Offset(-200, -200),
+        1,
+      );
+      expect(shrunk.width, 200);
+
+      final grown = resizeMediaElement(shrunk, const Offset(100, 100), 1);
+      expect(grown.width, 300);
+    }
   });
 }
