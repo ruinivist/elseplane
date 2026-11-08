@@ -69,4 +69,31 @@ void main() {
     expect(tester.getSize(find.byType(MediaLinkCard)), const Size(200, 150));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('generic card shows a resolved bare host and path without scheme or query', (tester) async {
+    const source = '  example.com/articles/design?tracking=ignored#details  ';
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: starlessLightThemeData,
+        home: const Center(
+          child: MediaLinkCard(
+            url: source,
+            width: 480,
+            target: null,
+            metadata: null,
+            thumbnail: null,
+            thumbnailFailed: false,
+            selected: false,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('example.com'), findsOneWidget);
+    expect(find.text('/articles/design'), findsOneWidget);
+    expect(find.textContaining('https://'), findsNothing);
+    expect(find.textContaining('tracking'), findsNothing);
+    expect(find.textContaining('#details'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

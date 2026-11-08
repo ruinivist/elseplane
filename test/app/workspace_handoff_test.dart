@@ -316,7 +316,7 @@ CanvasDocument _document({bool media = false}) => CanvasDocument(
   background: CanvasBackgroundKind.plain,
   elements: [
     if (media)
-      MediaElementData(id: 'media', position: const Offset(150, 200), width: 280, url: 'Original')
+      MediaElementData(id: 'media', position: const Offset(150, 200), width: 280, url: 'https:///missing-host')
     else
       TextElementData(
         id: 'text',

@@ -5,11 +5,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 
-import 'package:elseplane/canvas/document/media_url.dart';
+import 'package:elseplane/canvas/editor/media_source.dart';
 import 'package:http/http.dart' as http;
 
 const Duration mediaLinkRequestTimeout = Duration(seconds: 5);
 const int mediaLinkMaximumResponseBytes = 64 * 1024;
+const int _maximumMediaPreviewUrlLength = 2048;
 
 Size mediaLinkCardSize(String url, double width) => Size(
   width,
@@ -88,9 +89,9 @@ const _providerConfigs = <_ProviderConfig>[
 ];
 
 MediaLinkTarget? recognizeMediaLink(String source) {
-  if (!isSupportedMediaUrl(source)) return null;
-  final uri = Uri.parse(source);
-  if (uri.hasPort && uri.port != 443) return null;
+  final uri = resolveMediaUri(source);
+  if (uri == null || uri.toString().length > _maximumMediaPreviewUrlLength) return null;
+  if (!_isEligiblePreviewUrl(uri)) return null;
   final config = _providerConfigs.where((value) => value.hosts.contains(uri.host)).firstOrNull;
   if (config == null || uri.path.contains('%')) return null;
   final parts = uri.pathSegments;
@@ -129,10 +130,19 @@ MediaLinkTarget? recognizeMediaLink(String source) {
 }
 
 Uri? allowedMediaThumbnail(Uri? source, MediaLinkProvider provider) {
-  if (source == null || !isSupportedMediaUrl(source.toString())) return null;
-  if (source.hasPort && source.port != 443) return null;
+  if (source == null || source.toString().length > _maximumMediaPreviewUrlLength || !_isEligiblePreviewUrl(source)) {
+    return null;
+  }
   final config = _providerConfigs.firstWhere((value) => value.provider == provider);
   return config.allowsThumbnailHost(source.host) ? source : null;
+}
+
+bool _isEligiblePreviewUrl(Uri uri) {
+  try {
+    return uri.scheme == 'https' && uri.host.isNotEmpty && uri.userInfo.isEmpty && (!uri.hasPort || uri.port == 443);
+  } on FormatException {
+    return false;
+  }
 }
 
 MediaLinkMetadata? parseMediaLinkMetadata(String body, MediaLinkProvider provider) {
@@ -150,7 +160,7 @@ MediaLinkMetadata? parseMediaLinkMetadata(String body, MediaLinkProvider provide
   final authorName = authorValue == null ? null : _boundedString(authorValue, 256);
   if (title == null || providerName == null || (authorValue != null && authorName == null)) return null;
   final thumbnailValue = decoded['thumbnail_url'];
-  final thumbnailUri = thumbnailValue is String && thumbnailValue.length <= 2048
+  final thumbnailUri = thumbnailValue is String && thumbnailValue.length <= _maximumMediaPreviewUrlLength
       ? allowedMediaThumbnail(Uri.tryParse(thumbnailValue), provider)
       : null;
   return MediaLinkMetadata(

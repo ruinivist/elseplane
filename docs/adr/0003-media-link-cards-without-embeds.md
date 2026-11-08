@@ -20,40 +20,49 @@ canvas block.
 
 Media elements save their source URL and geometry, not a display kind or an
 automatic mode. Local attachment references continue to use the existing
-attachment-path checks. For an external URL, render an image only when its
-`URI.path` ends in `.png`, `.jpg`, `.jpeg`, `.gif`, or `.webp`, without regard to
-case; query and fragment text do not affect the path suffix. Every other valid
-HTTPS URL is a link. Do not probe remote content to infer its type. An
-extensionless remote image is a link card; users can upload or paste image bytes
-to create a local image instead.
+attachment-path checks. Resolve external sources at use time; render an image
+only when the resolved URI is HTTPS and its `URI.path` ends in `.png`, `.jpg`,
+`.jpeg`, `.gif`, or `.webp`, without regard to case. Query and fragment text do
+not affect the path suffix. Every other usable HTTP or HTTPS source is a link.
+Remote image loads require HTTPS, so an HTTP image-looking source remains a
+generic link without triggering an image request. Do not probe remote content to
+infer its type. An extensionless remote image is a link card; users can upload or
+paste image bytes to create a local image instead.
 
-Accept new and edited external sources only when the shared policy deems them
-safe, valid HTTPS URLs no longer than 2048 characters. Use one pure URL policy
-in `document/media_url.dart` for the URL field, plain-link paste, serialized
-clipboard values, project import, and library restore. It has no widget, network,
-or storage dependencies. Reject unsafe or invalid external candidates before
-staging or publishing them, without changing the current document, history, or
-attachments. Keep the document
-decoder permissive for already stored browser data: arbitrary legacy source
-strings remain readable and are not rewritten, but invalid sources show the
-unresolved URL panel and are never loaded or opened. Do not migrate or add a
+Store the raw source string in `MediaElementData.url`. URL-field commits preserve
+the exact text, including outer whitespace; clipboard, project, and library
+transfers likewise preserve raw source content without URL validation or
+normalization. Attachment paths retain their existing validation and transfer
+checks. Resolve external sources only when used: trim a copy in memory, retain
+explicit HTTP(S), map `//host` to HTTPS, and default bare addresses to HTTPS.
+Recognize a bare hostname with a numeric port before scheme detection, including
+localhost, IPv4, and bracketed IPv6. Unsupported schemes, unparseable values,
+missing hosts, and invalid ports remain unresolved and are never requested or
+opened. This resolver is presentation/runtime logic in
+`editor/media_source.dart`, not a document or transfer trust boundary.
+
+An empty or unresolved source keeps the URL panel visible. Plain-text canvas
+paste uses a small link-like heuristic for HTTP(S), protocol-relative addresses,
+and dotted-domain, IP, or localhost text; it stores the original clipboard text.
+Ordinary text is not inserted. Device image selection and pasted image bytes
+create local image attachments. Committing any changed source applies the
+derived rendering rule without rewriting the source. Do not migrate or add a
 compatibility path for a saved display-kind field.
-
-An empty source or unresolved legacy source keeps the URL panel visible. Device
-image selection and pasted image bytes create local image attachments. Committing
-a changed URL applies the derived rendering rule; invalid drafts are not saved,
-requested, or opened.
 
 Links use one shared card and one shared loader/parser that returns a normalized
 metadata model. Rich metadata is best-effort and initially comes only from
 public CORS-enabled oEmbed endpoints for YouTube, Vimeo, Spotify, and SoundCloud.
-Match exact allowlisted hosts; do not fetch metadata for unknown sites. Use
-provider-specific canonical request URLs, removing unrelated query parameters
-and fragments. Enforce finite URL and metadata size limits, accept only bounded
-plain-text metadata and validated HTTPS thumbnails from allowlisted hosts, and
-ignore returned HTML. Use a five-second timeout with no retries. Start requests
-only when a card is visible and retain source-keyed runtime resources across
-culling. Ignore results for a changed source, removed card, or replaced document.
+Match exact allowlisted hosts; do not fetch metadata for unknown sites. Automatic
+provider requests and thumbnails require normalized HTTPS URLs no longer than
+2048 characters, no parsed user information, and either the default port or
+port 443.
+Use provider-specific canonical request URLs, removing unrelated query
+parameters and fragments. Enforce finite metadata size limits, accept only
+bounded plain-text metadata and explicitly HTTPS thumbnails from allowlisted
+hosts under the same URL, user-information, and port limits, and ignore returned
+HTML. Use a five-second timeout with no retries. Start requests only when a card
+is visible and retain source-keyed runtime resources across culling. Ignore
+results for a changed source, removed card, or replaced document.
 
 Provider cards have a default 480 by 360 footprint; generic links use 480 by 112.
 Keep each footprint fixed through loading and failure. Metadata must not change
@@ -63,9 +72,10 @@ transforms.
 
 An inactive link card activates on click and moves on drag, like an image; its
 body does not navigate. The active card exposes an accessible Open link action
-that opens the original URL in a new tab. Show launch failures. Generic cards
-display host and path without query or fragment, while preserving the complete
-original URL for saving and opening.
+that opens the resolved HTTP(S) destination in a new tab. Show launch failures.
+Generic cards display resolved host and path without scheme, query, or fragment,
+while preserving the complete raw source for saving. Raw text is only the
+display fallback when no usable URI exists.
 
 Only recognized YouTube, Vimeo, Spotify, and SoundCloud links use the shared
 metadata pipeline; all other links remain generic cards and receive no network
@@ -91,6 +101,7 @@ content when a request or thumbnail fails, without changing their footprint.
 Provider requests disclose the canonical media URL to that provider, and
 thumbnail loads contact their validated third-party hosts; unknown sites receive
 no metadata request. Extensionless remote images intentionally appear as generic
-links, and invalid legacy sources remain unresolved until the user replaces them.
-Metadata and thumbnails are unavailable offline and are not retained after the
-runtime resource lifetime ends. The feature does not provide playback.
+links. Unsupported or unusable raw sources remain unresolved until the user
+replaces them. Metadata and thumbnails are unavailable offline and are not
+retained after the runtime resource lifetime ends. The feature does not provide
+playback.

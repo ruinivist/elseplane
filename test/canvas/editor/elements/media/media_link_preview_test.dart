@@ -5,7 +5,6 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/document/media_url.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_link_preview.dart';
 import 'package:elseplane/canvas/editor/media_source.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -59,11 +58,28 @@ void main() {
     expect(recognizeMediaLink(soundCloud)!.endpoint.queryParameters['format'], 'json');
   });
 
+  test('resolves bare provider sources to canonical HTTPS preview endpoints', () {
+    final target = recognizeMediaLink('  youtu.be/M7lc1UVf-VE?si=ignored  ');
+    expect(target!.canonicalUrl.toString(), 'https://www.youtube.com/watch?v=M7lc1UVf-VE');
+    expect(target.endpoint.host, 'www.youtube.com');
+  });
+
+  test('use-time resolution trims and defaults bare addresses without accepting other schemes', () {
+    expect(resolveMediaUri('  example.com/articles/design  ').toString(), 'https://example.com/articles/design');
+    expect(resolveMediaUri('example.com:8080/path')!.port, 8080);
+    expect(resolveMediaUri('localhost:8080')!.host, 'localhost');
+    expect(resolveMediaUri('127.0.0.1:8080')!.host, '127.0.0.1');
+    expect(resolveMediaUri('[::1]:8080')!.port, 8080);
+    expect(resolveMediaUri('http://example.com/path')!.scheme, 'http');
+    expect(resolveMediaUri('javascript:alert(1)'), isNull);
+    expect(resolveMediaUri('javascript:8080'), isNull);
+    expect(resolveMediaUri('https://example.com:999999999999999999999/path'), isNull);
+  });
+
   test('rejects malformed provider shapes, spoofed hosts, credentials, and insecure schemes', () {
     for (final url in [
       'http://youtu.be/M7lc1UVf-VE',
       'https://user:secret@youtu.be/M7lc1UVf-VE',
-      'https://@youtu.be/M7lc1UVf-VE',
       'https://youtu.be.attacker.test/M7lc1UVf-VE',
       'https://youtube.com.attacker.test/watch?v=M7lc1UVf-VE',
       'https://www.youtube.com/watch?v=short',
@@ -72,33 +88,27 @@ void main() {
       'https://open.spotify.com/track/not-a-public-id',
       'https://soundcloud.com/user/sets/playlist/extra',
       'https://www.youtube.com:444/watch?v=M7lc1UVf-VE',
-      'javascript:alert(1)',
+      'https://www.youtube.com:0/watch?v=M7lc1UVf-VE',
       'https://bad host.example/path',
       ' https://example.com/path ',
     ]) {
       expect(recognizeMediaLink(url), isNull, reason: url);
     }
-    expect(isSupportedMediaUrl('https://user:secret@example.com/path'), isFalse);
-    expect(isSupportedMediaUrl('https://@example.com/path'), isFalse);
-    expect(isSupportedMediaUrl('https://example.com/path'), isTrue);
-    final withinLimit =
-        'https://example.com/${List.filled(mediaUrlMaximumLength - 'https://example.com/'.length, 'a').join()}';
-    expect(isSupportedMediaUrl(withinLimit), isTrue);
-    expect(isSupportedMediaUrl('$withinLimit/a'), isFalse);
-    expect(recognizeMediaLink('$youtube&${List.filled(mediaUrlMaximumLength, 'x').join()}'), isNull);
+    expect(recognizeMediaLink('$youtube&${List.filled(2048, 'x').join()}'), isNull);
   });
 
-  test('infers display from local attachments and validated URL path suffixes', () {
+  test('infers display from attachments and resolved URL path suffixes', () {
     expect(isImageMediaSource('attachments/11111111-1111-4111-8111-111111111111.png'), isTrue);
     expect(isLinkMediaSource('attachments/11111111-1111-4111-8111-111111111111.png'), isFalse);
     expect(isImageMediaSource('https://example.com/IMAGE.JPEG?download=1'), isTrue);
+    expect(isImageMediaSource('example.com/IMAGE.JPEG?download=1'), isTrue);
     expect(isLinkMediaSource('https://example.com/IMAGE.JPEG?download=1'), isFalse);
     expect(isImageMediaSource('https://example.com/articles/one?source=share'), isFalse);
     expect(isLinkMediaSource('https://example.com/articles/one?source=share'), isTrue);
     expect(isImageMediaSource(youtube), isFalse);
     expect(isLinkMediaSource(youtube), isTrue);
     expect(isImageMediaSource('http://example.com/image.png'), isFalse);
-    expect(isLinkMediaSource('http://example.com/image.png'), isFalse);
+    expect(isLinkMediaSource('http://example.com/image.png'), isTrue);
 
     final legacy = MediaElementData.fromJson({
       'id': 'media',
@@ -194,6 +204,27 @@ void main() {
     );
     expect(unsafeThumbnail?.title, 'Title');
     expect(unsafeThumbnail?.thumbnailUri, isNull);
+    expect(
+      parseMediaLinkMetadata(
+        '{"title":"Title","provider_name":"YouTube","thumbnail_url":"https://user:secret@i.ytimg.com/image.jpg"}',
+        MediaLinkProvider.youtube,
+      )?.thumbnailUri,
+      isNull,
+    );
+    expect(
+      parseMediaLinkMetadata(
+        '{"title":"Title","provider_name":"YouTube","thumbnail_url":"http://i.ytimg.com/image.jpg"}',
+        MediaLinkProvider.youtube,
+      )?.thumbnailUri,
+      isNull,
+    );
+    expect(
+      allowedMediaThumbnail(
+        Uri.tryParse('https://i.ytimg.com:999999999999999999999/image.jpg'),
+        MediaLinkProvider.youtube,
+      ),
+      isNull,
+    );
     expect(
       parseMediaLinkMetadata(
         '{"title":"Title","provider_name":"Spotify","thumbnail_url":"https://sub.spotifycdn.com/image.jpg"}',

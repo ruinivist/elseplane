@@ -30,9 +30,10 @@
   `_MediaBody` for shared tap, drag, cancellation, device filtering, sizing, and
   resize animation. Image content keeps its image clip and selection border;
   `MediaLinkCard` remains the link content, with only the keyboard and semantics
-  wrapper around the shared body. Media resources stay with their existing
-  resource owner. Do not add provider-specific widgets or a generic media
-  framework.
+  wrapper around the shared body. Link cards show resolved host and path without
+  scheme, query, or fragment; raw text is only the fallback when resolution
+  fails. Media resources stay with their existing resource owner. Do not add
+  provider-specific widgets or a generic media framework.
 - Isolate platform implementations and reuse installed dependencies.
 
 ## Previews and tests

@@ -387,25 +387,13 @@ Suffix ${_path(1)}
     );
   });
 
-  test('project decoding validates incoming media sources before returning', () async {
-    for (final source in [
-      'javascript:alert(1)',
-      'https://user:secret@example.com/path',
-      'https://example.com/${List.filled(2049, 'x').join()}',
-    ]) {
-      final document = CanvasDocument(
-        background: CanvasBackgroundKind.plain,
-        elements: [_mediaSource('unsafe', source)],
-      );
-      await expectLater(decodeCanvasProject(_encode(_projectArchive(document))), throwsFormatException, reason: source);
-    }
-
+  test('project transfers preserve raw media sources and validate referenced attachments', () async {
     final attachment = _path(3);
     final sources = [
-      '',
+      '  example.com/articles/design  ',
+      'javascript:alert(1)',
+      'https:///missing-host',
       attachment,
-      'https://example.com/image.JPEG?download=1',
-      'https://example.com/article',
     ];
     final document = CanvasDocument(
       background: CanvasBackgroundKind.plain,

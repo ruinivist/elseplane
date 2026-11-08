@@ -5,7 +5,7 @@ Status: active
 ## Goal and scope
 
 Complete URL-derived image and link rendering, shared media interactions, and
-consistent external URL validation at every input and transfer boundary. The
+raw source preservation with use-time resolution. The
 accepted [decision](../adr/0003-media-link-cards-without-embeds.md),
 [interaction model](../specs/interaction-model.md), and
 [architecture](../arch/ownership.md) define the contract.
@@ -19,20 +19,19 @@ browser data or add a compatibility layer for the superseded display-kind form.
 
 ## Design
 
-Media elements save their source URL and geometry. Local attachment references
-use the existing path checks. A valid HTTPS URL is an image only when its path
-ends in `.png`, `.jpg`, `.jpeg`, `.gif`, or `.webp`, ignoring case and excluding
-query and fragment text. Other valid HTTPS URLs render as links. Extensionless
-remote images intentionally remain generic cards; upload or paste bytes to add
-an image instead.
+Media elements save raw source strings and geometry. Local attachment references
+use the existing path checks. A resolved external HTTPS URI is an image only
+when its path ends in `.png`, `.jpg`, `.jpeg`, `.gif`, or `.webp`, ignoring case
+and excluding query and fragment text. Other usable HTTP(S) sources render as
+links. One pure editor resolver normalizes a copy at use time; edits and all
+clipboard/project/library transfer paths preserve raw text. Unusable sources
+stay unresolved and are never requested or opened. Extensionless remote images
+remain generic cards; upload or paste bytes to add an image instead.
 
-Use one pure URL policy in `document/media_url.dart` for URL editing, plain-link
-paste, serialized clipboard data, project import, and library restore. Reject
-unsafe or invalid new, edited, or imported URLs and URLs longer than 2048
-characters. Preserve already stored arbitrary browser strings without rewriting
-them, but never load or open invalid legacy sources. Do not tighten the global
-document decoder. Reject invalid import candidates before attachment staging or
-publication, leaving the current document, history, and attachments unchanged.
+Plain-text canvas paste uses a compact explicit-HTTP(S)/protocol-relative or
+link-like address heuristic, but stores the original clipboard text. Ordinary
+text is not inserted. No external-media URL validation is added to document or
+transfer decoding; structural, archive, and attachment validation remain.
 
 Use one private media body for common tap, drag, cancellation, device filtering,
 sizing, and resize animation. Keep image clipping and selection borders and
@@ -46,21 +45,18 @@ metadata and thumbnails.
 
 ## Checklist
 
-- [x] Update the accepted behavior, ownership, and persistence contracts for the
-  revised URL-derived design.
-- [x] Remove the Image/Link selector and saved display kind; derive image versus
-  link from attachment validation or the supported URI path suffix.
-- [x] Share tap, drag, cancellation, device filtering, sizing, and resize
-  animation in one private media body without changing content rendering or
-  resource ownership.
-- [x] Centralize URL validation and apply it to editing, plain-link paste,
-  serialized clipboard data, project import, and library restore. Reject invalid
-  imported sources before staging or publication.
-- [x] Preserve the provider metadata pipeline and card footprints without
-  probing other links.
-- [x] Test path suffixes with query/fragment, extensionless and unsupported
-  URLs, empty and invalid legacy values, all URL ingress boundaries, failure
-  atomicity, media gestures, and provider metadata lifetime behavior.
+- [x] Update accepted behavior, ownership, persistence, and UI contracts for raw
+  source strings and runtime-only resolution.
+- [x] Remove document-source validation while preserving structural and
+  attachment validation on every transfer path.
+- [x] Resolve external sources only at use time for classification, image loads,
+  provider matching, card display, and link opening.
+- [x] Keep source editing exact and recognize plain-link clipboard content
+  without inserting ordinary text.
+- [x] Verify raw-source edit/open/undo, bare provider/image resolution,
+  clipboard paste, serialization/import roundtrips, and inert unsupported
+  sources; preserve real transfer failure checks.
+- [x] Run focused Chrome tests, `flutter analyze`, and `flutter build web`.
 
 ## Pre-revision evidence
 
@@ -99,15 +95,10 @@ that the revised implementation passes.
 
 ## Verification
 
-- [x] Run focused Chrome tests for URL policy, every input/import boundary,
-  provider behavior, and failure atomicity.
-- [x] Run `flutter analyze` and `flutter build web`.
-- [x] Run the full Chrome suite after the revision is complete: 646 passed,
-  4 skipped. The subsequent standard web build passed; the existing
-  `isolate_contactor` Wasm dry-run warnings remain.
-- [x] Check documentation link targets and `git diff --check` for this revision.
-
-Revised-build Chromium smoke checks confirmed no Image/Link selector, a generic
-card for an extensionless URL with no resource request to its destination, direct
-`.jpg` image rendering, and enriched YouTube metadata. Static inspection confirms
-one resolved-media drag implementation and resize handle in `_MediaBody`.
+- [x] Run focused Chrome tests for media, editor session/history, clipboard,
+  project/library transfers, workspace handoff/transfer, and attachment workflows.
+- [x] Run `flutter analyze` and `flutter build web`. Standard web build passed;
+  its Wasm dry run reports existing `dart:html` incompatibilities in
+  `isolate_contactor`.
+- [ ] Run the full Chrome suite (lead-owned verification).
+- [x] Check documentation links and `git diff --check`.

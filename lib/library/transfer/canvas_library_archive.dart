@@ -8,7 +8,6 @@ import 'package:archive/archive.dart';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/image_import.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/document/media_url.dart';
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/transfer/canvas_project.dart';
 import 'package:uuid/uuid.dart';
@@ -127,12 +126,6 @@ Future<CanvasLibraryArchive> decodeCanvasLibraryArchive(Uint8List bytes) async {
       throw const FormatException('Invalid canvas file');
     }
     final document = CanvasDocument.fromJson(root['document']);
-    if (document.elements.whereType<MediaElementData>().any(
-      (element) =>
-          element.url.isNotEmpty && !attachmentPathPattern.hasMatch(element.url) && !isSupportedMediaUrl(element.url),
-    )) {
-      throw const FormatException('Invalid media source in library archive');
-    }
     files.add(
       CanvasFile(
         id: const Uuid().v4(),

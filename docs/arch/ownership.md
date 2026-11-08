@@ -13,7 +13,6 @@ lib/
     document/
       canvas_document.dart           # Immutable ordered document
       canvas_element.dart             # Sealed element values and saved enums
-      media_url.dart                  # Pure external media URL policy
       document_codec.dart             # Encoding, decoding, boundary validation
     geometry/                        # Paths, bounds, hit tests, transforms
     editor/
@@ -22,6 +21,7 @@ lib/
       canvas_input.dart              # Pointer ownership and gesture transitions
       canvas_shortcuts.dart          # Focus-aware keyboard actions
       canvas_clipboard.dart          # Clipboard interpretation and edit workflow
+      media_source.dart              # Runtime media URI resolution and classification
       canvas_page.dart               # Compose canvas and controls
       canvas_view.dart               # Project document into infinite_lazy_grid
       element_resources.dart         # Resources retained by element identity
@@ -74,13 +74,15 @@ elements and stroke samples may be shared between snapshots. `Offset`, `Size`,
 `Rect`, and `Color` are suitable value types. Saved enums belong to the
 document; background builders and syntax-highlighting mappings belong to
 presentation. Font-download availability does not determine document validity.
-The pure media URL policy belongs to `document/media_url.dart`; it has no widget,
-network, or storage dependencies. Editor input, clipboard handling, project
-import, and library restore share it at their trust boundaries. The library uses
-the document policy without importing the editor.
+`MediaElementData.url` stores raw user content. The editor owns its pure,
+use-time URI resolver and media classification in `editor/media_source.dart`;
+it never rewrites saved values. Canvas clipboard, project, and library transfer
+code preserve source strings while retaining structural and attachment
+validation. The library does not import the editor.
 
 Keep one in-memory representation per concept. Convert JSON and color formats
-at boundaries, validate external input, and enforce invariants on edits.
+at boundaries, validate external structure and attachments, and enforce
+document invariants on edits.
 
 ## App and library ownership
 

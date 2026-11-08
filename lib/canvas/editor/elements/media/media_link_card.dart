@@ -2,6 +2,7 @@
 // Used by media elements for links, regardless of the source provider.
 
 import 'package:elseplane/canvas/editor/elements/media/media_link_preview.dart';
+import 'package:elseplane/canvas/editor/media_source.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:flutter/material.dart';
@@ -142,10 +143,10 @@ String _providerLine(String provider, MediaLinkMetadata? metadata) {
   return author == null || author.isEmpty ? provider : '$provider · $author';
 }
 
-String _hostname(String source) => Uri.tryParse(source)?.host ?? '';
+String _hostname(String source) => resolveMediaUri(source)?.host ?? '';
 
 String _location(String source) {
-  final uri = Uri.tryParse(source);
+  final uri = resolveMediaUri(source);
   if (uri == null) return source.split(RegExp('[?#]')).first;
   final host = uri.host;
   var path = uri.path;

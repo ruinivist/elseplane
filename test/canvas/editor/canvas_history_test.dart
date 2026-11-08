@@ -33,6 +33,8 @@ import 'package:super_clipboard/super_clipboard.dart';
 
 import '../test_helpers.dart';
 
+const _unusableMediaSource = 'https:///missing-host';
+
 // ---------- Tests ----------
 
 void main() {
@@ -100,7 +102,7 @@ void main() {
                   id: 'media',
                   position: const Offset(200, 240),
                   width: 280,
-                  url: 'original',
+                  url: _unusableMediaSource,
                 ),
               );
             }
@@ -134,7 +136,7 @@ void main() {
               await pending;
             });
             expect(attachments.files, {existingPath: onePixelPngBytes});
-            expect(media ? image!.data.url : text!.data.markdown, 'original');
+            expect(media ? image!.data.url : text!.data.markdown, media ? _unusableMediaSource : 'original');
             expect(
               media
                   ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources
@@ -146,11 +148,11 @@ void main() {
               media
                   ? (store.persisted!.elements.first as MediaElementData).url
                   : (store.persisted!.elements.first as TextElementData).markdown,
-              'original',
+              media ? _unusableMediaSource : 'original',
             );
             await _shortcut(tester, redo: true);
             expect(moved.canvasPosition, start + const Offset(20, 10));
-            expect(media ? image!.data.url : text!.data.markdown, 'original');
+            expect(media ? image!.data.url : text!.data.markdown, media ? _unusableMediaSource : 'original');
           },
         );
       }
@@ -170,7 +172,7 @@ void main() {
                 id: 'media',
                 position: const Offset(200, 240),
                 width: 280,
-                url: 'original',
+                url: _unusableMediaSource,
               ),
             );
           }
@@ -189,7 +191,7 @@ void main() {
             attachments.release.complete();
             await pending;
           });
-          expect(media ? image!.data.url : text!.data.markdown, 'original');
+          expect(media ? image!.data.url : text!.data.markdown, media ? _unusableMediaSource : 'original');
           expect(attachments.files, hasLength(failDelete ? 1 : 0));
         },
       );
@@ -236,7 +238,7 @@ void main() {
             id: 'media',
             position: const Offset(200, 240),
             width: 280,
-            url: 'original',
+            url: _unusableMediaSource,
           ),
         );
       }
@@ -257,7 +259,7 @@ void main() {
       await _shortcut(tester);
       reader.complete(_HistoryTextReader());
       await pending;
-      expect(media ? image!.data.url : text!.data.markdown, 'original');
+      expect(media ? image!.data.url : text!.data.markdown, media ? _unusableMediaSource : 'original');
       await pumpPastSave(tester);
     });
   }

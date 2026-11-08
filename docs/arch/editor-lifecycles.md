@@ -41,10 +41,11 @@ values and grant no mutation rights.
   resource objects only when needed. Text and code scroll controllers retain
   offsets across detachment; culling does not retire resources. Inline Markdown
   images load lazily and retain source-keyed reads and image streams with text
-  resources; preview widgets only render those resources. Media loads only
-  accepted local attachment references and valid external image sources;
-  arbitrary invalid legacy sources remain unresolved and are never requested or
-  opened. Provider metadata and thumbnail requests start when visible and retain
+  resources; preview widgets only render those resources. Media loads exact
+  local attachment references or external HTTPS image sources resolved at use
+  time; raw saved strings remain unchanged. Unsupported or unusable external
+  sources remain unresolved and are never requested or opened. Provider metadata
+  and thumbnail requests start when visible and retain
   source-keyed runtime results across culling. Source changes, removal, and
   document replacement invalidate them; stale completions are ignored. Menus,
   hover, and picker expansion stay local to presentation.

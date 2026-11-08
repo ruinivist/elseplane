@@ -9,7 +9,6 @@ import 'dart:ui';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/image_import.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/document/media_url.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/media_source.dart';
 import 'package:elseplane/canvas/geometry/element_geometry.dart';
@@ -86,9 +85,6 @@ List<CanvasElementData>? decodeCanvasClipboard(String text) {
   final elements = (decoded['elements'] as List).map(CanvasElementData.fromJson).toList();
   if (elements.isEmpty) {
     throw const FormatException('Clipboard elements must not be empty');
-  }
-  if (elements.whereType<MediaElementData>().any((element) => !isValidMediaSource(element.url))) {
-    throw const FormatException('Clipboard media source is invalid');
   }
   return elements;
 }
@@ -224,8 +220,8 @@ class CanvasClipboard {
       if (elements == null) {
         if (clipboard.image case final image?) {
           await _pasteImage(image, mediaPosition, generation);
-        } else if (text?.trim() case final url? when isSupportedMediaUrl(url)) {
-          _pasteMediaUrl(url, mediaPosition);
+        } else if (text case final source? when isCanvasLinkPasteCandidate(source)) {
+          _pasteMediaUrl(source, mediaPosition);
         }
         return;
       }

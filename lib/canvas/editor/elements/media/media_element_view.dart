@@ -6,10 +6,10 @@ import 'dart:async';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/image_import.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/document/media_url.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_link_card.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_resources.dart';
+import 'package:elseplane/canvas/editor/media_source.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/icon_drag.dart';
@@ -382,7 +382,7 @@ class _MediaBodyState extends State<_MediaBody> {
       ),
     );
     if (model.isLink) {
-      final title = model.linkMetadata?.title ?? Uri.tryParse(model.data.url)?.host ?? 'Link card';
+      final title = model.linkMetadata?.title ?? resolveMediaUri(model.data.url)?.host ?? 'Link card';
       body = Focus(
         key: const ValueKey('media-link-card-focus'),
         focusNode: model.cardFocusNode,
@@ -442,9 +442,9 @@ class _MediaUrlPanelState extends State<_MediaUrlPanel> {
   Offset? _dragPosition;
 
   Future<void> _openLink() async {
-    final url = widget.resources.data.url;
+    final uri = resolveMediaUri(widget.resources.data.url);
     try {
-      if (await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) return;
+      if (uri != null && await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
     } on Exception {
       // The same feedback covers unavailable and failed platform launchers.
     }
@@ -510,18 +510,16 @@ class _MediaUrlPanelState extends State<_MediaUrlPanel> {
                           widget.resources.session.invalidatePendingEdits();
                           widget.resources.commitUrl();
                         },
-                        onChanged: (_) => widget.resources.clearUrlValidationError(),
                         minLines: 1,
                         maxLines: 3,
                         keyboardType: TextInputType.url,
                         textInputAction: TextInputAction.done,
                         cursorColor: colors.accent,
                         style: theme.typo.body.copyWith(color: colors.textPrimary),
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           hintText: 'Paste link',
-                          errorText: widget.resources.hasInvalidUrlDraft ? 'Enter a valid HTTPS URL' : null,
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         ),
                       ),
                     ),
@@ -533,7 +531,7 @@ class _MediaUrlPanelState extends State<_MediaUrlPanel> {
                     child: IconButton(
                       key: const ValueKey('media-open-link'),
                       tooltip: 'Open link',
-                      onPressed: isSupportedMediaUrl(widget.resources.data.url) ? _openLink : null,
+                      onPressed: _openLink,
                       icon: const Icon(Icons.open_in_new, size: 20),
                     ),
                   ),

@@ -106,52 +106,16 @@ void main() {
     expect(restored.toJson(), shape.toJson());
   });
 
-  test('serialized media sources validate before clipboard insertion', () async {
-    final invalidSources = [
-      'javascript:alert(1)',
-      'https://user:secret@example.com/path',
-      'https://example.com/${List.filled(2049, 'x').join()}',
-    ];
-    for (final source in invalidSources) {
-      final payload = encodeCanvasClipboard([
-        MediaElementData(id: 'media', position: Offset.zero, width: 480, url: source),
-      ]);
-      expect(() => decodeCanvasClipboard(payload), throwsFormatException, reason: source);
-
-      final session = testSession(CanvasDocument(background: CanvasBackgroundKind.plain, elements: []));
-      var errors = 0;
-      final clipboard = CanvasClipboard(
-        session: session,
-        attachments: TestAttachmentStore(),
-        enabled: () => true,
-        menuOpen: () => false,
-        editing: () => false,
-        pointerPosition: () => null,
-        scale: () => 1,
-        screenToCanvas: (position) => position,
-        viewportSize: () => const Size(800, 600),
-        boundsOf: (_) => Rect.zero,
-        mediaWidth: 480,
-        clearEditing: () {},
-        onError: (_) => errors++,
-        readClipboard: () async => (text: payload, image: null),
-      );
-      await clipboard.paste(null);
-      expect(session.document.elements, isEmpty);
-      expect(errors, 1);
-    }
-
-    for (final source in [
-      '',
-      'attachments/11111111-1111-4111-8111-111111111111.png',
-      'https://example.com/image.JPEG?download=1',
-      'https://example.com/article',
-    ]) {
-      final payload = encodeCanvasClipboard([
-        MediaElementData(id: 'media', position: Offset.zero, width: 480, url: source),
-      ]);
-      expect((decodeCanvasClipboard(payload)!.single as MediaElementData).url, source);
-    }
+  test('serialized media clipboard preserves raw and unusable source strings', () {
+    const sources = ['  example.com/article?x=1  ', 'javascript:alert(1)', 'https:///missing-host'];
+    final payload = encodeCanvasClipboard([
+      for (var index = 0; index < sources.length; index++)
+        MediaElementData(id: 'media-$index', position: Offset.zero, width: 480, url: sources[index]),
+    ]);
+    expect(
+      decodeCanvasClipboard(payload)!.whereType<MediaElementData>().map((element) => element.url),
+      sources,
+    );
   });
 
   for (final cut in [false, true]) {
@@ -755,13 +719,12 @@ void main() {
     tester,
   ) async {
     final attachments = TestAttachmentStore();
-    CanvasClipboardSnapshot clipboard = (
-      text: ' https://example.com/image.png ',
-      image: null,
-    );
+    final store = TestLibraryStore(_emptyDocument);
+    const rawSource = '  example.com:8080/articles/design?source=paste#part  ';
+    CanvasClipboardSnapshot clipboard = (text: rawSource, image: null);
     await pumpCanvas(
       tester,
-      TestLibraryStore(_emptyDocument),
+      store,
       attachmentStore: attachments,
       readClipboard: () async => clipboard,
     );
@@ -770,14 +733,23 @@ void main() {
     await tester.pump();
     expect(
       tester.widget<MediaElementView>(find.byType(MediaElementView)).resources.data.url,
-      'https://example.com/image.png',
+      rawSource,
     );
-    expect(tester.widget<MediaElementView>(find.byType(MediaElementView)).resources.isLink, isFalse);
+    expect(tester.widget<MediaElementView>(find.byType(MediaElementView)).resources.isLink, isTrue);
+    await pumpPastSave(tester);
+    expect((store.persisted!.elements.single as MediaElementData).url, rawSource);
 
-    clipboard = (text: 'https://example.com/articles/design', image: null);
+    const httpLink = 'http://user:secret@example.com/articles/design';
+    clipboard = (text: httpLink, image: null);
     await _shortcut(tester, LogicalKeyboardKey.keyV);
     await tester.pump();
-    expect(tester.widgetList<MediaElementView>(find.byType(MediaElementView)).last.resources.isLink, isTrue);
+    final pastedLink = tester.widgetList<MediaElementView>(find.byType(MediaElementView)).last.resources;
+    expect(pastedLink.isLink, isTrue);
+    expect(pastedLink.data.url, httpLink);
+
+    clipboard = (text: 'javascript:alert(1)', image: null);
+    await _shortcut(tester, LogicalKeyboardKey.keyV);
+    expect(find.byType(MediaElementView), findsNWidgets(2));
 
     clipboard = (text: 'ordinary text', image: null);
     await _shortcut(tester, LogicalKeyboardKey.keyV);

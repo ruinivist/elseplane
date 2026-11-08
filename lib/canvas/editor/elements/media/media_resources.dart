@@ -53,7 +53,6 @@ class MediaResources extends ElementResources<MediaElementData> {
   ImageStream? _thumbnailStream;
   ImageStreamListener? _thumbnailListener;
   bool _thumbnailFailed = false;
-  bool _invalidUrlDraft = false;
 
   // ---------- State and geometry ----------
 
@@ -74,8 +73,6 @@ class MediaResources extends ElementResources<MediaElementData> {
   bool get thumbnailFailed => _thumbnailFailed;
 
   bool get linkPreviewFailed => _previewFailed;
-
-  bool get hasInvalidUrlDraft => _invalidUrlDraft;
 
   http.Client get _previewClient => _injectedPreviewClient ?? (_ownedPreviewClient ??= http.Client());
 
@@ -100,24 +97,8 @@ class MediaResources extends ElementResources<MediaElementData> {
 
   void commitUrl() {
     if (!attached) return;
-    if (data.url == controller.text) {
-      clearUrlValidationError();
-      return;
-    }
-    if (!session.setMediaUrl(data.id, controller.text)) {
-      if (!_invalidUrlDraft) {
-        _invalidUrlDraft = true;
-        notifyListeners();
-      }
-      return;
-    }
-    clearUrlValidationError();
-  }
-
-  void clearUrlValidationError() {
-    if (!_invalidUrlDraft) return;
-    _invalidUrlDraft = false;
-    notifyListeners();
+    final url = controller.text;
+    if (data.url != url) session.setMediaUrl(data.id, url);
   }
 
   /// Starts one metadata request for a mounted card and retains its result across culling.
@@ -156,7 +137,6 @@ class MediaResources extends ElementResources<MediaElementData> {
   @override
   void synchronizeData(MediaElementData previous, {required bool restored}) {
     if ((restored || previous.url != data.url) && controller.text != data.url) controller.text = data.url;
-    if (restored || previous.url != data.url) _invalidUrlDraft = false;
     if (previous.url != data.url) {
       _resetLinkPreview();
       if (!_applyingDeviceImage) _loadImage();
@@ -177,7 +157,8 @@ class MediaResources extends ElementResources<MediaElementData> {
       unawaited(_loadAttachment(source, identity));
       return;
     }
-    _attachImage(NetworkImage(source), identity);
+    final uri = resolveMediaUri(source);
+    if (uri != null) _attachImage(NetworkImage(uri.toString()), identity);
   }
 
   Future<void> _loadAttachment(String path, Object load) async {

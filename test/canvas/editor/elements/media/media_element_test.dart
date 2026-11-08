@@ -28,6 +28,8 @@ import 'package:web/web.dart' as web;
 
 import '../../../test_helpers.dart';
 
+const _unusableMediaSource = 'https:///missing-host';
+
 void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
@@ -49,32 +51,72 @@ void main() {
     expect(model.isLink, isTrue);
   });
 
-  for (final source in [' https://example.com/image.png ', 'javascript:alert(1)']) {
-    test('legacy media source "$source" remains readable without requests', () {
-      var requests = 0;
-      final client = MockClient((_) async {
-        requests++;
-        return http.Response('', 500);
-      });
-      addTearDown(client.close);
-      final model = testMediaModel(
-        MediaElementData(id: 'media', position: Offset.zero, width: 280, url: source),
-        TestAttachmentStore(),
-        previewClient: client,
-      );
-      addTearDown(model.dispose);
-      model.loadLinkPreview();
-
-      expect(model.data.url, source);
-      expect(model.image, isNull);
-      expect(model.hasImage, isFalse);
-      expect(model.isLink, isFalse);
-      expect(requests, 0);
+  testWidgets('unsupported stored media source stays unresolved and inert', (tester) async {
+    var requests = 0;
+    final client = MockClient((_) async {
+      requests++;
+      return http.Response('', 500);
     });
-  }
+    addTearDown(client.close);
+    final model = testMediaModel(
+      MediaElementData(id: 'media', position: Offset.zero, width: 280, url: 'javascript:alert(1)'),
+      TestAttachmentStore(),
+      previewClient: client,
+    );
+    addTearDown(model.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: starlessLightThemeData,
+        home: Scaffold(
+          body: MediaElementView(
+            resources: model,
+            data: model.data,
+            selected: false,
+            active: false,
+            onMove: (_) {},
+            onResize: (_) {},
+            onActivate: () => model.session.setActive(model.data.id),
+            onDeactivate: () => model.session.setActive(null),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 20));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.pumpAndSettle();
 
-  for (final source in ['https://example.com/article', 'https://example.com/extensionless?format=image']) {
-    testWidgets('generic extensionless link "$source" makes no image or metadata request', (tester) async {
+    expect(model.data.url, 'javascript:alert(1)');
+    expect(model.image, isNull);
+    expect(model.hasImage, isFalse);
+    expect(model.isLink, isFalse);
+    expect(find.byKey(const ValueKey('media-url-field')), findsOneWidget);
+    expect(find.byType(MediaLinkCard), findsNothing);
+    expect(find.byKey(const ValueKey('media-open-link')), findsNothing);
+    expect(requests, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  test('bare image source loads through resolved HTTPS without rewriting saved text', () async {
+    const source = '  example.com/image.png  ';
+    await _cacheImage('https://example.com/image.png');
+    final model = testMediaModel(
+      MediaElementData(id: 'media', position: Offset.zero, width: 280, url: source),
+      TestAttachmentStore(),
+    );
+    addTearDown(model.dispose);
+
+    expect(model.data.url, source);
+    expect(model.image, const NetworkImage('https://example.com/image.png'));
+    expect(model.hasImage, isTrue);
+  });
+
+  for (final source in [
+    'https://example.com/article',
+    'https://example.com/extensionless?format=image',
+    'http://example.com/image.png',
+    'http://youtu.be/M7lc1UVf-VE',
+  ]) {
+    testWidgets('generic link "$source" makes no image or metadata request', (tester) async {
       var requests = 0;
       final client = MockClient((_) async {
         requests++;
@@ -181,7 +223,7 @@ void main() {
           if (media) {
             document = document.withElements(
               (elements) => elements.add(
-                MediaElementData(id: 'media', position: const Offset(120, 150), width: 280, url: 'original'),
+                MediaElementData(id: 'media', position: const Offset(120, 150), width: 280, url: _unusableMediaSource),
               ),
             );
           } else {
@@ -224,7 +266,7 @@ void main() {
           });
           await tester.pump();
           expect(find.text('Could not paste image'), stale ? findsNothing : findsOneWidget);
-          expect(media ? image!.data.url : text!.data.markdown, 'original');
+          expect(media ? image!.data.url : text!.data.markdown, media ? _unusableMediaSource : 'original');
           await tester.pumpWidget(const SizedBox());
         },
       );
@@ -236,7 +278,7 @@ void main() {
   ) async {
     final attachments = TestAttachmentStore();
     final model = testMediaModel(
-      MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'),
+      MediaElementData(id: 'media', position: Offset.zero, width: 200, url: _unusableMediaSource),
       attachments,
     );
     for (final bytes in [
@@ -249,7 +291,7 @@ void main() {
         await pending;
       });
       expect(attachments.files, isEmpty);
-      expect(model.data.url, 'original');
+      expect(model.data.url, _unusableMediaSource);
     }
     await tester.runAsync(() async {
       await expectLater(model.setDeviceImage(Uint8List.fromList([1, 2, 3]), 'png'), throwsFormatException);
@@ -282,15 +324,25 @@ void main() {
     expect(field.minLines, 1);
     expect(field.maxLines, 3);
 
-    await tester.enterText(
-      find.byKey(const ValueKey('media-url-field')),
-      'http://example.com/image.png',
-    );
+    const rawLink = '  example.com/articles/design?source=field  ';
+    var publications = 0;
+    model.session.documentChanges.addListener(() => publications++);
+    await tester.enterText(find.byKey(const ValueKey('media-url-field')), rawLink);
     await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(model.hasImage, isFalse);
+    expect(model.isLink, isTrue);
+    expect(model.data.url, rawLink);
+    expect(model.controller.text, rawLink);
     expect(find.byKey(const ValueKey('media-url-field')), findsOneWidget);
-    expect(model.data.url, '');
+    expect(publications, 1);
+
+    await tester.enterText(find.byKey(const ValueKey('media-url-field')), rawLink);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(model.data.url, rawLink);
+    expect(model.controller.text, rawLink);
+    expect(publications, 1);
 
     const validUrl = 'https://example.com/new-image.png';
     await _cacheImage(validUrl);
@@ -300,7 +352,7 @@ void main() {
     );
     await tester.pump();
     expect(model.hasImage, isFalse);
-    expect(model.data.url, '');
+    expect(model.data.url, rawLink);
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
     expect(model.hasImage, isTrue);
@@ -351,7 +403,7 @@ void main() {
   });
 
   testWidgets('link cards activate without navigating and expose transform controls', (tester) async {
-    const url = 'https://example.com/articles/design?tracking=preserved#details';
+    const url = 'http://user:secret@example.com/articles/design?tracking=preserved#details';
     final originalLauncher = UrlLauncherPlatform.instance;
     final launcher = _FakeUrlLauncher();
     UrlLauncherPlatform.instance = launcher;
@@ -450,7 +502,43 @@ void main() {
     expect(launcher.launched, [url, url]);
   });
 
-  for (final source in ['', 'original', 'attachments/11111111-1111-4111-8111-111111111111.png']) {
+  testWidgets('bare source edits stay raw while opening and undo use the resolved destination', (tester) async {
+    const original = 'https://example.com/original';
+    const rawSource = '  example.com/articles/design?source=field#details  ';
+    final originalLauncher = UrlLauncherPlatform.instance;
+    final launcher = _FakeUrlLauncher();
+    UrlLauncherPlatform.instance = launcher;
+    addTearDown(() => UrlLauncherPlatform.instance = originalLauncher);
+    await pumpCanvas(
+      tester,
+      TestLibraryStore(
+        _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: original)),
+      ),
+    );
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
+    await tester.tap(find.byType(MediaLinkCard), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('media-url-field')), rawSource);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(model.data.url, rawSource);
+    expect(model.controller.text, rawSource);
+    expect(model.isLink, isTrue);
+    await tester.tap(find.byKey(const ValueKey('media-open-link')));
+    await tester.pump();
+    expect(launcher.launched, ['https://example.com/articles/design?source=field#details']);
+
+    model.session.undo();
+    await tester.pumpAndSettle();
+    expect(model.data.url, original);
+    model.session.redo();
+    await tester.pumpAndSettle();
+    expect(model.data.url, rawSource);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  for (final source in ['', _unusableMediaSource, 'attachments/11111111-1111-4111-8111-111111111111.png']) {
     testWidgets('inactive URL-only media with "$source" drags before editing', (tester) async {
       const position = Offset(120, 150);
       await pumpCanvas(
@@ -493,7 +581,9 @@ void main() {
     await pumpCanvas(
       tester,
       TestLibraryStore(
-        _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: 'original')),
+        _document(
+          MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: _unusableMediaSource),
+        ),
       ),
     );
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
@@ -520,7 +610,7 @@ void main() {
     expect(model.active, isTrue);
     picker.complete(null);
     await tester.pumpAndSettle();
-    expect(model.data.url, 'original');
+    expect(model.data.url, _unusableMediaSource);
     expect(model.hasImage, isFalse);
     await tester.pumpWidget(const SizedBox());
   });
@@ -531,7 +621,9 @@ void main() {
     await pumpCanvas(
       tester,
       TestLibraryStore(
-        _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: 'original')),
+        _document(
+          MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: _unusableMediaSource),
+        ),
       ),
     );
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
@@ -549,7 +641,7 @@ void main() {
     );
     await tester.pump();
     expect(model.focusNode.hasFocus, isTrue);
-    expect(model.data.url, 'original');
+    expect(model.data.url, _unusableMediaSource);
     expect(model.hasImage, isFalse);
     await click.moveBy(const Offset(80, 0));
     await tester.pump();
@@ -559,7 +651,7 @@ void main() {
     expect(model.controller.selection.isCollapsed, isFalse);
     expect(model.data.position, position);
     expect(model.controller.text, url);
-    expect(model.data.url, 'original');
+    expect(model.data.url, _unusableMediaSource);
     expect(model.hasImage, isFalse);
 
     await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -684,76 +776,28 @@ void main() {
     });
   }
 
-  for (final draft in ['', 'invalid path']) {
-    testWidgets('loaded media ${draft.isEmpty ? 'clears on' : 'rejects'} submitted "$draft"', (tester) async {
-      const url = 'https://example.com/image.png';
-      await _cacheImage(url);
-      await pumpCanvas(
-        tester,
-        TestLibraryStore(
-          _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
-        ),
-      );
-      final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
-      await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const ValueKey('media-url-field')), draft);
-      await tester.pump();
-      expect(model.hasImage, isTrue);
-      expect(model.data.url, url);
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
-      expect(model.data.url, draft.isEmpty ? draft : url);
-      expect(model.hasImage, draft.isNotEmpty);
-      expect(find.byKey(const ValueKey('media-image')), draft.isNotEmpty ? findsOneWidget : findsNothing);
-      expect(find.byKey(const ValueKey('media-url-field')), findsOneWidget);
-      expect(find.text('Enter a valid HTTPS URL'), draft.isEmpty ? findsNothing : findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-    });
-  }
+  testWidgets('submitting an empty media source keeps the URL panel available', (tester) async {
+    const url = 'https://example.com/image.png';
+    await _cacheImage(url);
+    await pumpCanvas(
+      tester,
+      TestLibraryStore(
+        _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
+      ),
+    );
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
+    await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('media-url-field')), '');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
 
-  for (final exit in ['Enter', 'blur', 'Escape']) {
-    testWidgets('invalid media URL draft survives $exit without losing the saved image', (tester) async {
-      const url = 'https://example.com/image.png';
-      await _cacheImage(url);
-      await pumpCanvas(
-        tester,
-        TestLibraryStore(
-          _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
-        ),
-      );
-      final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
-      final image = model.image;
-      await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
-      await tester.pumpAndSettle();
-      const invalidUrl = 'javascript:alert(1)';
-      await tester.enterText(find.byKey(const ValueKey('media-url-field')), invalidUrl);
-      await tester.pump();
-
-      switch (exit) {
-        case 'Enter':
-          await tester.testTextInput.receiveAction(TextInputAction.done);
-        case 'blur':
-          model.focusNode.unfocus();
-        case 'Escape':
-          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      }
-      await tester.pumpAndSettle();
-      expect(model.data.url, url);
-      expect(model.isLink, isFalse);
-      expect(model.image, same(image));
-      expect(model.controller.text, invalidUrl);
-      expect(tester.takeException(), isNull, reason: 'focus-loss validation callback');
-
-      if (exit == 'Escape') {
-        await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
-        await tester.pumpAndSettle();
-      }
-      expect(find.text('Enter a valid HTTPS URL'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-    });
-  }
+    expect(model.data.url, '');
+    expect(model.hasImage, isFalse);
+    expect(find.byKey(const ValueKey('media-url-field')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets('restoring media clears a draft before focus loss can apply it', (tester) async {
     const url = 'https://example.com/image.png';
@@ -821,6 +865,7 @@ void main() {
 
   testWidgets('focused media editor consumes browser paste', (tester) async {
     final attachments = TestAttachmentStore();
+    const source = 'foo://x me';
     await pumpCanvas(
       tester,
       TestLibraryStore(
@@ -829,7 +874,7 @@ void main() {
             id: 'media',
             position: const Offset(120, 150),
             width: 400,
-            url: 'replace me',
+            url: source,
           ),
         ),
       ),
@@ -847,7 +892,7 @@ void main() {
     });
     await tester.pump();
     expect(model.controller.text, 'keep me');
-    expect(model.data.url, 'replace me');
+    expect(model.data.url, source);
 
     await tester.runAsync(() async {
       _dispatchImagePaste(onePixelPngBytes);

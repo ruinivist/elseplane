@@ -96,20 +96,12 @@ void main() {
     await expectLater(decodeCanvasLibraryArchive(ZipEncoder().encodeBytes(archive)), throwsFormatException);
   });
 
-  test('library archive decoding validates incoming media sources', () async {
-    for (final source in [
-      'javascript:alert(1)',
-      'https://user:secret@example.com/path',
-      'https://example.com/${List.filled(2049, 'x').join()}',
-    ]) {
-      await expectLater(decodeCanvasLibraryArchive(await _mediaArchive([source])), throwsFormatException);
-    }
-
+  test('library archives preserve raw media sources and referenced attachments', () async {
     final sources = [
-      '',
+      '  example.com/articles/design  ',
+      'javascript:alert(1)',
+      'https:///missing-host',
       _path,
-      'https://example.com/image.JPEG?download=1',
-      'https://example.com/article',
     ];
     final decoded = await decodeCanvasLibraryArchive(await _mediaArchive(sources));
     expect(

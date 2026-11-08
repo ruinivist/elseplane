@@ -50,16 +50,16 @@ content; cleanup attempts only new unpublished attachment paths. Successful
 replacement invalidates queued revisions from the outgoing document. Existing
 attachments remain available to saved documents and retained history.
 
-Canvas project import and library restore validate each external media source
-with the shared pure document URL policy (valid HTTPS and at most 2048
-characters) before attachment staging or publication. The document decoder
-remains permissive for existing browser data: legacy arbitrary source strings
-stay readable and unrewritten, but are never loaded or opened. Rejecting an
-external candidate leaves the current document, history, and attachments
-unchanged. Library restore uses the document policy without importing the editor.
+Media source strings are raw user content, not a transfer validation boundary.
+Clipboard, project, and library decoding preserve them without URL
+normalization or source rejection. At runtime, the editor resolves a trimmed
+copy for loading or opening, defaulting bare addresses and protocol-relative
+addresses to HTTPS; unsupported or unusable sources remain unresolved and are
+never requested or opened. Attachment path discovery, image validation,
+reference matching, archive validation, and staged publication remain unchanged.
 
 Preserve path, byte-size, archive-entry, image, and attachment-reference
 validation. Attachment preparation must not overwrite bytes reachable from the
-existing library. Validate external input at the boundary. Import/restore
-details and user-facing behavior are specified in the
+existing library. Validate external structure and attachment data at the
+boundary. Import/restore details and user-facing behavior are specified in the
 [interaction model](../specs/interaction-model.md).

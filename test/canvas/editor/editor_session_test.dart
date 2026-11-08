@@ -4,7 +4,6 @@
 import 'dart:ui';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:elseplane/canvas/document/media_url.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/media_source.dart';
 import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
@@ -114,7 +113,7 @@ void main() {
     expect((session.document.elements.single as ShapeElementData).position, const Offset(10, 0));
   });
 
-  test('invalid media URLs leave the saved source and history unchanged', () {
+  test('media source edits preserve raw text through undo and redo', () {
     final original = MediaElementData(
       id: 'media',
       position: Offset.zero,
@@ -122,38 +121,17 @@ void main() {
       url: 'https://example.com/original.png',
     );
     final session = _session([original]);
-    expect(session.setMediaUrl('media', 'https://example.com/changed'), isTrue);
+    const source = '  example.com/articles/design?ref=canvas#section  ';
+    expect(session.setMediaUrl('media', source), isTrue);
     session.finishOperation();
     final changed = session.element('media')! as MediaElementData;
+    expect(changed.url, source);
     expect(isLinkMediaSource(changed.url), isTrue);
-
-    var publications = 0;
-    session.documentChanges.addListener(() => publications++);
-    final invalidUrls = [
-      'javascript:alert(1)',
-      'https://user:secret@example.com/path',
-      'https://example.com/${List.filled(mediaUrlMaximumLength, 'x').join()}',
-    ];
-    for (final url in invalidUrls) {
-      expect(session.setMediaUrl('media', url), isFalse, reason: url);
-      expect(session.element('media'), changed, reason: url);
-    }
-    expect(publications, 0);
 
     session.undo();
     expect(session.element('media'), original);
     session.redo();
     expect(session.element('media'), changed);
-  });
-
-  test('valid media URLs and empty sources commit through the session', () {
-    final session = _session([
-      MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'https://example.com/original'),
-    ]);
-    expect(session.setMediaUrl('media', 'https://example.com/next'), isTrue);
-    expect((session.element('media')! as MediaElementData).url, 'https://example.com/next');
-    expect(session.setMediaUrl('media', ''), isTrue);
-    expect((session.element('media')! as MediaElementData).url, '');
   });
 
   test('tool-only history preserves selection without document publication', () {
