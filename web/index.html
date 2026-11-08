@@ -123,6 +123,12 @@
     <span aria-hidden="true">Loading <span class="loading-dots"></span></span>
   </div>
   <script>
+    const suppressMiddleMouseDefault = (event) => {
+      if (event.button === 1) event.preventDefault();
+    };
+    window.addEventListener('mousedown', suppressMiddleMouseDefault, true);
+    window.addEventListener('auxclick', suppressMiddleMouseDefault, true);
+
     window.addEventListener('flutter-first-frame', () => {
       document.getElementById('startup-loader').remove();
     }, { once: true });
