@@ -23,7 +23,7 @@ void main() {
     for (final failure in [false, true]) {
       for (final dispose in [false, true]) {
         test(
-          '${media ? 'media' : 'text'} cancels delayed reader ${failure ? 'failure' : 'text'} on ${dispose ? 'disposal' : 'restore'}',
+          '${media ? 'media' : 'text'} ignores delayed reader ${failure ? 'failure' : 'text'} after ${dispose ? 'disposal' : 'removal'}',
           () async {
             final store = TestAttachmentStore();
             final text = media ? null : _model('original');
@@ -38,9 +38,9 @@ void main() {
             if (dispose) {
               (text ?? image!).dispose();
             } else if (media) {
-              image!.session.invalidatePendingEdits();
+              image!.session.remove([image.data.id]);
             } else {
-              text!.session.invalidatePendingEdits();
+              text!.session.remove([text.data.id]);
             }
             if (failure) {
               reader.completeError(StateError('clipboard failed'));
@@ -56,27 +56,6 @@ void main() {
       }
     }
 
-    test('${media ? 'media' : 'text'} cancels clipboard content already being read', () async {
-      final store = TestAttachmentStore();
-      final text = media ? null : _model('original');
-      final image = media
-          ? testMediaModel(MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'), store)
-          : null;
-      final value = Completer<String>();
-      final reader = _TextReader(value.future);
-      final pending = media ? image!.paste(Future.value(reader)) : text!.paste(Future.value(reader), store);
-      await reader.started.future;
-      if (media) {
-        image!.session.invalidatePendingEdits();
-      } else {
-        text!.session.invalidatePendingEdits();
-      }
-      value.complete('late');
-      await pending;
-      expect(media ? image!.data.url : text!.data.markdown, 'original');
-      (text ?? image!).dispose();
-    });
-
     test('${media ? 'media' : 'text'} current reader failure still reports', () async {
       final store = TestAttachmentStore();
       final text = media ? null : _model('original');
@@ -91,20 +70,6 @@ void main() {
       (text ?? image!).dispose();
     });
   }
-
-  test('invalidation is silent and invalid edits keep pending work', () {
-    final model = _model('original');
-    var notifications = 0;
-    model.addListener(() => notifications++);
-    model.session.documentChanges.addListener(() => notifications++);
-    final generation = model.session.editGeneration;
-    expect(() => model.session.move([model.data.id], const Offset(double.nan, 0)), throwsFormatException);
-    expect(model.session.editGeneration, generation);
-    model.session.invalidatePendingEdits();
-    expect(model.session.editGeneration, generation + 1);
-    expect(notifications, 0);
-    model.dispose();
-  });
 
   test(
     'pasted image is committed before its short reference is inserted',
@@ -168,29 +133,6 @@ void main() {
     expect(model.controller.value, value);
     expect(model.session.document, same(document));
   });
-
-  for (final corrupt in [false, true]) {
-    test('cancellation during image validation is silent with corrupt bytes $corrupt', () async {
-      final store = _TrackingAttachmentStore();
-      final model = _model('unchanged');
-      addTearDown(model.dispose);
-      final value = model.controller.value;
-      final document = model.session.document;
-      final pending = model.insertPastedImage(
-        corrupt ? Uint8List.fromList([1, 2, 3]) : onePixelPngBytes,
-        'png',
-        store,
-      );
-      model.session.invalidatePendingEdits();
-
-      await pending;
-
-      expect(store.writes, 0);
-      expect(store.files, isEmpty);
-      expect(model.controller.value, value);
-      expect(model.session.document, same(document));
-    });
-  }
 
   test('plain text paste replaces the current selection', () {
     final model = _model('before after')

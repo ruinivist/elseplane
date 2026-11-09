@@ -110,19 +110,18 @@ class _TextMarkdownEditorState extends State<TextMarkdownEditor> {
 
 extension TextClipboardEdits on TextEditorResources {
   Future<void> paste(Future<ClipboardReader> readerFuture, AttachmentStore store) async {
-    final token = session.captureEdit(data.id);
     try {
       final reader = await readerFuture;
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       final clipboard = await readCanvasClipboard(reader);
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       if (clipboard.image case final image?) {
         await insertPastedImage(image.bytes, image.extension, store);
       } else if (clipboard.text case final text?) {
         insertPastedText(text);
       }
     } on Object {
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       rethrow;
     }
   }
@@ -132,28 +131,27 @@ extension TextClipboardEdits on TextEditorResources {
     String extension,
     AttachmentStore store,
   ) async {
-    final token = session.captureEdit(data.id);
     try {
       final path = 'attachments/${const Uuid().v4()}.$extension';
       await validateCanvasAttachment(path, bytes);
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       var written = false;
       try {
         await store.write(path, bytes);
         written = true;
       } finally {
-        if (!written || !token.isCurrent || !attached) {
+        if (!written || !attached) {
           try {
             await store.delete(path);
           } on Object {
-            // Cleanup cannot revive a canceled edit or hide the write failure.
+            // Cleanup must not hide the write failure.
           }
         }
       }
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       insertPastedText('![pasted image]($path)');
     } on Object {
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       rethrow;
     }
   }

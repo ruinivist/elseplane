@@ -11,7 +11,7 @@ then read the authority relevant to the work. Do not create a separate
   [ownership](arch/ownership.md), [editor lifecycles](arch/editor-lifecycles.md),
   [persistence](arch/persistence.md), and [UI](arch/ui.md).
 - [Interaction model](specs/interaction-model.md) is the accepted product
-  behavior contract. The accepted [paste cancellation decision](adr/0001-cancel-unfinished-pastes.md),
+  behavior contract. The accepted [asynchronous edit decision](adr/0001-cancel-unfinished-pastes.md),
   [canvas document and media decision](adr/0002-separate-documents-and-media.md),
   and [media link cards decision](adr/0003-media-link-cards-without-embeds.md)
   record their rationale and consequences.

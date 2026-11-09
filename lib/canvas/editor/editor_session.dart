@@ -56,21 +56,6 @@ extension DrawingDefaultsChanges on DrawingDefaults {
   );
 }
 
-/// Checks whether async work still belongs to its original editor and target.
-/// Used before applying clipboard reads, uploads, and their error messages.
-class EditorEditToken {
-  EditorEditToken._(this._session, this._generation, this._id)
-    : _targetLifetime = _id == null ? null : _session.elementLifetime(_id);
-  final EditorSession _session;
-  final int _generation;
-  final String? _id;
-  final Object? _targetLifetime;
-  bool get isCurrent =>
-      _session.isLive &&
-      _generation == _session.editGeneration &&
-      (_id == null || _targetLifetime != null && identical(_targetLifetime, _session.elementLifetime(_id)));
-}
-
 // ---------- Session ----------
 
 /// Coordinates edits and interaction state for one open canvas.
@@ -112,7 +97,6 @@ class EditorSession extends ChangeNotifier {
   EditorContext? _editing;
   CanvasTool _tool = CanvasTool.select;
   bool _live = true;
-  int _editGeneration = 0;
   int _restorationGeneration = 0;
   DrawingDefaults _defaults;
   DrawingDefaults get defaults => _defaults;
@@ -124,7 +108,6 @@ class EditorSession extends ChangeNotifier {
   EditorContext? get editing => _editing;
   CanvasTool get tool => _tool;
   bool get isLive => _live;
-  int get editGeneration => _editGeneration;
   int get restorationGeneration => _restorationGeneration;
   EditorSnapshot get _snapshot => (document: document, tool: tool);
 
@@ -139,15 +122,11 @@ class EditorSession extends ChangeNotifier {
 
   // ---------- Interaction state and history ----------
 
-  EditorEditToken captureEdit([String? id]) => EditorEditToken._(this, editGeneration, id);
-  void invalidatePendingEdits() => _editGeneration++;
-
-  void setSelection(Iterable<String> ids, {bool preserveContext = false}) {
+  void setSelection(Iterable<String> ids) {
     if (!_live) return;
     final next = ids.toSet();
     if (setEquals(next, _selectedIds)) return;
     if (next.any((id) => element(id) == null)) throw ArgumentError('Unknown selected element');
-    if (!preserveContext) invalidatePendingEdits();
     _selectedIds
       ..clear()
       ..addAll(next);
@@ -162,7 +141,6 @@ class EditorSession extends ChangeNotifier {
       finishOperation();
       _editing = null;
     }
-    invalidatePendingEdits();
     _activeId = id;
     notifyListeners();
   }
@@ -180,7 +158,6 @@ class EditorSession extends ChangeNotifier {
       if (!valid) throw ArgumentError('Unknown editing field');
     }
     finishOperation();
-    invalidatePendingEdits();
     _editing = value;
     notifyListeners();
   }
@@ -193,7 +170,6 @@ class EditorSession extends ChangeNotifier {
   }
 
   void _applyTool(CanvasTool value) {
-    invalidatePendingEdits();
     _editing = null;
     _activeId = null;
     _tool = value;
@@ -210,7 +186,6 @@ class EditorSession extends ChangeNotifier {
   void _restore(EditorSnapshot? snapshot) {
     if (!_live || snapshot == null) return;
     final changed = document != snapshot.document;
-    invalidatePendingEdits();
     _restorationGeneration++;
     _activeId = null;
     _editing = null;
@@ -239,7 +214,6 @@ class EditorSession extends ChangeNotifier {
     if (!_live) return;
     final removed = ids.toSet();
     if (!document.elements.any((value) => removed.contains(value.id))) return;
-    invalidatePendingEdits();
     _selectedIds.removeAll(removed);
     if (removed.contains(_activeId)) _activeId = null;
     if (removed.contains(_editing?.id)) _editing = null;
@@ -426,7 +400,6 @@ class EditorSession extends ChangeNotifier {
 
   void endLifetime() {
     if (!_live) return;
-    invalidatePendingEdits();
     _restorationGeneration++;
     _live = false;
   }

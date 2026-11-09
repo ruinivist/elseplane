@@ -16,7 +16,9 @@ library operations use the same queue.
   empty document.
 - Workspace owns the open editor session and forwards document-change
   notifications to the library. File switching flushes completed edits before
-  replacement; failed flushes preserve the open editor for retry.
+  replacement without waiting for pending clipboard or upload work; failed
+  flushes preserve the open editor for retry. Pending work has no persistence
+  guarantee.
 
 ## Canvas archives
 

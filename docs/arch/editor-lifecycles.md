@@ -58,23 +58,22 @@ values and grant no mutation rights.
 ## Restoration and history
 
 - Reconcile surviving IDs and types; update changed content without recreating
-  unrelated controllers or restarting unchanged image loads. Removal
-  invalidates pending work immediately; dispose resources after consumers
-  detach. File switching and document replacement start a fresh editor
-  lifetime.
+  unrelated controllers or restarting unchanged image loads. Removal detaches
+  target resources immediately; dispose resources after consumers detach. File
+  switching and document replacement start a fresh editor lifetime.
 - Retain 50 typed snapshots of document and tool choice. JSON does not
   participate in ordinary history capture or comparison. Explicit operation
   boundaries group drags, resizes, rotations, strokes, and option changes.
   Autosave timing is independent of history grouping.
-- Tool-only undo does not save; a tool change cancels pending edits from the
-  previous input context. Placement and its return to Select share an
-  operation. Auto promotion belongs to the interaction that caused it; manual
-  arrangement changes order and Auto settings together. No-ops preserve redo;
-  new edits and explicit tool choices clear it. Focused editors retain local
-  text undo.
+- Tool-only undo does not save and does not cancel pending clipboard or upload
+  work. Placement and its return to Select share an operation. Auto promotion
+  belongs to the interaction that caused it; manual arrangement changes order
+  and Auto settings together. No-ops preserve redo; new edits and explicit tool
+  choices clear it. Focused editors retain local text undo.
 - Active owns controls, selected owns group operations, and editing owns
-  content input. Document restoration clears these states and cancels pending
-  edits; tool-only restoration follows the [interaction model](../specs/interaction-model.md).
+  content input. Document restoration clears these states; pending edits to
+  surviving targets may still complete. Tool-only restoration follows the
+  [interaction model](../specs/interaction-model.md).
   Rendering lift is temporary; saved order changes only through editor
   operations.
 
@@ -83,9 +82,8 @@ values and grant no mutation rights.
 - CanvasInput owns pointer arbitration and explicit gesture transitions;
   CanvasShortcuts gives menus and focused editors priority; CanvasClipboard
   owns canvas clipboard interpretation and edit workflows. Input supplies
-  lifetime-bound element and control callbacks. Cancellation, tool changes,
-  dialogs, restoration, replacement, and disposal cancel affected work, and
-  held interrupted pointers cannot restart it.
+  lifetime-bound element and control callbacks. Canceled or interrupted pointer
+  gestures cannot restart while their original pointers remain held.
 - Direct Arrange captures the pre-pointer selection when the active object
   belongs to it. CanvasView owns the menu and grid queries; EditorSession
   commits group order and Auto changes together.
@@ -99,16 +97,16 @@ values and grant no mutation rights.
   `localDelta`), convert at boundaries, and share transform calculations. The
   document is authoritative for persisted geometry and order; the grid owns
   measured layout and viewport state.
-- Async edits capture session and target lifetime tokens and follow the
-  [paste cancellation decision](../adr/0001-cancel-unfinished-pastes.md).
-  Logical field changes, editing exit, tool changes, app dialogs, restoration,
-  replacement, removal, and disposal invalidate affected edits. Media metadata
-  and thumbnail completions also check source and document lifetime. Browser focus
-  loss, permission prompts, device selection, and ordinary edits in the same
-  context do not. Navigation cancels unfinished work and flushes completed
-  snapshots without waiting for clipboard reads or uploads. Image display loads
-  track source identity separately. Canceled uploads attempt cleanup without
-  modifying restored content.
+- Async clipboard and upload edits follow the
+  [asynchronous edit decision](../adr/0001-cancel-unfinished-pastes.md).
+  Field, selection, tool, focus, and history changes do not cancel them; they
+  apply to the live selection or original surviving target. Session end and
+  target removal or disposal still prevent writes, and cleanup removes only new
+  unpublished attachment paths. Navigation flushes completed snapshots without
+  waiting for pending clipboard reads or uploads; pending work has no persistence
+  guarantee. Media metadata and thumbnail completions retain their separate
+  source and document lifetime checks, and image display loads track source
+  identity independently.
 
 ## Code wrapping constraint
 

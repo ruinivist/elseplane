@@ -1,7 +1,6 @@
 // Verifies object Arrange menus, shortcuts, persistence, and history.
 // Exercises ordering through the canvas rather than reproducing the library algorithm.
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -14,7 +13,6 @@ import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
-import 'package:elseplane/canvas/editor/elements/text/text_markdown_editor.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/library/canvas_library.dart';
@@ -160,43 +158,6 @@ void main() {
       expect(_canvas(tester).childOrder, ['editor', 'other']);
     });
   }
-
-  testWidgets('canceled image paste leaves content, stacking, and history unchanged after editing ends', (
-    tester,
-  ) async {
-    final document = _autoDocument('text').withElements(
-      (elements) => elements[elements.length - 1] = elements[elements.length - 1].copyWith(autoArrange: true),
-    );
-    final attachments = (await tester.runAsync(() async => _DelayedAttachmentStore()))!;
-    await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
-    await tester.tapAt(_autoHitPoint(tester, 'text'), kind: PointerDeviceKind.mouse);
-    await tester.pumpAndSettle();
-    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
-    model.controller.selection = const TextSelection.collapsed(offset: 0);
-    late Future<void> paste;
-    await tester.runAsync(() async {
-      paste = model.insertPastedImage(onePixelPngBytes, 'png', attachments);
-      await attachments.started.future;
-    });
-    await _promoteOther(tester);
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await tester.pumpAndSettle();
-    expect(model.editing, isFalse);
-    await tester.runAsync(() async {
-      attachments.resume.complete();
-      await paste;
-    });
-    await tester.pumpAndSettle();
-    expect(_canvas(tester).childOrder, ['editor', 'other']);
-    expect(model.controller.text, 'contents');
-    expect(attachments.files, isEmpty);
-    await _shortcut(tester, LogicalKeyboardKey.keyZ);
-    expect(_canvas(tester).childOrder, ['other', 'editor']);
-    expect(model.controller.text, 'contents');
-    await _shortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
-    expect(_canvas(tester).childOrder, ['editor', 'other']);
-    expect(model.controller.text, 'contents');
-  });
 
   for (final image in [false, true]) {
     for (final auto in [true, false]) {
@@ -1889,18 +1850,6 @@ void main() {
 }
 
 // ---------- Helpers ----------
-
-class _DelayedAttachmentStore extends TestAttachmentStore {
-  final started = Completer<void>();
-  final resume = Completer<void>();
-
-  @override
-  Future<void> write(String path, Uint8List bytes) async {
-    started.complete();
-    await resume.future;
-    await super.write(path, bytes);
-  }
-}
 
 Future<void> _promoteOther(WidgetTester tester) async {
   await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);

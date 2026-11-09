@@ -551,10 +551,9 @@ class _CodeTitleSurfaceClipper extends CustomClipper<Path> {
 
 extension CodeClipboardEdits on CodeEditorResources {
   Future<void> paste({bool intoTitle = false}) async {
-    final token = session.captureEdit(data.id);
     try {
       final clipboard = await Clipboard.getData(Clipboard.kTextPlain);
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       final text = clipboard?.text;
       if (text == null || text.isEmpty) return;
       if (intoTitle) {
@@ -574,7 +573,7 @@ extension CodeClipboardEdits on CodeEditorResources {
         controller.replaceSelection(text);
       }
     } on Object {
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       rethrow;
     }
   }

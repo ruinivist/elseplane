@@ -1,4 +1,4 @@
-// Checks editor ownership, typed history, and logical context cancellation.
+// Checks editor ownership and typed history.
 // Exercises session operations without widgets, storage, or browser APIs.
 
 import 'dart:ui';
@@ -165,30 +165,27 @@ void main() {
     expect(session.tool, CanvasTool.select);
   });
 
-  test('source and title are separate content groups and paste contexts', () {
-    final session = _session([
-      CodeElementData(
-        id: 'code',
-        position: Offset.zero,
-        size: const Size(300, 300),
-        language: CodeLanguage.dart,
-        source: '',
-        title: '',
-        showLineNumbers: true,
-      ),
-    ]);
-    final token = (session..editField((id: 'code', field: EditorField.source))).captureEdit('code');
-    session
-      ..setCodeSource('code', 'one')
-      ..editField((id: 'code', field: EditorField.source))
-      ..setCodeSource('code', 'two');
-    expect(token.isCurrent, isTrue);
-    session.editField((id: 'code', field: EditorField.title));
-    expect(token.isCurrent, isFalse);
-    session
-      ..setCodeTitle('code', 'title')
-      ..editField(null)
-      ..undo();
+  test('source and title are separate content groups', () {
+    final session =
+        _session([
+            CodeElementData(
+              id: 'code',
+              position: Offset.zero,
+              size: const Size(300, 300),
+              language: CodeLanguage.dart,
+              source: '',
+              title: '',
+              showLineNumbers: true,
+            ),
+          ])
+          ..editField((id: 'code', field: EditorField.source))
+          ..setCodeSource('code', 'one')
+          ..editField((id: 'code', field: EditorField.source))
+          ..setCodeSource('code', 'two')
+          ..editField((id: 'code', field: EditorField.title))
+          ..setCodeTitle('code', 'title')
+          ..editField(null)
+          ..undo();
     final afterTitle = session.document.elements.single as CodeElementData;
     expect(afterTitle.source, 'two');
     expect(afterTitle.title, '');
@@ -248,24 +245,6 @@ void main() {
       ..chooseTool(CanvasTool.pen)
       ..redo();
     expect(session.tool, CanvasTool.pen);
-  });
-
-  test('removal, restore, and disposal invalidate captured edits', () {
-    final session = _session([_shape('a')]);
-    final pending = session.captureEdit('a');
-    final lifetime = session.elementLifetime('a');
-    session.remove(['a']);
-    expect(pending.isCurrent, isFalse);
-    session
-      ..finishOperation()
-      ..undo();
-    expect(session.elementLifetime('a'), isNot(same(lifetime)));
-    expect(pending.isCurrent, isFalse);
-    final restored = session.captureEdit('a');
-    session.endLifetime();
-    expect(restored.isCurrent, isFalse);
-    session.move(['a'], const Offset(100, 0));
-    expect((session.document.elements.single as ShapeElementData).position, Offset.zero);
   });
 
   test('pen movement preserves normalized local geometry', () {

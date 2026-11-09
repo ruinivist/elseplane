@@ -18,33 +18,21 @@ import '../../../test_helpers.dart';
 
 void main() {
   for (final intoTitle in [false, true]) {
-    for (final cancel in ['none', 'deactivate', 'restore', 'dispose']) {
-      testWidgets('${intoTitle ? 'title' : 'source'} paste respects $cancel', (tester) async {
-        final read = Completer<Map<String, Object>>();
-        _mockClipboardRead(() => read.future);
-        final model = _codeModel(source: 'old tail')
-          ..setActive(value: true)
-          ..setTitle('old tail');
-        model.controller.selection = _replacementSelection;
-        model.titleController.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
-        final paste = model.paste(intoTitle: intoTitle);
-        switch (cancel) {
-          case 'deactivate':
-            model
-              ..setActive(value: false)
-              ..setActive(value: true);
-          case 'restore':
-            model.session.invalidatePendingEdits();
-          case 'dispose':
-            model.dispose();
-        }
-        read.complete({'text': 'NEW'});
-        await tester.pump();
-        await paste;
-        expect(intoTitle ? model.title : model.data.source, cancel == 'none' ? 'NEW tail' : 'old tail');
-        if (cancel != 'dispose') model.dispose();
-      });
-    }
+    testWidgets('${intoTitle ? 'title' : 'source'} paste ignores a disposed target', (tester) async {
+      final read = Completer<Map<String, Object>>();
+      _mockClipboardRead(() => read.future);
+      final model = _codeModel(source: 'old tail')
+        ..setActive(value: true)
+        ..setTitle('old tail');
+      model.controller.selection = _replacementSelection;
+      model.titleController.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
+      final paste = model.paste(intoTitle: intoTitle);
+      model.dispose();
+      read.complete({'text': 'NEW'});
+      await tester.pump();
+      await paste;
+      expect(intoTitle ? model.title : model.data.source, 'old tail');
+    });
   }
 
   testWidgets('pending code paste uses live content and selection after ordinary edits', (tester) async {
@@ -64,31 +52,25 @@ void main() {
     expect(model.controller, same(controller));
   });
 
-  for (final canceled in [false, true]) {
-    testWidgets(
-      'code paste ${canceled ? 'ignores a canceled failure' : 'reports a current failure and permits retry'}',
-      (tester) async {
-        final read = Completer<Map<String, Object>>();
-        _mockClipboardRead(() => read.future);
-        final model = _codeModel(source: 'old tail')..setActive(value: true);
-        addTearDown(model.dispose);
-        final paste = model.paste();
-        final checked = canceled ? paste : expectLater(paste, throwsA(isA<PlatformException>()));
-        if (canceled) model.setActive(value: false);
-        read.completeError(PlatformException(code: 'clipboard-denied'));
-        await tester.pump();
-        await checked;
-        expect(model.data.source, 'old tail');
-        model.setActive(value: true);
-        _mockClipboardRead(() async => {'text': 'NEW'});
-        model.controller.selection = _replacementSelection;
-        final retry = model.paste();
-        await tester.pump();
-        await retry;
-        expect(model.data.source, 'NEW tail');
-      },
-    );
-  }
+  testWidgets('code paste reports a current failure and permits retry', (tester) async {
+    final read = Completer<Map<String, Object>>();
+    _mockClipboardRead(() => read.future);
+    final model = _codeModel(source: 'old tail')..setActive(value: true);
+    addTearDown(model.dispose);
+    final paste = model.paste();
+    final checked = expectLater(paste, throwsA(isA<PlatformException>()));
+    read.completeError(PlatformException(code: 'clipboard-denied'));
+    await tester.pump();
+    await checked;
+    expect(model.data.source, 'old tail');
+    model.setActive(value: true);
+    _mockClipboardRead(() async => {'text': 'NEW'});
+    model.controller.selection = _replacementSelection;
+    final retry = model.paste();
+    await tester.pump();
+    await retry;
+    expect(model.data.source, 'NEW tail');
+  });
 
   test('title changes publish the synchronized controller and value once', () {
     final model = _codeModel();

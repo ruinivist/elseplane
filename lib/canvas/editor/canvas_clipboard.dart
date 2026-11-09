@@ -169,8 +169,8 @@ class CanvasClipboard {
     }
     final ids = (targets ?? session.selectedIds).toSet();
     final selected = session.document.elements.where((value) => ids.contains(value.id)).toList();
-    final generation = session.captureEdit();
     if (selected.isEmpty) return;
+    final targetLifetimes = cut ? {for (final value in selected) value.id: session.elementLifetime(value.id)} : null;
     final payload = encodeCanvasClipboard(
       selected,
     );
@@ -184,18 +184,21 @@ class CanvasClipboard {
         final item = DataWriterItem()..add(Formats.plainText(payload));
         await clipboard.write([item]);
       }
-      if (!session.isLive || !generation.isCurrent) return;
+      if (!session.isLive) return;
       _lastPastedPayload = null;
       _pasteOffset = Offset.zero;
       _cutPayload = cut ? payload : null;
       _pointerReference = (payload, pointerPosition());
       if (cut) {
         session.finishOperation();
-        session.remove(selected.map((a) => a.id));
+        session.remove([
+          for (final entry in targetLifetimes!.entries)
+            if (entry.value != null && identical(entry.value, session.elementLifetime(entry.key))) entry.key,
+        ]);
         session.finishOperation();
       }
     } on Object {
-      if (!session.isLive || !generation.isCurrent) return;
+      if (!session.isLive) return;
       onError(
         cut ? 'Could not cut canvas elements' : 'Could not copy canvas elements',
       );
@@ -204,7 +207,6 @@ class CanvasClipboard {
 
   Future<void> paste(Future<ClipboardReader>? readerFuture, {Offset? position}) async {
     if (!enabled()) return;
-    final generation = session.captureEdit();
     final pointer = this.pointerPosition();
     final scale = this.scale();
     final pointerPosition = pointer == null ? null : screenToCanvas(pointer);
@@ -214,18 +216,17 @@ class CanvasClipboard {
       final clipboard = read != null
           ? await read()
           : await readCanvasClipboard(await (readerFuture ?? SystemClipboard.instance!.read()));
-      if (!session.isLive || !enabled() || !generation.isCurrent) return;
+      if (!session.isLive) return;
       final text = clipboard.text;
       final elements = text == null ? null : decodeCanvasClipboard(text);
       if (elements == null) {
         if (clipboard.image case final image?) {
-          await _pasteImage(image, mediaPosition, generation);
+          await _pasteImage(image, mediaPosition);
         } else if (text case final source? when isCanvasLinkPasteCandidate(source)) {
           _pasteMediaUrl(source, mediaPosition);
         }
         return;
       }
-      if (!session.isLive || !enabled()) return;
       final payload = text!;
 
       final placeAtPointer = position != null || (pointer != null && (payload, pointer) != _pointerReference);
@@ -245,21 +246,21 @@ class CanvasClipboard {
       session.insert([for (final value in pasted) moveElement(value, _pasteOffset)]);
       session.setSelection(pasted.map((value) => value.id));
     } on Object {
-      if (!session.isLive || !generation.isCurrent) return;
+      if (!session.isLive) return;
       onError('Could not paste canvas elements');
     }
   }
 
-  Future<void> _pasteImage(ClipboardImage image, Offset position, EditorEditToken generation) async {
+  Future<void> _pasteImage(ClipboardImage image, Offset position) async {
     final extension = image.extension.toLowerCase() == 'jpeg' ? 'jpg' : image.extension.toLowerCase();
     final path = 'attachments/${const Uuid().v4()}.$extension';
     if (!attachmentPathPattern.hasMatch(path)) throw const FormatException('Unsupported image type');
     var published = false;
     try {
       final size = await readCanvasImageSize(image.bytes);
-      if (!generation.isCurrent) return;
+      if (!session.isLive) return;
       await attachments.write(path, image.bytes);
-      if (!session.isLive || !generation.isCurrent) return;
+      if (!session.isLive) return;
       _placePastedMedia(
         _newMediaData(path),
         position,
@@ -271,14 +272,14 @@ class CanvasClipboard {
         try {
           await attachments.delete(path);
         } on Object {
-          // Cleanup cannot hide the original failure or revive a canceled edit.
+          // Cleanup must not hide the original failure.
         }
       }
     }
   }
 
   void _pasteMediaUrl(String url, Offset position) {
-    if (!session.isLive || !enabled()) return;
+    if (!session.isLive) return;
     _placePastedMedia(_newMediaData(url), position);
   }
 

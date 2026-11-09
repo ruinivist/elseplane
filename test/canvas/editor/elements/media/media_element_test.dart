@@ -217,90 +217,55 @@ void main() {
   });
 
   for (final media in [false, true]) {
-    for (final stale in [false, true]) {
-      testWidgets(
-        '${media ? 'media' : 'text'} image paste ${stale ? 'cancels stale' : 'reports current'} write failure',
-        (tester) async {
-          final attachments = (await tester.runAsync(() async => _FailedWrite()))!;
-          var document = _document();
-          if (media) {
-            document = document.withElements(
-              (elements) => elements.add(
-                MediaElementData(id: 'media', position: const Offset(120, 150), width: 280, url: _unusableMediaSource),
-              ),
-            );
-          } else {
-            document = document.withElements(
-              (elements) => elements.add(
-                TextElementData(
-                  id: 'text',
-                  position: const Offset(120, 150),
-                  width: 280,
-                  height: null,
-                  markdown: 'original',
-                  style: const TextNodeStyle(fontFamily: 'Inter', color: Color(0xff201C1A)),
-                ),
-              ),
-            );
-          }
-          await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
-          final text = media ? null : tester.widget<TextElementView>(find.byType(TextElementView)).resources;
-          final image = media ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources : null;
-          await tester.tap(
-            find.byKey(ValueKey(media ? 'media-url-panel' : 'text-markdown-preview')),
-            kind: PointerDeviceKind.mouse,
+    testWidgets(
+      '${media ? 'media' : 'text'} image paste reports write failure',
+      (tester) async {
+        final attachments = (await tester.runAsync(() async => _FailedWrite()))!;
+        var document = _document();
+        if (media) {
+          document = document.withElements(
+            (elements) => elements.add(
+              MediaElementData(id: 'media', position: const Offset(120, 150), width: 280, url: _unusableMediaSource),
+            ),
           );
-          await tester.pump();
-          await tester.runAsync(() async {
-            _dispatchImagePaste(onePixelPngBytes);
-            await attachments.started.future;
-          });
-          if (stale) {
-            if (media) {
-              image!.session.invalidatePendingEdits();
-            } else {
-              text!.session.invalidatePendingEdits();
-            }
-          }
-          await tester.runAsync(() async {
-            attachments.release.completeError(StateError('write failed'));
-            await attachments.finished.future;
-            await Future<void>.delayed(Duration.zero);
-          });
-          await tester.pump();
-          expect(find.text('Could not paste image'), stale ? findsNothing : findsOneWidget);
-          expect(media ? image!.data.url : text!.data.markdown, media ? _unusableMediaSource : 'original');
-          await tester.pumpWidget(const SizedBox());
-        },
-      );
-    }
-  }
-
-  testWidgets('restoring during image decoding prevents storage writes and silences stale decoding errors', (
-    tester,
-  ) async {
-    final attachments = TestAttachmentStore();
-    final model = testMediaModel(
-      MediaElementData(id: 'media', position: Offset.zero, width: 200, url: _unusableMediaSource),
-      attachments,
+        } else {
+          document = document.withElements(
+            (elements) => elements.add(
+              TextElementData(
+                id: 'text',
+                position: const Offset(120, 150),
+                width: 280,
+                height: null,
+                markdown: 'original',
+                style: const TextNodeStyle(fontFamily: 'Inter', color: Color(0xff201C1A)),
+              ),
+            ),
+          );
+        }
+        await pumpCanvas(tester, TestLibraryStore(document), attachmentStore: attachments);
+        final text = media ? null : tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+        final image = media ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources : null;
+        await tester.tap(
+          find.byKey(ValueKey(media ? 'media-url-panel' : 'text-markdown-preview')),
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pump();
+        await tester.runAsync(() async {
+          _dispatchImagePaste(onePixelPngBytes);
+          await attachments.started.future;
+        });
+        await tester.runAsync(() async {
+          attachments.release.completeError(StateError('write failed'));
+          await attachments.finished.future;
+          await Future<void>.delayed(Duration.zero);
+        });
+        await tester.pump();
+        expect(find.text('Could not paste image'), findsOneWidget);
+        expect(media ? image!.data.url : text!.data.markdown, media ? _unusableMediaSource : 'original');
+        await tester.pumpWidget(const SizedBox());
+      },
     );
-    for (final bytes in [
-      onePixelPngBytes,
-      Uint8List.fromList([1, 2, 3]),
-    ]) {
-      await tester.runAsync(() async {
-        final pending = model.setDeviceImage(bytes, 'png');
-        model.session.invalidatePendingEdits();
-        await pending;
-      });
-      expect(attachments.files, isEmpty);
-      expect(model.data.url, _unusableMediaSource);
-    }
-    await tester.runAsync(() async {
-      await expectLater(model.setDeviceImage(Uint8List.fromList([1, 2, 3]), 'png'), throwsFormatException);
-    });
-    model.dispose();
-  });
+  }
 
   testWidgets('media places as a selectable URL-only node', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document()));

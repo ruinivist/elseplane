@@ -480,11 +480,11 @@ class CanvasInput extends ChangeNotifier {
     if (value == null) return;
     var selected = session.isSelected(id);
     if (_gesture case _ObjectGesture(selection: final before) when before.contains(id)) {
-      session.setSelection(before, preserveContext: true);
+      session.setSelection(before);
       selected = true;
     }
     if (_gesture case _ArrowDragGesture(selection: final before) when before.contains(id)) {
-      session.setSelection(before, preserveContext: true);
+      session.setSelection(before);
       selected = true;
     }
     if (!selected) session.setSelection(const []);
@@ -577,7 +577,7 @@ class CanvasInputTarget {
     );
     _sequence = input._gesture;
     if (control) {
-      if (!input.modifierPressed.value) session.setSelection(const [], preserveContext: true);
+      if (!input.modifierPressed.value) session.setSelection(const []);
       return;
     }
     if (input.modifierPressed.value) {
@@ -588,7 +588,6 @@ class CanvasInputTarget {
         ..finishOperation();
       return;
     }
-    if (!session.isSelected(id) && session.activeId != id) session.invalidatePendingEdits();
     if (session.activeId != id && session.editing?.id != id) {
       session.setActive(null);
       input.onEndEditing();
@@ -596,7 +595,7 @@ class CanvasInputTarget {
     if (value is! TextElementData || session.editing?.field != EditorField.markdown) {
       if (session.editing?.field == EditorField.markdown) session.editField(null);
     }
-    session.setSelection(const [], preserveContext: true);
+    session.setSelection(const []);
     if (value is ArrowElementData) {
       input._gesture = _ArrowDragGesture(event.pointer, id, event.position, input.panSlop(event.kind), selection);
       _sequence = input._gesture;

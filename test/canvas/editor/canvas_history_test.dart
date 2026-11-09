@@ -6,7 +6,6 @@ import 'dart:ui' as ui;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_view.dart';
-import 'package:elseplane/canvas/editor/element_resources.dart';
 import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_editor_resources.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
@@ -29,7 +28,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts_lite.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
-import 'package:super_clipboard/super_clipboard.dart';
 
 import '../test_helpers.dart';
 
@@ -90,79 +88,9 @@ void main() {
   }
 
   for (final media in [false, true]) {
-    for (final unchanged in [false, true]) {
-      for (final failure in [false, true]) {
-        testWidgets(
-          '${media ? 'media' : 'text'} pending image ${failure ? 'failure' : 'write'} cannot change ${unchanged ? 'unchanged' : 'moved'} undo target or redo',
-          (tester) async {
-            var document = _textDocument().withElements((elements) => elements.add(_penDocument(1).elements.single));
-            if (media) {
-              document = document.withElements(
-                (elements) => elements[0] = MediaElementData(
-                  id: 'media',
-                  position: const Offset(200, 240),
-                  width: 280,
-                  url: _unusableMediaSource,
-                ),
-              );
-            }
-            final store = TestLibraryStore(document);
-            final attachments = (await tester.runAsync(() async => _PausedWrite()))!;
-            const existingPath = 'attachments/11111111-1111-4111-8111-111111111111.png';
-            attachments.files[existingPath] = onePixelPngBytes;
-            await pumpCanvas(tester, store, attachmentStore: attachments);
-            final text = media ? null : tester.widget<TextElementView>(find.byType(TextElementView)).resources;
-            final image = media ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources : null;
-            final target = (media ? image! : text!) as ElementResources;
-            final moved = unchanged ? _stroke(tester) : target;
-            final start = moved.canvasPosition;
-            moved.moveBy(const Offset(20, 10));
-            await pumpPastSave(tester);
-            late Future<void> pending;
-            await tester.runAsync(() async {
-              pending = media
-                  ? image!.setDeviceImage(onePixelPngBytes, 'png')
-                  : text!.insertPastedImage(onePixelPngBytes, 'png', attachments);
-              await attachments.started.future;
-            });
-            await _shortcut(tester);
-            expect(moved.canvasPosition, start);
-            await tester.runAsync(() async {
-              if (failure) {
-                attachments.release.completeError(StateError('write failed'));
-              } else {
-                attachments.release.complete();
-              }
-              await pending;
-            });
-            expect(attachments.files, {existingPath: onePixelPngBytes});
-            expect(media ? image!.data.url : text!.data.markdown, media ? _unusableMediaSource : 'original');
-            expect(
-              media
-                  ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources
-                  : tester.widget<TextElementView>(find.byType(TextElementView)).resources,
-              same(target),
-            );
-            await pumpPastSave(tester);
-            expect(
-              media
-                  ? (store.persisted!.elements.first as MediaElementData).url
-                  : (store.persisted!.elements.first as TextElementData).markdown,
-              media ? _unusableMediaSource : 'original',
-            );
-            await _shortcut(tester, redo: true);
-            expect(moved.canvasPosition, start + const Offset(20, 10));
-            expect(media ? image!.data.url : text!.data.markdown, media ? _unusableMediaSource : 'original');
-          },
-        );
-      }
-    }
-  }
-
-  for (final media in [false, true]) {
     for (final failDelete in [false, true]) {
       testWidgets(
-        '${media ? 'media' : 'text'} disposed upload ${failDelete ? 'stays canceled if deletion fails' : 'deletes its completed write'}',
+        '${media ? 'media' : 'text'} upload cleans up after disposal ${failDelete ? 'when deletion fails' : ''}',
         (tester) async {
           final attachments = (await tester.runAsync(() async => _PausedWrite(failDeletes: failDelete)))!;
           var document = _textDocument();
@@ -199,7 +127,7 @@ void main() {
   }
 
   for (final removal in [false, true]) {
-    testWidgets('pending write cancels immediately on ${removal ? 'removal' : 'document replacement'}', (tester) async {
+    testWidgets('pending write cleans up on ${removal ? 'target removal' : 'document replacement'}', (tester) async {
       final attachments = (await tester.runAsync(() async => _PausedWrite()))!;
       final store = TestLibraryStore(_textDocument());
       await pumpCanvas(tester, store, attachmentStore: attachments);
@@ -216,7 +144,6 @@ void main() {
         await replaceTestEditor(tester, CanvasLibrary.emptyDocument);
       }
       expect(text.disposed, !removal);
-      expect(text.session.editGeneration, greaterThan(0));
       await tester.runAsync(() async {
         attachments.release.complete();
         await pending;
@@ -224,43 +151,6 @@ void main() {
       expect(text.data.markdown, 'original');
       expect(attachments.files, isEmpty);
       await tester.pumpAndSettle();
-    });
-  }
-
-  for (final media in [false, true]) {
-    testWidgets('pending ${media ? 'media' : 'text'} paste stays canceled after leaving editing and tool-only undo', (
-      tester,
-    ) async {
-      var document = _textDocument();
-      if (media) {
-        document = document.withElements(
-          (elements) => elements[0] = MediaElementData(
-            id: 'media',
-            position: const Offset(200, 240),
-            width: 280,
-            url: _unusableMediaSource,
-          ),
-        );
-      }
-      await pumpCanvas(tester, TestLibraryStore(document));
-      final text = media ? null : tester.widget<TextElementView>(find.byType(TextElementView)).resources;
-      final image = media ? tester.widget<MediaElementView>(find.byType(MediaElementView)).resources : null;
-      await tester.tap(
-        find.byKey(ValueKey(media ? 'media-url-panel' : 'text-markdown-preview')),
-        kind: PointerDeviceKind.mouse,
-      );
-      await tester.pumpAndSettle();
-      (media ? image!.controller : text!.controller).selection = const TextSelection.collapsed(offset: 8);
-      final reader = Completer<ClipboardReader>();
-      final pending = media ? image!.paste(reader.future) : text!.paste(reader.future, TestAttachmentStore());
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
-      await tester.pump();
-      await _shortcut(tester);
-      reader.complete(_HistoryTextReader());
-      await pending;
-      expect(media ? image!.data.url : text!.data.markdown, media ? _unusableMediaSource : 'original');
-      await pumpPastSave(tester);
     });
   }
 
@@ -444,11 +334,10 @@ void main() {
     expect(attachments.reads, 4);
   });
 
-  test('ordinary edits preserve published values and pending edit generations', () {
+  test('ordinary edits preserve published values and no-ops', () {
     final model = testTextModel(_textDocument().elements.single as TextElementData);
     final original = model.data;
     final document = CanvasDocument(background: CanvasBackgroundKind.plain, elements: [original]);
-    final generation = model.session.editGeneration;
     var edits = 0;
     model.session.documentChanges.addListener(() => edits++);
     model
@@ -459,31 +348,16 @@ void main() {
     model.controller.text = 'changed';
     model.setAutoArrange(value: !original.autoArrange);
     expect(edits, 3);
-    expect(model.session.editGeneration, generation);
     expect(document.elements.single, same(original));
     expect(model.data.position, original.position + const Offset(20, 10));
     expect(original.markdown, isNot('changed'));
     expect(original.autoArrange, isNot(model.autoArrange));
     model.session.finishOperation();
     model.session.undo();
-    expect(model.session.editGeneration, generation + 1);
     expect(model.data, same(original));
     expect(model.controller.text, original.markdown);
     expect(edits, 4);
     model.dispose();
-  });
-
-  testWidgets('detached resource disposal preserves edits started after removal', (tester) async {
-    final document = _textDocument().withElements((elements) => elements.add(_penDocument(1).elements.single));
-    await pumpCanvas(tester, TestLibraryStore(document));
-    final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
-    final removed = _stroke(tester);
-    text.session.remove([removed.data.id]);
-    final pending = text.session.captureEdit(text.data.id);
-    expect(removed.disposed, isFalse);
-    await tester.pump();
-    expect(removed.disposed, isTrue);
-    expect(pending.isCurrent, isTrue);
   });
 
   testWidgets('background undo retains objects and saves one reversible step', (tester) async {
@@ -788,7 +662,6 @@ void main() {
     final originalSize = code.size;
     code.session.setSelection([code.data.id]);
     code.controller.text = 'before resize';
-    final token = code.session.captureEdit(code.data.id);
     final resize = await tester.startGesture(
       tester.getCenter(find.byKey(const ValueKey('code-block-resize-handle'))),
       kind: PointerDeviceKind.mouse,
@@ -799,7 +672,6 @@ void main() {
     await tester.pumpAndSettle();
     final resized = code.size;
     expect(resized, isNot(originalSize));
-    expect(token.isCurrent, isTrue);
     code.controller.text = 'after resize';
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await _shortcut(tester);
@@ -1132,16 +1004,6 @@ class _PausedRead extends TestAttachmentStore {
     reads++;
     return bytes.future;
   }
-}
-
-class _HistoryTextReader extends ClipboardReader {
-  _HistoryTextReader() : super([]);
-
-  @override
-  bool canProvide(DataFormat format) => format == Formats.plainText;
-
-  @override
-  Future<T?> readValue<T extends Object>(ValueFormat<T> format) async => 'late' as T;
 }
 
 CanvasDocument _promotionDocument({required bool pen, bool auto = true}) => CanvasDocument(

@@ -299,9 +299,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   }
 
   void _detachSession(EditorSession session) {
-    session
-      ..invalidatePendingEdits()
-      ..removeListener(_sessionChanged);
+    session.removeListener(_sessionChanged);
     FocusManager.instance.removeListener(_shortcuts.focusChanged);
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _closeContextMenu();
@@ -337,8 +335,6 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     }
     return null;
   }
-
-  void _invalidatePendingEdits() => _shortcuts.invalidatePendingEdits();
 
   @override
   void dispose() {
@@ -425,7 +421,6 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   }
 
   void _clearElementEditing({bool commitMediaDraft = true}) {
-    _invalidatePendingEdits();
     if (commitMediaDraft) {
       for (final resource in _resources.values.whereType<MediaResources>()) {
         if (resource.focusNode.hasFocus) resource.commitUrl();
@@ -443,8 +438,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   }
 
   void _clearSelection() => _session.setSelection(const []);
-  void _setSelection(Set<Object> values, {bool preserveContext = false}) =>
-      _session.setSelection(values.cast<CanvasElementData>().map((a) => a.id), preserveContext: preserveContext);
+  void _setSelection(Set<Object> values) => _session.setSelection(values.cast<CanvasElementData>().map((a) => a.id));
 
   Offset _screenToCanvas(Offset position) => screenToCanvas(position);
 

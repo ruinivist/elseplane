@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
+import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
@@ -156,6 +157,39 @@ void main() {
       );
     }
   }
+
+  test('delayed Cut does not remove a target restored under the same ID', () async {
+    final session = testSession(_menuDocument)..setSelection(['a']);
+    final write = Completer<void>();
+    final clipboard = CanvasClipboard(
+      session: session,
+      attachments: TestAttachmentStore(),
+      enabled: () => true,
+      menuOpen: () => false,
+      editing: () => false,
+      pointerPosition: () => null,
+      scale: () => 1,
+      screenToCanvas: (position) => position,
+      viewportSize: () => const Size(800, 600),
+      boundsOf: (_) => Rect.zero,
+      mediaWidth: 100,
+      clearEditing: () {},
+      onError: fail,
+      writeClipboardText: (_) => write.future,
+    );
+
+    final originalLifetime = session.elementLifetime('a');
+    final cut = clipboard.copy(null, cut: true);
+    session
+      ..remove(['a'])
+      ..finishOperation()
+      ..undo();
+    expect(session.elementLifetime('a'), isNot(same(originalLifetime)));
+
+    write.complete();
+    await cut;
+    expect(session.document.elements.map((element) => element.id), ['a', 'b']);
+  });
 
   testWidgets('copies, pastes, cuts, restores, and persists mixed elements', (
     tester,
@@ -500,109 +534,67 @@ void main() {
     }
   }
 
-  for (final (cut, fail) in [(true, false), (true, true), (false, false)]) {
-    testWidgets(
-      'pending ${cut ? 'Cut' : 'Paste'} ${fail ? 'failure' : 'completion'} stays canceled when Select All adds objects',
-      (tester) async {
-        final read = Completer<CanvasClipboardSnapshot>();
-        final write = Completer<void>();
-        final store = TestLibraryStore(_menuDocument);
-        await pumpCanvas(tester, store, readClipboard: () => read.future, writeClipboardText: (_) => write.future);
-        _models(tester).first.setSelected(value: true);
-        await _shortcut(tester, cut ? LogicalKeyboardKey.keyX : LogicalKeyboardKey.keyV);
-        await _shortcut(tester, LogicalKeyboardKey.keyA);
-        _expectOnlySelected(tester, {'a', 'b'});
-
-        if (cut) {
-          if (fail) {
-            write.completeError(StateError('write failed'));
-          } else {
-            write.complete();
-          }
-        } else {
-          read.complete((text: encodeCanvasClipboard(_menuDocument.elements), image: null));
-        }
-        await tester.pumpAndSettle();
-        await pumpPastSave(tester);
-        expect(
-          _models(tester).map((model) => model.data.toJson()),
-          _menuDocument.elements.map((data) => data.toJson()),
-        );
-        _expectOnlySelected(tester, {'a', 'b'});
-        expect(find.text('Could not cut canvas elements'), findsNothing);
-        expect(store.persisted, isNull);
-
-        await _shortcut(tester, LogicalKeyboardKey.keyZ);
-        _expectOnlySelected(tester, {'a', 'b'});
-        expect(store.persisted, isNull);
-      },
-    );
-  }
-
-  for (final canceled in [false, true]) {
-    testWidgets(
-      'oversized image clipboard read ${canceled ? 'stays silent after cancellation' : 'reports its failure'}',
-      (
-        tester,
-      ) async {
-        final read = Completer<CanvasClipboardSnapshot>();
-        final store = TestLibraryStore(_menuDocument);
-        final attachments = TestAttachmentStore();
-        await pumpCanvas(tester, store, attachmentStore: attachments, readClipboard: () => read.future);
-        _models(tester).first.setSelected(value: true);
-        await _shortcut(tester, LogicalKeyboardKey.keyV);
-        if (canceled) await _shortcut(tester, LogicalKeyboardKey.keyA);
-
-        read.completeError(const FormatException('Image exceeds 10 MiB'));
-        await tester.pumpAndSettle();
-        expect(find.text('Could not paste canvas elements'), canceled ? findsNothing : findsOneWidget);
-        expect(tester.takeException(), isNull);
-        expect(
-          _models(tester).map((model) => model.data.toJson()),
-          _menuDocument.elements.map((data) => data.toJson()),
-        );
-        _expectOnlySelected(tester, canceled ? {'a', 'b'} : {'a'});
-        expect(attachments.files, isEmpty);
-        await pumpPastSave(tester);
-        expect(store.persisted, isNull);
-
-        await _shortcut(tester, LogicalKeyboardKey.keyZ);
-        expect(
-          _models(tester).map((model) => model.data.toJson()),
-          _menuDocument.elements.map((data) => data.toJson()),
-        );
-        _expectOnlySelected(tester, canceled ? {'a', 'b'} : {'a'});
-        await pumpPastSave(tester);
-        expect(store.persisted, isNull);
-      },
-    );
-  }
-
-  testWidgets('dragging another inactive object cancels delayed Cut', (tester) async {
-    final write = Completer<void>();
+  testWidgets('oversized image clipboard read reports its failure', (tester) async {
+    final read = Completer<CanvasClipboardSnapshot>();
     final store = TestLibraryStore(_menuDocument);
-    await pumpCanvas(tester, store, writeClipboardText: (_) => write.future);
-    final first = _models(tester).firstWhere((model) => model.data.id == 'a');
-    final second = _models(tester).firstWhere((model) => model.data.id == 'b');
-    first.setSelected(value: true);
-    await _shortcut(tester, LogicalKeyboardKey.keyX);
-    final start = second.canvasPosition;
-    final drag = await tester.startGesture(
-      tester.getCenter(
-        find.byWidgetPredicate((widget) => widget is ShapeElementView && widget.data.id == second.data.id),
-      ),
-      kind: PointerDeviceKind.mouse,
-    );
-    await drag.moveBy(const Offset(30, 20));
-    await drag.up();
-    await tester.pump();
-    expect(second.canvasPosition, start + const Offset(30, 20));
-    write.complete();
+    final attachments = TestAttachmentStore();
+    await pumpCanvas(tester, store, attachmentStore: attachments, readClipboard: () => read.future);
+    _models(tester).first.setSelected(value: true);
+    await _shortcut(tester, LogicalKeyboardKey.keyV);
+
+    read.completeError(const FormatException('Image exceeds 10 MiB'));
     await tester.pumpAndSettle();
-    expect(_models(tester).map((model) => model.data.id).toSet(), {'a', 'b'});
-    expect(first.selected, isFalse);
+    expect(find.text('Could not paste canvas elements'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    expect(
+      _models(tester).map((model) => model.data.toJson()),
+      _menuDocument.elements.map((data) => data.toJson()),
+    );
+    _expectOnlySelected(tester, {'a'});
+    expect(attachments.files, isEmpty);
+    await pumpPastSave(tester);
+    expect(store.persisted, isNull);
+
     await _shortcut(tester, LogicalKeyboardKey.keyZ);
-    expect(second.canvasPosition, start);
+    expect(
+      _models(tester).map((model) => model.data.toJson()),
+      _menuDocument.elements.map((data) => data.toJson()),
+    );
+    _expectOnlySelected(tester, {'a'});
+    await pumpPastSave(tester);
+    expect(store.persisted, isNull);
+  });
+
+  test('pending paste completes after selection and tool changes', () async {
+    final session = testSession(_menuDocument);
+    final read = Completer<CanvasClipboardSnapshot>();
+    final clipboard = CanvasClipboard(
+      session: session,
+      attachments: TestAttachmentStore(),
+      enabled: () => true,
+      menuOpen: () => false,
+      editing: () => false,
+      pointerPosition: () => null,
+      scale: () => 1,
+      screenToCanvas: (position) => position,
+      viewportSize: () => const Size(800, 600),
+      boundsOf: (_) => Rect.zero,
+      mediaWidth: 100,
+      clearEditing: () {},
+      onError: fail,
+      readClipboard: () => read.future,
+    );
+
+    final paste = clipboard.paste(null);
+    session
+      ..setSelection(['b'])
+      ..chooseTool(CanvasTool.text);
+    read.complete((text: encodeCanvasClipboard([_menuDocument.elements.first]), image: null));
+    await paste;
+
+    expect(session.document.elements, hasLength(3));
+    expect(session.tool, CanvasTool.text);
+    expect(session.selectedIds, {session.document.elements.last.id});
   });
 
   testWidgets('Select All preserves pending Cut when every object is already selected', (tester) async {
@@ -622,35 +614,6 @@ void main() {
   });
 
   for (final cut in [false, true]) {
-    testWidgets('pending ${cut ? 'Cut' : 'Paste'} is canceled by document undo', (tester) async {
-      final read = Completer<CanvasClipboardSnapshot>();
-      final write = Completer<void>();
-      final store = TestLibraryStore(_menuDocument);
-      await pumpCanvas(tester, store, readClipboard: () => read.future, writeClipboardText: (_) => write.future);
-      final model = canvasElement(
-        tester,
-        tester.widgetList<ShapeElementView>(find.byType(ShapeElementView)).first.data,
-      );
-      final position = model.data.position;
-      model.moveBy(const Offset(10, 10));
-      await tester.pump();
-      await _openMenu(tester, const Offset(320, 320));
-      await tester.tap(find.text(cut ? 'Cut' : 'Paste'));
-      await tester.pump();
-      await _shortcut(tester, LogicalKeyboardKey.keyZ);
-      expect(model.data.position, position);
-      read.complete((text: encodeCanvasClipboard(_menuDocument.elements), image: null));
-      write.complete();
-      await tester.pumpAndSettle();
-      expect(tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller.childOrder, ['a', 'b']);
-      expect(
-        canvasElement(tester, tester.widgetList<ShapeElementView>(find.byType(ShapeElementView)).first.data),
-        equals(model),
-      );
-      await pumpPastSave(tester);
-      expect(store.persisted!.toJson(), _menuDocument.toJson());
-    });
-
     testWidgets('pending ${cut ? 'Cut' : 'Paste'} cannot affect a replacement document', (tester) async {
       final read = Completer<CanvasClipboardSnapshot>();
       final write = Completer<void>();
@@ -677,29 +640,21 @@ void main() {
 
   for (final failDelete in [false, true]) {
     testWidgets(
-      'canceled canvas image paste ${failDelete ? 'stays canceled if cleanup fails' : 'deletes its written attachment'}',
+      'canvas image paste after session end ${failDelete ? 'ignores cleanup failure' : 'deletes its unpublished attachment'}',
       (tester) async {
         final attachments = (await tester.runAsync(() async => _PausedImageWrite(failDeletes: failDelete)))!;
-        final store = TestLibraryStore(_menuDocument);
+        final store = TestLibraryStore(_emptyDocument);
         await pumpCanvas(
           tester,
           store,
           attachmentStore: attachments,
           readClipboard: () async => (text: null, image: (bytes: onePixelPngBytes, extension: 'png')),
         );
-        final model = canvasElement(
-          tester,
-          tester.widgetList<ShapeElementView>(find.byType(ShapeElementView)).first.data,
-        );
-        final position = model.canvasPosition;
-        model.moveBy(const Offset(10, 10));
-        await pumpPastSave(tester);
         await tester.runAsync(() async {
           await _shortcut(tester, LogicalKeyboardKey.keyV);
           await attachments.started.future;
         });
-        await _shortcut(tester, LogicalKeyboardKey.keyZ);
-        expect(model.canvasPosition, position);
+        await replaceTestEditor(tester, _emptyDocument);
         await tester.runAsync(() async {
           attachments.release.complete();
           await attachments.finished.future;
@@ -709,8 +664,7 @@ void main() {
         expect(find.byType(MediaElementView), findsNothing);
         expect(attachments.files, hasLength(failDelete ? 1 : 0));
         expect(find.text('Could not paste canvas elements'), findsNothing);
-        await pumpPastSave(tester);
-        expect(store.persisted!.toJson(), _menuDocument.toJson());
+        expect(store.persisted, isNull);
       },
     );
   }

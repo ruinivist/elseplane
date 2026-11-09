@@ -1,10 +1,11 @@
-// Checks that navigation cancels unfinished edits and saves completed content.
+// Checks editor handoffs, saves, and target lifetimes across navigation.
 // Exercises clipboard and attachment lifetimes across editor-to-workspace handoffs.
 
 import 'dart:async';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
+import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_editor_resources.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
@@ -31,7 +32,7 @@ void main() {
   for (final media in [false, true]) {
     for (final failed in [false, true]) {
       testWidgets(
-        '${media ? 'media' : 'text'} upload ${failed ? 'failure' : 'completion'} stays canceled after switching',
+        '${media ? 'media' : 'text'} upload ${failed ? 'failure' : 'completion'} cannot update a switched-out target',
         (tester) async {
           final store = _Store(_document(media: media));
           final attachments = (await tester.runAsync(() async => _PausedAttachments()))!;
@@ -121,36 +122,6 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  for (final failedSave in [false, true]) {
-    testWidgets('${failedSave ? 'failed save retry' : 'picker dismissal'} never revives a canceled clipboard read', (
-      tester,
-    ) async {
-      final store = _Store(_document());
-      final attachments = TestAttachmentStore();
-      final read = Completer<CanvasClipboardSnapshot>();
-      await pumpCanvas(tester, store, attachmentStore: attachments, readClipboard: () => read.future);
-      tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText(' dirty');
-      await _clipboardShortcut(tester, LogicalKeyboardKey.keyV);
-      store.fail = failedSave;
-      await tester.tap(find.byType(CanvasTitle));
-      await tester.pumpAndSettle();
-      expect(find.byType(CanvasFilePicker), failedSave ? findsNothing : findsOneWidget);
-      if (!failedSave) {
-        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-        await tester.pumpAndSettle();
-      }
-      read.complete((text: null, image: (bytes: onePixelPngBytes, extension: 'png')));
-      await tester.pumpAndSettle();
-      expect(attachments.files, isEmpty);
-      expect(tester.widget<TextElementView>(find.byType(TextElementView)).resources.data.markdown, 'Original dirty');
-      store.fail = false;
-      await tester.tap(find.byType(CanvasTitle));
-      await tester.pumpAndSettle();
-      expect((store.library.file('a').document!.elements.single as TextElementData).markdown, 'Original dirty');
-      await tester.pumpWidget(const SizedBox());
-    });
-  }
-
   testWidgets('a canvas image upload cleans up after navigation without blocking the picker', (tester) async {
     final store = _Store(CanvasLibrary.emptyDocument);
     final attachments = (await tester.runAsync(() async => _PausedAttachments()))!;
@@ -206,25 +177,6 @@ void main() {
       variant: TargetPlatformVariant.only(TargetPlatform.linux),
     );
 
-    testWidgets('changing ${intoTitle ? 'title to source' : 'source to title'} cancels paste even after returning', (
-      tester,
-    ) async {
-      final read = Completer<Map<String, Object>>();
-      _mockClipboard(tester, () => read.future);
-      await pumpCanvas(tester, _Store(_codeDocument()));
-      final model = await _focusCode(tester, intoTitle: intoTitle);
-      await _pasteCode(tester, intoTitle: intoTitle);
-      (intoTitle ? model.focusNode : model.titleFocusNode).requestFocus();
-      await tester.pump();
-      (intoTitle ? model.titleFocusNode : model.focusNode).requestFocus();
-      await tester.pump();
-      read.complete({'text': 'NEW'});
-      await tester.pumpAndSettle();
-      expect(model.data.source, 'old source');
-      expect(model.title, 'old title');
-      await tester.pumpWidget(const SizedBox());
-    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
-
     testWidgets('${intoTitle ? 'title' : 'source'} paste survives temporary focus loss in the same context', (
       tester,
     ) async {
@@ -269,7 +221,21 @@ void main() {
     expect(model.data.source, 'old source');
   }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
-  testWidgets('canceled Cut leaves its original objects after the clipboard write succeeds', (tester) async {
+  testWidgets('focused code fields keep their logical edit history', (tester) async {
+    await pumpCanvas(tester, _Store(_codeDocument()));
+    final model = await _focusCode(tester, intoTitle: false);
+    expect(model.session.editing, (id: 'code', field: EditorField.source));
+
+    model.titleFocusNode.requestFocus();
+    await tester.pump();
+    expect(model.session.editing, (id: 'code', field: EditorField.title));
+
+    model.focusNode.requestFocus();
+    await tester.pump();
+    expect(model.session.editing, (id: 'code', field: EditorField.source));
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+  testWidgets('delayed Cut does not delete after its session is replaced', (tester) async {
     final store = _Store(_document());
     final write = Completer<void>();
     await pumpCanvas(tester, store, writeClipboardText: (_) => write.future);
@@ -287,27 +253,45 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('opening settings cancels a pending paste and keeps modal input ahead of the canvas', (tester) async {
-    final read = Completer<CanvasClipboardSnapshot>();
-    var reads = 0;
-    await pumpCanvas(
-      tester,
-      _Store(CanvasLibrary.emptyDocument),
-      readClipboard: () {
-        reads++;
-        return read.future;
+  for (final serialized in [false, true]) {
+    testWidgets(
+      'pending ${serialized ? 'serialized object' : 'URL'} paste completes in Settings while modal shortcuts stay blocked',
+      (tester) async {
+        final read = Completer<CanvasClipboardSnapshot>();
+        var reads = 0;
+        await pumpCanvas(
+          tester,
+          _Store(CanvasLibrary.emptyDocument),
+          readClipboard: () {
+            reads++;
+            return read.future;
+          },
+        );
+        await _clipboardShortcut(tester, LogicalKeyboardKey.keyV);
+        await tester.tap(find.byKey(const ValueKey('settings-button')));
+        await tester.pumpAndSettle();
+        await _clipboardShortcut(tester, LogicalKeyboardKey.keyV);
+        expect(reads, 1);
+
+        read.complete((
+          text: serialized ? encodeCanvasClipboard(_document().elements) : 'https://example.com/image.png',
+          image: null,
+        ));
+        await tester.pumpAndSettle();
+        if (serialized) {
+          expect(find.byType(TextElementView), findsOneWidget);
+          expect(tester.widget<TextElementView>(find.byType(TextElementView)).resources.data.markdown, 'Original');
+        } else {
+          expect(find.byType(MediaElementView), findsOneWidget);
+          expect(
+            tester.widget<MediaElementView>(find.byType(MediaElementView)).resources.data.url,
+            'https://example.com/image.png',
+          );
+        }
+        await tester.pumpWidget(const SizedBox());
       },
     );
-    await _clipboardShortcut(tester, LogicalKeyboardKey.keyV);
-    await tester.tap(find.byKey(const ValueKey('settings-button')));
-    await tester.pumpAndSettle();
-    await _clipboardShortcut(tester, LogicalKeyboardKey.keyV);
-    expect(reads, 1);
-    read.complete((text: 'https://example.com/image.png', image: null));
-    await tester.pumpAndSettle();
-    expect(find.byType(MediaElementView), findsNothing);
-    await tester.pumpWidget(const SizedBox());
-  });
+  }
 }
 
 // ---------- Fixtures ----------

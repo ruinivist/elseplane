@@ -7,7 +7,7 @@ resources. Storage owns durability.**
 
 This architecture defines implemented ownership and allowed dependencies. The
 [interaction model](../specs/interaction-model.md) defines product behavior;
-the accepted [paste cancellation ADR](../adr/0001-cancel-unfinished-pastes.md),
+the accepted [asynchronous edit ADR](../adr/0001-cancel-unfinished-pastes.md),
 [canvas document and media ADR](../adr/0002-separate-documents-and-media.md), and
 [media link cards ADR](../adr/0003-media-link-cards-without-embeds.md) record
 their rationale and consequences. Older notes, research, and migration
@@ -19,7 +19,7 @@ intentional design decision changes.
 - [Ownership and dependencies](ownership.md): project structure, boundaries,
   and shared design rules.
 - [Editor lifecycles](editor-lifecycles.md): document editing, input, history,
-  rendering resources, and cancellation.
+  rendering resources, and asynchronous edit workflows.
 - [Persistence](persistence.md): library ownership, saving, and import/restore.
 - [UI](ui.md): theme, presentation, shared components, and UI dependencies.
 

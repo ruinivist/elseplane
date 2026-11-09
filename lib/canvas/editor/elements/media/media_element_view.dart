@@ -145,23 +145,22 @@ class _MediaElementViewState extends State<MediaElementView> {
   Future<void> _pickImage() async {
     widget.onActivate();
     final model = widget.resources;
-    final token = model.session.captureEdit(model.data.id);
     try {
       final file = await openFile(acceptedTypeGroups: const [_imageTypes]);
-      if (file == null || !token.isCurrent || !model.attached) return;
+      if (file == null || !model.attached) return;
       final separator = file.name.lastIndexOf('.');
       if (separator < 0) throw const FormatException('Missing image type');
       final length = await file.length();
-      if (!token.isCurrent || !model.attached) return;
+      if (!model.attached) return;
       validateAttachmentSize(length, 'Image exceeds 10 MiB');
       final bytes = await file.readAsBytes();
-      if (!token.isCurrent || !model.attached) return;
+      if (!model.attached) return;
       await model.setDeviceImage(
         bytes,
         file.name.substring(separator + 1),
       );
     } on Object {
-      if (!mounted || !token.isCurrent || !model.attached) return;
+      if (!mounted || !model.attached) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Could not open image')));
@@ -543,12 +542,10 @@ class _MediaUrlPanelState extends State<_MediaUrlPanel> {
                         canRequestFocus: widget.active,
                         onTap: widget.onActivate,
                         onTapOutside: (_) {
-                          widget.resources.session.invalidatePendingEdits();
                           widget.resources.commitUrl();
                           widget.resources.focusNode.unfocus();
                         },
                         onSubmitted: (_) {
-                          widget.resources.session.invalidatePendingEdits();
                           widget.resources.commitUrl();
                         },
                         minLines: 1,
@@ -655,12 +652,11 @@ Widget _mediaTransition(
 
 extension MediaClipboardEdits on MediaResources {
   Future<void> paste(Future<ClipboardReader> readerFuture) async {
-    final token = session.captureEdit(data.id);
     try {
       final reader = await readerFuture;
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       final clipboard = await readCanvasClipboard(reader);
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       if (clipboard.image case final image?) {
         await setDeviceImage(image.bytes, image.extension);
       } else if (clipboard.text case final text?) {
@@ -668,13 +664,12 @@ extension MediaClipboardEdits on MediaResources {
         if (!focusNode.hasFocus) commitUrl();
       }
     } on Object {
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       rethrow;
     }
   }
 
   Future<void> setDeviceImage(Uint8List bytes, String extension) async {
-    final token = session.captureEdit(data.id);
     try {
       final normalizedExtension = extension.toLowerCase() == 'jpeg' ? 'jpg' : extension.toLowerCase();
       if (!const {'png', 'jpg', 'gif', 'webp'}.contains(normalizedExtension)) {
@@ -684,25 +679,25 @@ extension MediaClipboardEdits on MediaResources {
 
       final path = 'attachments/${const Uuid().v4()}.$normalizedExtension';
       final ratio = (await readCanvasImageSize(bytes)).aspectRatio;
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       var written = false;
       try {
         await attachmentStore.write(path, bytes);
         written = true;
       } finally {
-        if (!written || !token.isCurrent || !attached) {
+        if (!written || !attached) {
           try {
             await attachmentStore.delete(path);
           } on Object {
-            // Cleanup cannot revive a canceled edit or hide the write failure.
+            // Cleanup must not hide the write failure.
           }
         }
       }
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
 
       applyDeviceImage(bytes, ratio, path);
     } on Object {
-      if (!token.isCurrent || !attached) return;
+      if (!attached) return;
       rethrow;
     }
   }

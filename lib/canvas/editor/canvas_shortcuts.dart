@@ -34,7 +34,6 @@ class CanvasShortcuts {
 
   final CanvasInput input;
   final EditorContext? Function(FocusNode) fieldForFocus;
-  FocusNode? _pasteField;
   final bool Function() macOS;
   final bool Function() enabled;
   final bool Function() blocked;
@@ -52,25 +51,17 @@ class CanvasShortcuts {
   final VoidCallback escape;
   final VoidCallback selectAll;
 
-  void invalidatePendingEdits() {
-    input.session.invalidatePendingEdits();
-    _pasteField = null;
-  }
-
   void focusChanged() {
     final node = FocusManager.instance.primaryFocus;
-    if (node == null || identical(node, _pasteField)) return;
+    if (node == null) return;
     final field = fieldForFocus(node);
     if (field != null) {
       input.session.editField(field);
-      _pasteField = node;
       return;
     }
     final context = node.context;
     if (context?.widget is EditableText || context?.findAncestorWidgetOfExactType<EditableText>() != null) {
       input.session.editField(null);
-      invalidatePendingEdits();
-      _pasteField = node;
     }
   }
 
