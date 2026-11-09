@@ -15,8 +15,8 @@ then read the authority relevant to the work. Do not create a separate
   [canvas document and media decision](adr/0002-separate-documents-and-media.md),
   and [media link cards decision](adr/0003-media-link-cards-without-embeds.md)
   record their rationale and consequences.
-- **Proposed:** [canvas input delegation ADR 0004](adr/0004-delegate-canvas-input-behavior.md)
-  and its [draft migration plan](plans/input-delegation.md). They are proposals;
+- **Deferred:** [canvas input delegation ADR 0004](adr/0004-delegate-canvas-input-behavior.md)
+  and its [migration plan](plans/input-delegation.md). They remain proposals;
   accepted architecture and behavior remain authoritative until the ADR is
   accepted.
 - [Backlog](backlog.md) contains reported defects, proposals, and open

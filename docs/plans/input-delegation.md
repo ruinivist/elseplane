@@ -1,12 +1,15 @@
 # Canvas input delegation migration
 
-Status: draft
+Status: deferred
 
 Date: 2026-11-09
 
 This plan implements the proposal in [ADR 0004](../adr/0004-delegate-canvas-input-behavior.md).
-The ADR and this plan link to each other. This draft does not authorize
-implementation. The accepted [ownership contract](../arch/ownership.md),
+The ADR and this plan link to each other. Work is deferred. Before resuming,
+evaluate the ADR's [alternative completion contract](../adr/0004-delegate-canvas-input-behavior.md#alternative-to-explore)
+and revise this plan to match the chosen contract. The steps below retain the
+original proposal and do not authorize implementation.
+The accepted [ownership contract](../arch/ownership.md),
 [editor lifecycle contract](../arch/editor-lifecycles.md), and
 [interaction model](../specs/interaction-model.md) remain authoritative until
 the ADR is accepted and implementation is separately authorized.

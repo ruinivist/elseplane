@@ -1,8 +1,13 @@
 # Delegate canvas input behavior to feature owners
 
-Status: proposed
+Status: deferred
 
 Date: 2026-11-09
+
+The proposal and migration are deferred. Before resuming, evaluate the
+[alternative completion contract](#alternative-to-explore) and revise the
+decision and plan to match the chosen contract. The decision below retains the
+original proposal; it is not accepted architecture.
 
 ## Context
 
@@ -115,6 +120,69 @@ tap or use a Flutter double-tap recognizer that defers it.
   sampling needs raw pressure events and native fields must retain Flutter's
   gestures and text selection.
 
+### Alternative to explore
+
+Keep the proposed routing and feature ownership boundaries, but separate
+activation, pointer completion, and history completion. The rule is: the input
+path that accepts an action owns its completion. Activation must not change its
+completion behavior depending on whether it runs inside `completeTap`.
+
+- `activate` performs common activation and Auto promotion without finishing a
+  pointer sequence. Preserve the guards required before running a post-activation
+  action. Feature owners retain focus, editing, and media policy.
+- `completeTap` validates the captured pointer sequence and marks the tap action
+  consumed before invoking the feature action synchronously. It then finalizes
+  only that captured action; a reentrant callback cannot finish a newer sequence.
+  Activation does not need a flag or calling-context check to suppress finishing.
+- Keyboard and semantics actions use an explicit command path with their existing
+  admission checks and completion boundary. They do not fabricate pointer events
+  or require a pointer sequence.
+- Pointer route retirement and history completion are separate decisions. Once
+  the action is settled and root release is observed, retire the route even if
+  logical editing continues. Keep an ongoing typing group open; otherwise close
+  the completed operation under the existing history rules.
+
+```text
+Viewport hit registration
+          |
+          v
+Root admits once and captures recipient
+          |
+          v
+completeTap(action)                 Keyboard / semantics command
+  validate + consume once            check command eligibility
+          |                                   |
+          +----------------+------------------+
+                           |
+                           v
+                  Synchronous feature action
+                    activate + promote
+                    local focus/edit/media policy
+                           |
+                           v
+                  Return to the accepting path
+                    pointer: settle captured action,
+                             consume release, retire route
+                    command: finish command
+
+History: keep typing group open while editing continues;
+         otherwise close the completed operation.
+```
+
+Both callback orders remain necessary: the inactive Code preview acts before
+root raw up, while an ordinary body recognizer may act afterward. Early
+completion leaves the matching release consumed; root up arriving first retains
+the captured route for the accepted callback. Root up alone must not activate or
+open an object. Native fields retain Flutter input, and media launch stays
+synchronous in its trusted callback with the existing launch guards.
+
+This alternative is not implemented or proven. Before adopting it, trace every
+caller relying on implicit completion, including `interact`, Markdown links,
+native editors, picker controls, and keyboard/semantics actions. Prove both
+callback orders, exactly-once action delivery, stale and reentrant callback
+rejection, cancellation, and history grouping with focused browser tests. Then
+revise the migration plan; its current steps describe the original contract.
+
 ## Consequences
 
 Feature owners gain a small amount of local callback wiring, while the router
@@ -128,4 +196,4 @@ The proposal is not authorization to implement. Until accepted, current
 architecture and behavior documents remain the contract. If source behavior,
 event-role order, or grid delivery contradicts this decision, stop and resolve
 that discrepancy before changing the design. See the
-[draft migration plan](../plans/input-delegation.md).
+[deferred migration plan](../plans/input-delegation.md).
