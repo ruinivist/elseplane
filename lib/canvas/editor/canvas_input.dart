@@ -41,9 +41,11 @@ sealed class _Gesture {
 }
 
 final class _ObjectGesture extends _Gesture {
-  _ObjectGesture(super.pointer, this.id, this.selection);
+  _ObjectGesture(super.pointer, this.id, this.selection, {required this.modified, required this.spaceHeld});
   final String id;
   final Set<String> selection;
+  final bool modified;
+  final bool spaceHeld;
   bool transforming = false;
 }
 
@@ -566,7 +568,13 @@ class CanvasInputTarget {
     final value = session.element(id);
     if (value == null) return;
     final selection = session.selectedIds;
-    input._gesture = _ObjectGesture(event.pointer, id, selection);
+    input._gesture = _ObjectGesture(
+      event.pointer,
+      id,
+      selection,
+      modified: control || input.modifierPressed.value,
+      spaceHeld: input.spaceHeld,
+    );
     _sequence = input._gesture;
     if (control) {
       if (!input.modifierPressed.value) session.setSelection(const [], preserveContext: true);
@@ -595,10 +603,33 @@ class CanvasInputTarget {
     }
   }
 
-  void activate({bool edit = false}) {
+  void activate({bool edit = false, VoidCallback? afterActivate, bool fromPointer = false}) {
     if (!attached || input.blocked || input.modifierPressed.value) return;
+    final sequence = _sequence;
+    if (afterActivate != null) {
+      if (input.session.tool != CanvasTool.select ||
+          input.spaceHeld ||
+          sequence is _ObjectGesture && (sequence.modified || sequence.spaceHeld) ||
+          sequence != null && !current) {
+        return;
+      }
+      if (fromPointer && (sequence is! _ObjectGesture || sequence.id != id || sequence.transforming || !current)) {
+        return;
+      }
+    }
+    final generation = input._generation;
     input._activate(id, edit: edit);
     _finishClick();
+    if (afterActivate != null &&
+        attached &&
+        !input.blocked &&
+        !input.modifierPressed.value &&
+        input.session.tool == CanvasTool.select &&
+        !input.spaceHeld &&
+        generation == input._generation &&
+        input.session.activeId == id) {
+      afterActivate();
+    }
   }
 
   void move(Offset delta) {
@@ -615,6 +646,7 @@ class CanvasInputTarget {
     if (!current) return;
     input.finishOperation();
     if (input._gesture case _ObjectGesture(id: final target) when target == id) input._gesture = null;
+    _sequence = null;
   }
 
   void interact() {

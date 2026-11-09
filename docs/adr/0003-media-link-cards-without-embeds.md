@@ -4,6 +4,8 @@ Status: accepted
 
 Date: 2026-11-07
 
+Updated: 2026-11-09
+
 ## Context
 
 Canvas media needs to support images and useful link cards without adding
@@ -71,9 +73,27 @@ Use the same card components and transform behavior for providers. Do not add
 provider-specific widgets or custom transforms. Resizing has a 200px minimum
 width, while persisted media down to 120px remains valid.
 
-An inactive link card activates on click and moves on drag, like an image; its
-body does not navigate. The active card exposes an accessible Open link action
-that opens the resolved HTTP(S) destination in a new tab. Show launch failures.
+On a generic or provider link card, a completed, unmodified primary-button body
+click accepted by the canvas activates an inactive card without opening it; a
+body click on an already-active card opens its resolved HTTP(S) destination in a
+new tab and keeps its controls. Opening uses the already resolved destination
+without awaiting metadata or another network request or rewriting the saved raw
+source. The body cursor is default while inactive and click while active.
+Dragging continues to move inactive cards or selected groups without opening a
+destination. Images remain activate-only; unresolved sources remain edit-only.
+The active card also exposes an accessible Open link action. URL fields and
+buttons do not bubble to the body.
+
+Modified selection clicks, Space panning, secondary/menu input, middle-button
+navigation, non-Select tools, blocked or canceled gestures, and stale targets
+never launch.
+Focused-card Enter/Space and semantics activation follow the same
+inactive-activates / active-opens behavior; key repeat is ignored, and URL-field
+Enter only commits. No double-click timing recognizer or delay is used: rapid
+two clicks naturally activate then open once, and a later separate active-card
+click opens again. Returned or thrown launch failures leave activation and
+controls intact. This behavior is accepted and implemented; verification is
+recorded in the completed [media link cards plan](../archive/media-link-cards.md).
 Generic cards display resolved host and path without scheme, query, or fragment,
 while preserving the complete raw source for saving. Raw text is only the
 display fallback when no usable URI exists.
@@ -104,5 +124,9 @@ thumbnail loads contact their validated third-party hosts; unknown sites receive
 no metadata request. Extensionless remote images intentionally appear as generic
 links. Unsupported or unusable raw sources remain unresolved until the user
 replaces them. Metadata and thumbnails are unavailable offline and are not
-retained after the runtime resource lifetime ends. The feature does not provide
-playback.
+retained after the runtime resource lifetime ends. Opening requires a separate
+body activation and subsequent click, leaving the canvas controls ready when the
+user returns; later clicks can launch repeated tabs. Browser popup blocking may
+not be detectable by the launcher; no same-tab or blank-tab fallback is
+promised. A reported launch failure is visible without undoing activation. The
+feature does not provide playback.

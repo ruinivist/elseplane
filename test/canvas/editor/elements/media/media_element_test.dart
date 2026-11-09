@@ -76,6 +76,7 @@ void main() {
             onMove: (_) {},
             onResize: (_) {},
             onActivate: () => model.session.setActive(model.data.id),
+            onActivateLink: (_, {required fromPointer}) {},
             onDeactivate: () => model.session.setActive(null),
           ),
         ),
@@ -146,6 +147,7 @@ void main() {
               onMove: (_) {},
               onResize: (_) {},
               onActivate: () => model.session.setActive(model.data.id),
+              onActivateLink: (_, {required fromPointer}) {},
               onDeactivate: () => model.session.setActive(null),
             ),
           ),
@@ -191,6 +193,7 @@ void main() {
           onMove: (_) {},
           onResize: (_) {},
           onActivate: () => model.session.setActive(model.data.id),
+          onActivateLink: (_, {required fromPointer}) {},
           onDeactivate: () => model.session.setActive(null),
         ),
       ),
@@ -372,6 +375,10 @@ void main() {
 
   testWidgets('link bodies cancel zoomed drags as one history operation', (tester) async {
     const position = Offset(120, 150);
+    final originalLauncher = UrlLauncherPlatform.instance;
+    final launcher = _FakeUrlLauncher();
+    UrlLauncherPlatform.instance = launcher;
+    addTearDown(() => UrlLauncherPlatform.instance = originalLauncher);
     await pumpCanvas(
       tester,
       TestLibraryStore(
@@ -398,11 +405,169 @@ void main() {
     await canceledDrag.cancel();
     await tester.pumpAndSettle();
     expect(model.data.position, position + const Offset(12, 0) / canvas.scale);
+    expect(launcher.launched, isEmpty);
     model.session.undo();
     expect(model.data.position, position);
   });
 
-  testWidgets('link cards activate without navigating and expose transform controls', (tester) async {
+  testWidgets('rejected second pointer does not activate or open a link', (tester) async {
+    const firstUrl = 'https://first.example/articles/design';
+    const secondUrl = 'https://second.example/articles/design';
+    final originalLauncher = UrlLauncherPlatform.instance;
+    final launcher = _FakeUrlLauncher();
+    UrlLauncherPlatform.instance = launcher;
+    addTearDown(() => UrlLauncherPlatform.instance = originalLauncher);
+    await pumpCanvas(
+      tester,
+      TestLibraryStore(
+        CanvasDocument(
+          background: CanvasBackgroundKind.plain,
+          elements: [
+            MediaElementData(id: 'first', position: const Offset(120, 150), width: 480, url: firstUrl),
+            MediaElementData(id: 'second', position: const Offset(120, 300), width: 480, url: secondUrl),
+          ],
+        ),
+      ),
+    );
+    final firstModel = tester.widget<MediaElementView>(find.byType(MediaElementView).at(0)).resources;
+    final secondModel = tester.widget<MediaElementView>(find.byType(MediaElementView).at(1)).resources;
+    final cards = find.byType(MediaLinkCard);
+    expect(cards, findsNWidgets(2));
+    final firstCardPosition = tester.getCenter(cards.at(0));
+    final mouse = await tester.startGesture(
+      firstCardPosition,
+      pointer: 1,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    final stylus = await tester.startGesture(
+      tester.getCenter(cards.at(1)),
+      pointer: 2,
+      kind: PointerDeviceKind.stylus,
+    );
+    await tester.pump();
+    await stylus.up();
+    await tester.pumpAndSettle();
+
+    expect(secondModel.active, isFalse);
+    expect(launcher.launched, isEmpty);
+
+    await mouse.up();
+    await tester.pumpAndSettle();
+    expect(firstModel.active, isTrue);
+    expect(secondModel.active, isFalse);
+    expect(launcher.launched, isEmpty);
+    await tester.tapAt(firstCardPosition, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(firstModel.active, isTrue);
+    expect(secondModel.active, isFalse);
+    expect(launcher.launched, [firstUrl]);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('provider link body uses the same combined activation', (tester) async {
+    const url = 'https://www.youtube.com/watch?v=M7lc1UVf-VE';
+    final client = MockClient((_) async => http.Response('{}', 200));
+    addTearDown(client.close);
+    final originalLauncher = UrlLauncherPlatform.instance;
+    final launcher = _FakeUrlLauncher();
+    UrlLauncherPlatform.instance = launcher;
+    addTearDown(() => UrlLauncherPlatform.instance = originalLauncher);
+    final model = testMediaModel(
+      MediaElementData(id: 'media', position: Offset.zero, width: 480, url: url),
+      TestAttachmentStore(),
+      previewClient: client,
+    );
+    addTearDown(model.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: starlessLightThemeData,
+        home: Scaffold(
+          body: MediaElementView(
+            resources: model,
+            data: model.data,
+            selected: false,
+            active: false,
+            onMove: (_) {},
+            onResize: (_) {},
+            onActivate: () => model.session.setActive(model.data.id),
+            onActivateLink: (openLink, {required fromPointer}) {
+              model.session.setActive(model.data.id);
+              openLink();
+            },
+            onDeactivate: () => model.session.setActive(null),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.pumpAndSettle();
+    final cursor = find.byKey(const ValueKey('media-link-body-cursor'));
+    expect(tester.widget<MouseRegion>(cursor).cursor, SystemMouseCursors.basic);
+    await tester.tap(find.byType(MediaLinkCard), kind: PointerDeviceKind.mouse);
+    expect(model.active, isTrue);
+    expect(launcher.launched, isEmpty);
+    await tester.tap(find.byType(MediaLinkCard), kind: PointerDeviceKind.mouse);
+    expect(launcher.launched, [url], reason: 'a rapid second click reads the activated model state');
+    await tester.pumpAndSettle();
+    expect(tester.widget<MouseRegion>(cursor).cursor, SystemMouseCursors.click);
+    await tester.tap(find.byType(MediaLinkCard), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(launcher.launched, [url, url]);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('modified and source-changed link clicks never open', (tester) async {
+    const url = 'https://example.com/articles/design';
+    final originalLauncher = UrlLauncherPlatform.instance;
+    final launcher = _FakeUrlLauncher();
+    UrlLauncherPlatform.instance = launcher;
+    addTearDown(() => UrlLauncherPlatform.instance = originalLauncher);
+    await pumpCanvas(
+      tester,
+      TestLibraryStore(
+        _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 480, url: url)),
+      ),
+    );
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
+    final card = find.byType(MediaLinkCard);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.tap(card, kind: PointerDeviceKind.mouse);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(model.selected, isTrue);
+    expect(model.active, isFalse);
+    expect(launcher.launched, isEmpty);
+
+    model.session.setSelection(const []);
+    final click = await tester.startGesture(tester.getCenter(card), kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    model.session.setMediaUrl(model.data.id, 'https://example.com/changed');
+    await tester.pump();
+    await click.up();
+    await tester.pumpAndSettle();
+    expect(model.active, isFalse);
+    expect(launcher.launched, isEmpty);
+
+    await tester.tap(card, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(model.active, isTrue);
+    expect(launcher.launched, isEmpty);
+    final activeClick = await tester.startGesture(tester.getCenter(card), kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    model.session.setMediaUrl(model.data.id, 'https://example.com/changed-again');
+    await tester.pump();
+    await activeClick.up();
+    await tester.pumpAndSettle();
+    expect(model.active, isTrue);
+    expect(launcher.launched, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('link body clicks activate and open while preserving controls', (tester) async {
     const url = 'http://user:secret@example.com/articles/design?tracking=preserved#details';
     final originalLauncher = UrlLauncherPlatform.instance;
     final launcher = _FakeUrlLauncher();
@@ -424,6 +589,8 @@ void main() {
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     expect(model.canvasSize, const Size(480, 80));
     expect(find.byType(MediaLinkCard), findsOneWidget);
+    final bodyCursor = tester.widget<MouseRegion>(find.byKey(const ValueKey('media-link-body-cursor')));
+    expect(bodyCursor.cursor, SystemMouseCursors.basic);
     expect(find.textContaining('tracking'), findsNothing);
     expect(find.textContaining('#details'), findsNothing);
     expect(find.byKey(const ValueKey('media-block-rotate-control')), findsNothing);
@@ -437,8 +604,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(model.active, isTrue);
     expect(model.canRotate, isTrue);
-    expect(launcher.launched, isEmpty);
-    model.session.setActive(null);
+    expect(launcher.launched, isEmpty, reason: 'the first inactive click activates only');
+    expect(
+      tester.widget<MouseRegion>(find.byKey(const ValueKey('media-link-body-cursor'))).cursor,
+      SystemMouseCursors.click,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('media-link-body-cursor')),
+        matching: find.byKey(const ValueKey('media-url-field')),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('media-link-body-cursor')),
+        matching: find.byKey(const ValueKey('media-resize-handle')),
+      ),
+      findsNothing,
+    );
+    final initialWidth = model.data.width;
+    await tester.drag(
+      find.byKey(const ValueKey('media-resize-handle')),
+      const Offset(20, 0),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pumpAndSettle();
+    expect(model.data.width, greaterThan(initialWidth));
+    expect(launcher.launched, isEmpty, reason: 'resizing active controls does not open the link');
+
+    await tester.tap(find.byType(MediaLinkCard), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(launcher.launched, [url]);
+    expect(launcher.options.single.mode, PreferredLaunchMode.externalApplication);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(model.active, isFalse);
+    expect(
+      tester.widget<MouseRegion>(find.byKey(const ValueKey('media-link-body-cursor'))).cursor,
+      SystemMouseCursors.basic,
+    );
 
     model
       ..setSelected(value: true)
@@ -451,20 +656,58 @@ void main() {
 
     model.cardFocusNode.requestFocus();
     await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'keyboard activation');
     expect(model.active, isTrue);
-    expect(launcher.launched, isEmpty);
+    expect(launcher.launched, [url], reason: 'inactive Enter only activates despite key repeat');
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(launcher.launched, [url, url], reason: 'active Enter opens once despite key repeat');
     expect(find.byKey(const ValueKey('media-url-panel')), findsOneWidget);
     expect(find.byKey(const ValueKey('media-open-link')), findsOneWidget);
     expect(find.byKey(const ValueKey('media-block-rotate-control')), findsOneWidget);
     model.session.setActive(null);
     model.cardFocusNode.requestFocus();
     await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.space);
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.space);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.space);
     await tester.pumpAndSettle();
     expect(model.active, isTrue, reason: 'space activation');
+    expect(launcher.launched, [url, url], reason: 'inactive Space only activates despite key repeat');
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.space);
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.space);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(launcher.launched, [url, url, url], reason: 'active Space opens once despite key repeat');
+
+    model.session.setActive(null);
+    await tester.pumpAndSettle();
+    final semantics = tester.ensureSemantics();
+    tester.semantics.tap(find.semantics.byLabel('Link card: example.com'));
+    await tester.pumpAndSettle();
+    expect(model.active, isTrue);
+    expect(launcher.launched, [url, url, url], reason: 'inactive semantics activation only activates');
+    tester.semantics.tap(find.semantics.byLabel('Link card: example.com'));
+    await tester.pumpAndSettle();
+    expect(launcher.launched, [url, url, url, url]);
+    semantics.dispose();
+
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(model.active, isFalse, reason: 'click-away deactivates the card');
+    expect(
+      tester.widget<MouseRegion>(find.byKey(const ValueKey('media-link-body-cursor'))).cursor,
+      SystemMouseCursors.basic,
+    );
+    model.session.setActive(model.data.id);
+    await tester.pumpAndSettle();
+
     await tester.drag(
       find.byKey(const ValueKey('media-block-rotate-control')),
       const Offset(0, 40),
@@ -491,15 +734,59 @@ void main() {
     expect(model.canvasSize.height / model.canvasSize.width, closeTo(80 / 480, 0.0001));
 
     await tester.tap(find.byKey(const ValueKey('media-open-link')));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'opening saved URL');
-    expect(launcher.launched, [url]);
-    expect(launcher.options.single.mode, PreferredLaunchMode.externalApplication);
+    expect(launcher.launched, [url, url, url, url, url]);
+    expect(launcher.options.last.mode, PreferredLaunchMode.externalApplication);
     launcher.successful = false;
     await tester.tap(find.byKey(const ValueKey('media-open-link')));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('Could not open link'), findsOneWidget);
+    expect(model.active, isTrue);
+    expect(launcher.launched, [url, url, url, url, url, url]);
+    launcher.error = Exception('launcher unavailable');
+    await tester.tap(find.byKey(const ValueKey('media-open-link')));
+    await tester.pumpAndSettle();
+    expect(find.text('Could not open link'), findsOneWidget);
+    expect(model.active, isTrue);
+  });
+
+  testWidgets('body launch failure keeps a newly activated link active', (tester) async {
+    const url = 'https://example.com/articles/design';
+    final originalLauncher = UrlLauncherPlatform.instance;
+    final launcher = _FakeUrlLauncher()..successful = false;
+    UrlLauncherPlatform.instance = launcher;
+    addTearDown(() => UrlLauncherPlatform.instance = originalLauncher);
+    await pumpCanvas(
+      tester,
+      TestLibraryStore(
+        _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 480, url: url)),
+      ),
+    );
+    final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
+
+    await tester.tap(find.byType(MediaLinkCard), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(model.active, isTrue);
+    expect(find.byKey(const ValueKey('media-block-rotate-control')), findsOneWidget);
+    expect(launcher.launched, isEmpty, reason: 'the inactive click activates before navigation');
+
+    await tester.tap(find.byType(MediaLinkCard), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(launcher.launched, [url]);
+    expect(find.text('Could not open link'), findsOneWidget);
+
+    model.session.setActive(null);
+    launcher.error = Exception('launcher unavailable');
+    await tester.tap(find.byType(MediaLinkCard), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(model.active, isTrue);
+    expect(launcher.launched, [url], reason: 'the next inactive click only activates');
+    await tester.tap(find.byType(MediaLinkCard), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
     expect(launcher.launched, [url, url]);
+    expect(find.text('Could not open link'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('bare source edits stay raw while opening and undo use the resolved destination', (tester) async {
@@ -525,9 +812,16 @@ void main() {
     expect(model.data.url, rawSource);
     expect(model.controller.text, rawSource);
     expect(model.isLink, isTrue);
+    expect(launcher.launched, isEmpty, reason: 'the first body click only activates');
+    await tester.tap(find.byType(MediaLinkCard), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(launcher.launched, ['https://example.com/articles/design?source=field#details']);
     await tester.tap(find.byKey(const ValueKey('media-open-link')));
     await tester.pump();
-    expect(launcher.launched, ['https://example.com/articles/design?source=field#details']);
+    expect(launcher.launched, [
+      'https://example.com/articles/design?source=field#details',
+      'https://example.com/articles/design?source=field#details',
+    ]);
 
     model.session.undo();
     await tester.pumpAndSettle();
@@ -945,6 +1239,10 @@ void main() {
     tester,
   ) async {
     const url = 'https://example.com/image.png';
+    final originalLauncher = UrlLauncherPlatform.instance;
+    final launcher = _FakeUrlLauncher();
+    UrlLauncherPlatform.instance = launcher;
+    addTearDown(() => UrlLauncherPlatform.instance = originalLauncher);
     await _cacheImage(url);
     final store = TestLibraryStore(
       _document(
@@ -979,6 +1277,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(model.active, isTrue);
+    expect(launcher.launched, isEmpty, reason: 'image clicks only activate');
     expect(model.selected, isFalse);
     expect(find.byKey(const ValueKey('media-url-field')), findsOneWidget);
     expect(find.byKey(const ValueKey('media-resize-handle')), findsOneWidget);
@@ -1173,6 +1472,7 @@ class _FakeUrlLauncher extends UrlLauncherPlatform {
   final launched = <String>[];
   final options = <LaunchOptions>[];
   bool successful = true;
+  Exception? error;
 
   @override
   LinkDelegate? get linkDelegate => null;
@@ -1181,6 +1481,7 @@ class _FakeUrlLauncher extends UrlLauncherPlatform {
   Future<bool> launchUrl(String url, LaunchOptions options) async {
     launched.add(url);
     this.options.add(options);
+    if (error case final value?) throw value;
     return successful;
   }
 }

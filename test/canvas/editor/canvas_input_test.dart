@@ -26,6 +26,8 @@ void main() {
   late _Viewport viewport;
   late List<Offset> quickText;
   var focusedEditor = false;
+  var enabled = true;
+  var inputDisposed = false;
 
   setUp(() {
     session = EditorSession(
@@ -57,10 +59,12 @@ void main() {
     viewport = _Viewport();
     quickText = [];
     focusedEditor = false;
+    enabled = true;
+    inputDisposed = false;
     input = CanvasInput(
       session: session,
       viewport: viewport,
-      enabled: () => session.isLive,
+      enabled: () => enabled && session.isLive,
       panSlop: (_) => 10,
       onCloseMenu: () {},
       onOpenMenu: (_, _) {},
@@ -75,7 +79,7 @@ void main() {
     );
   });
   tearDown(() {
-    input.dispose();
+    if (!inputDisposed) input.dispose();
     session.dispose();
   });
 
@@ -416,12 +420,14 @@ void main() {
   for (final releaseFirst in [false, true]) {
     test('click promotions finish after callbacks with raw release first $releaseFirst', () {
       final pointer = TestPointer(1, PointerDeviceKind.mouse);
+      var externalActivations = 0;
       for (final id in ['a', 'b']) {
         final target = input.target(id)..pointerDown(pointer.down(const Offset(30, 30)));
         if (releaseFirst) input.pointerUp(pointer.up());
-        target.activate();
+        target.activate(afterActivate: () => externalActivations++, fromPointer: true);
         if (!releaseFirst) input.pointerUp(pointer.up());
       }
+      expect(externalActivations, 2);
       expect(session.document.elements.map((value) => value.id), ['a', 'b']);
       session.undo();
       expect(session.document.elements.map((value) => value.id), ['b', 'a']);
@@ -433,6 +439,118 @@ void main() {
       expect(session.document.elements.map((value) => value.id), ['a', 'b']);
     });
   }
+
+  test('pointer-origin activation needs its own accepted object sequence', () {
+    var externalActivations = 0;
+    final mouse = TestPointer(1, PointerDeviceKind.mouse);
+    final stylus = TestPointer(2, PointerDeviceKind.stylus);
+    final accepted = input.target('a')..pointerDown(mouse.down(const Offset(30, 30)));
+    final rejected = input.target('b')..pointerDown(stylus.down(const Offset(230, 30)));
+    input.pointerUp(stylus.up());
+
+    rejected.activate(
+      afterActivate: () => externalActivations++,
+      fromPointer: true,
+    );
+    expect(session.activeId, isNull);
+    expect(externalActivations, 0);
+
+    input.pointerUp(mouse.up());
+    accepted.activate(
+      afterActivate: () => externalActivations++,
+      fromPointer: true,
+    );
+    expect(session.activeId, 'a', reason: 'raw pointer release preserves a completed tap sequence');
+    expect(externalActivations, 1);
+
+    input.target('b').activate(afterActivate: () => externalActivations++);
+    expect(session.activeId, 'b', reason: 'keyboard activation remains sequence-free');
+    expect(externalActivations, 2);
+
+    session.setActive(null);
+    final transformPointer = TestPointer(3, PointerDeviceKind.mouse);
+    final transforming = input.target('b')
+      ..pointerDown(transformPointer.down(const Offset(230, 30)))
+      ..transform(() => session.move(['b'], const Offset(10, 0)))
+      ..activate(afterActivate: () => externalActivations++, fromPointer: true);
+    expect(session.activeId, isNull);
+    expect(externalActivations, 2);
+    input.pointerUp(transformPointer.up());
+    transforming.finish();
+  });
+
+  test('combined activation rejects modified, Space, blocked, and non-Select input', () {
+    var externalActivations = 0;
+    final modified = input.target('a');
+    final modifiedPointer = TestPointer(1, PointerDeviceKind.mouse);
+    input.modifierPressed.value = true;
+    modified.pointerDown(modifiedPointer.down(const Offset(30, 30)));
+    input.modifierPressed.value = false;
+    input.pointerUp(modifiedPointer.up());
+    modified.activate(afterActivate: () => externalActivations++, fromPointer: true);
+    expect(session.activeId, isNull);
+    expect(externalActivations, 0);
+
+    final panned = input.target('a');
+    final pannedPointer = TestPointer(2, PointerDeviceKind.mouse);
+    input.spaceHeld = true;
+    panned.pointerDown(pannedPointer.down(const Offset(30, 30)));
+    input
+      ..spaceHeld = false
+      ..pointerUp(pannedPointer.up());
+    panned.activate(afterActivate: () => externalActivations++, fromPointer: true);
+    expect(session.activeId, isNull);
+    expect(externalActivations, 0);
+
+    enabled = false;
+    input.target('a').activate(afterActivate: () => externalActivations++);
+    expect(session.activeId, isNull);
+    expect(externalActivations, 0);
+    enabled = true;
+
+    final nonSelect = (input..chooseTool(CanvasTool.pen)).target('a');
+    final activateNonSelect = nonSelect.activate;
+    activateNonSelect(afterActivate: () => externalActivations++);
+    expect(session.activeId, isNull);
+    expect(externalActivations, 0);
+    activateNonSelect();
+    expect(session.activeId, 'a', reason: 'plain activation keeps its existing behavior');
+  });
+
+  test('combined activation rejects canceled, removed, and restored targets', () {
+    var externalActivations = 0;
+    final canceled = input.target('a');
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    canceled.pointerDown(pointer.down(const Offset(30, 30)));
+    input.pointerCancel(pointer.cancel());
+    canceled.activate(afterActivate: () => externalActivations++);
+    expect(externalActivations, 0);
+
+    final removed = input.target('a');
+    final element = session.element('a')!;
+    session
+      ..remove(['a'])
+      ..insert([element]);
+    removed.activate(afterActivate: () => externalActivations++);
+    expect(externalActivations, 0);
+
+    final restored = input.target('b');
+    session
+      ..setBackground(CanvasBackgroundKind.dotGrid)
+      ..finishOperation()
+      ..undo();
+    restored.activate(afterActivate: () => externalActivations++);
+    expect(externalActivations, 0);
+  });
+
+  test('combined activation rejects targets from a replaced input lifetime', () {
+    var externalActivations = 0;
+    final target = input.target('a');
+    input.dispose();
+    inputDisposed = true;
+    target.activate(afterActivate: () => externalActivations++);
+    expect(externalActivations, 0);
+  });
 
   test('an old completion cannot split a newer target transform', () {
     final pointer = TestPointer(1, PointerDeviceKind.mouse);

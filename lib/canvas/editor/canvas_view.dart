@@ -850,6 +850,8 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         selected: selected,
         active: active,
         onActivate: target.activate,
+        onActivateLink: (openLink, {required fromPointer}) =>
+            target.activate(afterActivate: openLink, fromPointer: fromPointer),
         onMove: target.move,
         onChangeEnd: target.finish,
         onResize: (delta) => _resizeMedia(a, delta),

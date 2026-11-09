@@ -52,6 +52,7 @@ class MediaElementView extends StatefulWidget {
     required this.onMove,
     required this.onResize,
     required this.onActivate,
+    required this.onActivateLink,
     required this.onDeactivate,
     this.onControlPointerDown,
     this.onChangeEnd,
@@ -66,6 +67,7 @@ class MediaElementView extends StatefulWidget {
   final VoidCallback? onChangeEnd;
   final ValueChanged<Offset> onResize;
   final VoidCallback onActivate;
+  final void Function(VoidCallback, {required bool fromPointer}) onActivateLink;
   final VoidCallback onDeactivate;
   final PointerDownEventListener? onControlPointerDown;
 
@@ -129,6 +131,17 @@ class _MediaElementViewState extends State<MediaElementView> {
     if (clipboard != null) unawaited(_paste(clipboard.read()));
   }
 
+  Future<void> _openLink() async {
+    final uri = resolveMediaUri(widget.resources.data.url);
+    try {
+      if (uri != null && await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    } on Exception {
+      // The same feedback covers unavailable and failed platform launchers.
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open link')));
+  }
+
   Future<void> _pickImage() async {
     widget.onActivate();
     final model = widget.resources;
@@ -166,6 +179,7 @@ class _MediaElementViewState extends State<MediaElementView> {
         final showUrlPanel = model.hasImage || model.isLink;
         return Semantics(
           container: true,
+          explicitChildNodes: model.isLink,
           image: model.hasImage,
           selected: widget.selected,
           label: model.isLink
@@ -208,6 +222,7 @@ class _MediaElementViewState extends State<MediaElementView> {
                                       selected: widget.selected,
                                       active: widget.active,
                                       onActivate: widget.onActivate,
+                                      onOpenLink: _openLink,
                                       onPickImage: _pickImage,
                                       onPaste: _pasteFromClipboard,
                                     ),
@@ -232,6 +247,8 @@ class _MediaElementViewState extends State<MediaElementView> {
                       selected: widget.selected,
                       active: widget.active,
                       onActivate: widget.onActivate,
+                      onActivateLink: widget.onActivateLink,
+                      onOpenLink: _openLink,
                       onMove: widget.onMove,
                       onChangeEnd: widget.onChangeEnd,
                       onResize: widget.onResize,
@@ -243,6 +260,7 @@ class _MediaElementViewState extends State<MediaElementView> {
                     selected: widget.selected,
                     active: widget.active,
                     onActivate: widget.onActivate,
+                    onOpenLink: _openLink,
                     onMove: widget.onMove,
                     onChangeEnd: widget.onChangeEnd,
                     onPickImage: _pickImage,
@@ -261,6 +279,8 @@ class _MediaBody extends StatefulWidget {
     required this.selected,
     required this.active,
     required this.onActivate,
+    required this.onActivateLink,
+    required this.onOpenLink,
     required this.onMove,
     required this.onResize,
     this.onChangeEnd,
@@ -271,6 +291,8 @@ class _MediaBody extends StatefulWidget {
   final bool selected;
   final bool active;
   final VoidCallback onActivate;
+  final void Function(VoidCallback, {required bool fromPointer}) onActivateLink;
+  final VoidCallback onOpenLink;
   final ValueChanged<Offset> onMove;
   final VoidCallback? onChangeEnd;
   final PointerDownEventListener? onControlPointerDown;
@@ -282,6 +304,26 @@ class _MediaBody extends StatefulWidget {
 
 class _MediaBodyState extends State<_MediaBody> {
   Offset? _dragPosition;
+  String? _tapSource;
+
+  void _activateBody() {
+    final model = widget.resources;
+    if (!model.isLink) {
+      widget.onActivate();
+      return;
+    }
+    final source = _tapSource;
+    _tapSource = null;
+    if (source != model.data.url) return;
+    _activateLink(fromPointer: true);
+  }
+
+  void _activateLink({bool fromPointer = false}) {
+    final wasActive = widget.resources.active;
+    widget.onActivateLink(() {
+      if (wasActive) widget.onOpenLink();
+    }, fromPointer: fromPointer);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -300,84 +342,92 @@ class _MediaBodyState extends State<_MediaBody> {
               ),
             ),
           )
-        : MediaLinkCard(
-            url: model.data.url,
-            width: model.data.width,
-            target: model.linkTarget,
-            metadata: model.linkMetadata,
-            thumbnail: model.thumbnailImage,
-            thumbnailFailed: model.thumbnailFailed,
-            selected: widget.selected,
+        : MouseRegion(
+            key: const ValueKey('media-link-body-cursor'),
+            cursor: model.active ? SystemMouseCursors.click : SystemMouseCursors.basic,
+            child: MediaLinkCard(
+              url: model.data.url,
+              width: model.data.width,
+              target: model.linkTarget,
+              metadata: model.linkMetadata,
+              thumbnail: model.thumbnailImage,
+              thumbnailFailed: model.thumbnailFailed,
+              selected: widget.selected,
+            ),
           );
     Widget body = SizedBox.fromSize(
       size: model.canvasSize,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        dragStartBehavior: DragStartBehavior.down,
-        supportedDevices: const {
-          PointerDeviceKind.mouse,
-          PointerDeviceKind.stylus,
-          PointerDeviceKind.invertedStylus,
-        },
-        onTap: widget.onActivate,
-        onPanStart: (details) => _dragPosition = details.globalPosition,
-        onPanUpdate: (details) {
-          final position = details.globalPosition;
-          widget.onMove(position - _dragPosition!);
-          _dragPosition = position;
-        },
-        onPanEnd: (_) {
-          _dragPosition = null;
-          widget.onChangeEnd?.call();
-        },
-        onPanCancel: () {
-          if (_dragPosition == null) return;
-          _dragPosition = null;
-          widget.onChangeEnd?.call();
-        },
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            content,
-            if (model.hasImage && widget.selected)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: theme.geo.radiusSmall,
-                      border: Border.all(color: colors.accent, width: 2),
+      child: Listener(
+        onPointerDown: (_) => _tapSource = model.isLink ? model.data.url : null,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          dragStartBehavior: DragStartBehavior.down,
+          supportedDevices: const {
+            PointerDeviceKind.mouse,
+            PointerDeviceKind.stylus,
+            PointerDeviceKind.invertedStylus,
+          },
+          onTap: _activateBody,
+          onTapCancel: () => _tapSource = null,
+          onPanStart: (details) => _dragPosition = details.globalPosition,
+          onPanUpdate: (details) {
+            final position = details.globalPosition;
+            widget.onMove(position - _dragPosition!);
+            _dragPosition = position;
+          },
+          onPanEnd: (_) {
+            _dragPosition = null;
+            widget.onChangeEnd?.call();
+          },
+          onPanCancel: () {
+            if (_dragPosition == null) return;
+            _dragPosition = null;
+            widget.onChangeEnd?.call();
+          },
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              content,
+              if (model.hasImage && widget.selected)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: theme.geo.radiusSmall,
+                        border: Border.all(color: colors.accent, width: 2),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: IgnorePointer(
-                ignoring: !widget.active,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 260),
-                  reverseDuration: const Duration(milliseconds: 180),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeOutCubic,
-                  transitionBuilder: (child, animation) => _mediaTransition(child, animation, Alignment.bottomRight),
-                  child: widget.active
-                      ? ResizeHandle(
-                          key: const ValueKey('media-resize-handle'),
-                          semanticLabel: 'Resize media',
-                          onPointerDown: widget.onControlPointerDown,
-                          showCornerSurface: true,
-                          gestures: {
-                            ImmediateMultiDragGestureRecognizer: immediateDragGestureFactory(
-                              (_) => CallbackDrag(widget.onResize, onEnd: widget.onChangeEnd),
-                            ),
-                          },
-                        )
-                      : const SizedBox(key: ValueKey('media-resize-handle-hidden')),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: IgnorePointer(
+                  ignoring: !widget.active,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    reverseDuration: const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeOutCubic,
+                    transitionBuilder: (child, animation) => _mediaTransition(child, animation, Alignment.bottomRight),
+                    child: widget.active
+                        ? ResizeHandle(
+                            key: const ValueKey('media-resize-handle'),
+                            semanticLabel: 'Resize media',
+                            onPointerDown: widget.onControlPointerDown,
+                            showCornerSurface: true,
+                            gestures: {
+                              ImmediateMultiDragGestureRecognizer: immediateDragGestureFactory(
+                                (_) => CallbackDrag(widget.onResize, onEnd: widget.onChangeEnd),
+                              ),
+                            },
+                          )
+                        : const SizedBox(key: ValueKey('media-resize-handle-hidden')),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -389,7 +439,7 @@ class _MediaBodyState extends State<_MediaBody> {
         onKeyEvent: (_, event) {
           if (event is KeyDownEvent &&
               (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.space)) {
-            widget.onActivate();
+            _activateLink();
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;
@@ -399,7 +449,7 @@ class _MediaBodyState extends State<_MediaBody> {
           button: true,
           selected: widget.selected,
           label: 'Link card: $title',
-          onTap: widget.onActivate,
+          onTap: _activateLink,
           child: body,
         ),
       );
@@ -419,6 +469,7 @@ class _MediaUrlPanel extends StatefulWidget {
     required this.selected,
     required this.active,
     required this.onActivate,
+    required this.onOpenLink,
     required this.onPickImage,
     required this.onPaste,
     this.onMove,
@@ -429,6 +480,7 @@ class _MediaUrlPanel extends StatefulWidget {
   final bool selected;
   final bool active;
   final VoidCallback onActivate;
+  final VoidCallback onOpenLink;
   final VoidCallback onPickImage;
   final VoidCallback onPaste;
   final ValueChanged<Offset>? onMove;
@@ -440,17 +492,6 @@ class _MediaUrlPanel extends StatefulWidget {
 
 class _MediaUrlPanelState extends State<_MediaUrlPanel> {
   Offset? _dragPosition;
-
-  Future<void> _openLink() async {
-    final uri = resolveMediaUri(widget.resources.data.url);
-    try {
-      if (uri != null && await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
-    } on Exception {
-      // The same feedback covers unavailable and failed platform launchers.
-    }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open link')));
-  }
 
   void _edit() {
     widget.onActivate();
@@ -531,7 +572,7 @@ class _MediaUrlPanelState extends State<_MediaUrlPanel> {
                     child: IconButton(
                       key: const ValueKey('media-open-link'),
                       tooltip: 'Open link',
-                      onPressed: _openLink,
+                      onPressed: widget.onOpenLink,
                       icon: const Icon(Icons.open_in_new, size: 20),
                     ),
                   ),
