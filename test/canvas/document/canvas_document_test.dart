@@ -421,6 +421,28 @@ void main() {
     );
   });
 
+  test('shape text defaults, round-trips, copies, and decodes strictly', () {
+    final legacy = ShapeElementData.fromJson(_encodedShape());
+    expect(legacy.text, '');
+    expect(legacy.toJson()['text'], '');
+
+    const text = 'Shapes keep labels: café — 🪐';
+    final shape = legacy.copyWith(text: text);
+    final restored = ShapeElementData.fromJson(jsonDecode(jsonEncode(shape.toJson())));
+    expect(restored.text, text);
+    expect(restored, shape);
+    expect(restored.hashCode, shape.hashCode);
+    expect(restored.copyWith().text, text);
+    expect(restored.copyWith(text: '').text, '');
+
+    for (final malformed in [null, 42, true, <String, Object?>{}]) {
+      expect(
+        () => ShapeElementData.fromJson(_encodedShape()..['text'] = malformed),
+        throwsA(isA<FormatException>()),
+      );
+    }
+  });
+
   test('unknown document keys are rejected', () {
     final document = _document()..['extra'] = true;
 
@@ -694,6 +716,17 @@ Map<String, Object?> _encodedCode({String id = 'code-1', Object rotation = 0.0})
   'title': '',
   'showLineNumbers': true,
   'rotation': rotation,
+};
+
+Map<String, Object?> _encodedShape() => {
+  'id': 'shape',
+  'type': 'shape',
+  'kind': 'rectangle',
+  'position': {'x': 0.0, 'y': 0.0},
+  'size': {'width': 80.0, 'height': 80.0},
+  'strokeColor': 0xff000000,
+  'fillColor': null,
+  'strokeWidth': 2.0,
 };
 
 Map<String, Object?> _encodedMedia({Object width = 480.0, Object rotation = 0.0}) => {

@@ -17,6 +17,7 @@ import '../../canvas/test_helpers.dart';
 
 void main() {
   test('mixed projects round-trip with deterministic attachments', () async {
+    final shapeText = '  Café 🌱\n\n![literal](${_path(3)})\n  ';
     final document =
         _document(
           markdown: '''
@@ -33,20 +34,25 @@ void main() {
                 width: 480,
                 url: 'https://example.com/articles/design?tracking=kept',
               ),
-            ),
+            )
+            ..add(_shape(shapeText)),
         );
     final first = onePixelPngBytes;
     final second = Uint8List.fromList(onePixelPngBytes);
     final third = Uint8List.fromList(onePixelPngBytes);
-    final store = TestAttachmentStore({
+    final literal = Uint8List.fromList(onePixelPngBytes);
+    final store = _CountingAttachmentStore({
       _path(0): first,
       _path(1): second,
       _path(2): third,
+      _path(3): literal,
     });
 
+    expect(canvasAttachmentPaths(document), {_path(0), _path(1), _path(2)});
     final encoded = await encodeCanvasProject(document, store);
     final archive = ZipDecoder().decodeBytes(encoded);
     expect(archive.map((entry) => entry.name), ['document.json', _path(0), _path(1), _path(2)]);
+    expect(store.readPaths, [_path(0), _path(1), _path(2)]);
     expect(
       utf8.decode(archive.find('document.json')!.readBytes()!),
       const JsonEncoder.withIndent('  ').convert(document.toJson()),
@@ -57,9 +63,13 @@ void main() {
 
     final project = await decodeCanvasProject(encoded);
     expect(project.document.toJson(), document.toJson());
+    expect(project.document.elements.whereType<ShapeElementData>().single.text, shapeText);
     expect(project.attachments[_path(0)], first);
     expect(project.attachments[_path(1)], second);
     expect(project.attachments[_path(2)], third);
+
+    final rebased = rebaseCanvasDocumentAttachments(project.document, {_path(3): _path(4)});
+    expect(rebased.elements.whereType<ShapeElementData>().single.text, shapeText);
   });
 
   test('local image discovery uses the Markdown AST', () {
@@ -411,10 +421,12 @@ class _CountingAttachmentStore extends TestAttachmentStore {
   _CountingAttachmentStore([super.initial]);
 
   int reads = 0;
+  final readPaths = <String>[];
 
   @override
   Future<Uint8List> read(String path) async {
     reads++;
+    readPaths.add(path);
     return await super.read(path);
   }
 }
@@ -618,6 +630,17 @@ MediaElementData _mediaSource(String id, String url) => MediaElementData(
   position: Offset.zero,
   width: 400,
   url: url,
+);
+
+ShapeElementData _shape(String text) => ShapeElementData(
+  id: 'shape-1',
+  kind: ShapeKind.rectangle,
+  position: const Offset(100, 200),
+  size: const Size(160, 100),
+  strokeColor: const Color(0xff000000),
+  fillColor: null,
+  strokeWidth: 2,
+  text: text,
 );
 
 String _path(int index) => 'attachments/0000000$index-0000-4000-8000-000000000000.png';

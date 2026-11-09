@@ -12,7 +12,7 @@ export 'editor_history.dart' show CanvasTool;
 
 // ---------- Context and defaults ----------
 
-enum EditorField { markdown, source, title, mediaUrl }
+enum EditorField { markdown, source, title, mediaUrl, shapeText }
 
 typedef EditorContext = ({String id, EditorField field});
 
@@ -154,6 +154,7 @@ class EditorSession extends ChangeNotifier {
         EditorField.markdown => target is TextElementData,
         EditorField.source || EditorField.title => target is CodeElementData,
         EditorField.mediaUrl => target is MediaElementData,
+        EditorField.shapeText => target is ShapeElementData,
       };
       if (!valid) throw ArgumentError('Unknown editing field');
     }
@@ -255,6 +256,8 @@ class EditorSession extends ChangeNotifier {
 
   void setMarkdown(String id, String markdown) =>
       _change([id], (a) => (a as TextElementData).copyWith(markdown: markdown), promote: true);
+  void setShapeText(String id, String text) =>
+      _change([id], (a) => (a as ShapeElementData).copyWith(text: text), promote: true);
   void setTextStyle(String id, TextNodeStyle style) =>
       _change([id], (a) => (a as TextElementData).copyWith(style: style));
   void setCodeSource(String id, String source) =>

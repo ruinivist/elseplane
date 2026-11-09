@@ -9,6 +9,7 @@ import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_resources.dart';
+import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -85,6 +86,42 @@ void main() {
     expect(media.image, same(image));
     expect(attachments.reads, 1);
     expect(code.scrollController.verticalScroller.offset, codeOffset);
+  });
+
+  testWidgets('shape editor controller, focus node, and scroll offset survive culling', (tester) async {
+    final value = ShapeElementData(
+      id: 'shape',
+      position: const ui.Offset(30, 80),
+      size: const ui.Size(300, 200),
+      kind: ShapeKind.rectangle,
+      strokeColor: const ui.Color(0xff000000),
+      strokeWidth: 2,
+      fillColor: null,
+      text: List.generate(80, (index) => 'Shape label line $index').join('\n'),
+    );
+    await pumpCanvas(
+      tester,
+      TestLibraryStore(CanvasDocument(background: CanvasBackgroundKind.plain, elements: [value])),
+    );
+    final initial = tester.widget<ShapeElementView>(find.byType(ShapeElementView)).resources
+      ..session.setActive(value.id)
+      ..enterEditing();
+    initial.focusNode.requestFocus();
+    await tester.pumpAndSettle();
+    initial.scrollController.jumpTo(100);
+    await tester.pumpAndSettle();
+    final scrollOffset = initial.scrollController.offset;
+    expect(scrollOffset, greaterThan(0));
+
+    await _pan(tester, -20000);
+    expect(find.byType(ShapeElementView), findsNothing);
+    await _pan(tester, 20000);
+    final restored = tester.widget<ShapeElementView>(find.byType(ShapeElementView)).resources;
+    expect(restored, same(initial));
+    expect(restored.controller.text, value.text);
+    expect(restored.focusNode, same(initial.focusNode));
+    expect(restored.scrollController.offset, scrollOffset);
+    expect(tester.takeException(), isNull);
   });
 
   for (final delayed in [false, true]) {

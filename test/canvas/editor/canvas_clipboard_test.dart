@@ -88,7 +88,7 @@ void main() {
     }
   });
 
-  test('clipboard preserves shape geometry', () {
+  test('clipboard preserves shape geometry and label', () {
     final shape = ShapeElementData(
       id: 'shape',
       kind: ShapeKind.diamond,
@@ -97,6 +97,7 @@ void main() {
       strokeColor: const Color(0xffdc3f3f),
       fillColor: const Color(0xffffc936),
       strokeWidth: 4,
+      text: 'Canvas label — 雪',
     );
 
     final restored =

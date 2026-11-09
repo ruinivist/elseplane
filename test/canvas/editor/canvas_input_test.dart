@@ -69,7 +69,10 @@ void main() {
       onCloseMenu: () {},
       onOpenMenu: (_, _) {},
       onEndEditing: ({commitMediaDraft = true}) {},
-      onFocusElement: (_, {edit = false}) {},
+      onEndShapeEditing: () {},
+      onFocusElement: (id, {edit = false}) {
+        if (edit) session.editField((id: id, field: EditorField.shapeText));
+      },
       onPlace: (_) {},
       onQuickText: quickText.add,
       isFocusedEditorAt: (_) => focusedEditor,
@@ -81,6 +84,60 @@ void main() {
   tearDown(() {
     if (!inputDisposed) input.dispose();
     session.dispose();
+  });
+
+  test('shape double-click requires one live target and preserves immediate taps', () {
+    final pointer = TestPointer(41, PointerDeviceKind.mouse);
+    _rawTargetClick(input, pointer, 'a', const Offset(30, 30), 100);
+    expect(session.activeId, 'a');
+    expect(session.editing, isNull);
+
+    _rawTargetClick(input, pointer, 'b', const Offset(35, 35), 200);
+    expect(session.editing, isNull);
+
+    _rawTargetClick(input, pointer, 'a', const Offset(30, 30), 300);
+    _rawTargetClick(input, pointer, 'a', const Offset(30, 30), 400);
+    expect(session.editing, (id: 'a', field: EditorField.shapeText));
+  });
+
+  test('shape double-click is canceled by controls, modifiers, drags, and lifetimes', () {
+    final pointer = TestPointer(42, PointerDeviceKind.mouse);
+
+    _rawTargetClick(input, pointer, 'a', const Offset(30, 30), 100);
+    final controlDown = pointer.down(const Offset(30, 30), timeStamp: const Duration(milliseconds: 200));
+    input
+      ..pointerDown(controlDown)
+      ..target('a').pointerDown(controlDown, control: true)
+      ..pointerUp(pointer.up(timeStamp: const Duration(milliseconds: 220)));
+    _rawTargetClick(input, pointer, 'a', const Offset(30, 30), 300);
+    expect(session.editing, isNull);
+
+    input.cancelQuickText();
+    _rawTargetClick(input, pointer, 'a', const Offset(30, 30), 400);
+    input.modifierPressed.value = true;
+    input.modifierPressed.value = false;
+    _rawTargetClick(input, pointer, 'a', const Offset(30, 30), 500);
+    expect(session.editing, isNull);
+
+    input.cancelQuickText();
+    _rawTargetClick(input, pointer, 'a', const Offset(30, 30), 600);
+    final dragDown = pointer.down(const Offset(30, 30), timeStamp: const Duration(milliseconds: 700));
+    input
+      ..pointerDown(dragDown)
+      ..target('a').pointerDown(dragDown)
+      ..pointerMove(pointer.move(const Offset(60, 30), timeStamp: const Duration(milliseconds: 710)))
+      ..pointerUp(pointer.up(timeStamp: const Duration(milliseconds: 720)));
+    _rawTargetClick(input, pointer, 'a', const Offset(30, 30), 800);
+    expect(session.editing, isNull);
+
+    input.cancelQuickText();
+    _rawTargetClick(input, pointer, 'a', const Offset(30, 30), 900);
+    final old = session.element('a')!;
+    session
+      ..remove(['a'])
+      ..insert([old]);
+    _rawTargetClick(input, pointer, 'a', const Offset(30, 30), 1000);
+    expect(session.editing, isNull);
   });
 
   for (final rejection in [
@@ -249,6 +306,11 @@ void main() {
           expect(editor.editing, (id: 'existing', field: EditorField.markdown));
           expect((editor.element('existing')! as TextElementData).markdown, 'Existing text');
         }
+        if (surface == 'shape') {
+          expect(editor.editing, (id: 'a', field: EditorField.shapeText));
+          final shape = tester.widget<ShapeElementView>(find.byType(ShapeElementView));
+          expect(shape.resources.focusNode.hasFocus, isTrue);
+        }
         if (surface == 'code') {
           expect((editor.element('existing')! as CodeElementData).source, 'final value = 1;');
         }
@@ -287,6 +349,7 @@ void main() {
       expect(editor.document.elements, hasLength(1));
       expect(editor.document.elements.single, isA<ShapeElementData>());
       expect(editor.activeId, objectFirst ? isNull : 'a');
+      expect(editor.editing, isNull);
     });
   }
 
@@ -779,6 +842,15 @@ void main() {
     await tester.pump();
     expect(find.byType(ShapeElementView), findsOneWidget);
   });
+}
+
+void _rawTargetClick(CanvasInput input, TestPointer pointer, String id, Offset position, int time) {
+  final target = input.target(id);
+  final down = pointer.down(position, timeStamp: Duration(milliseconds: time));
+  input.pointerDown(down);
+  target.pointerDown(down);
+  input.pointerUp(pointer.up(timeStamp: Duration(milliseconds: time + 20)));
+  target.activate();
 }
 
 class _Viewport implements CanvasInputViewport {

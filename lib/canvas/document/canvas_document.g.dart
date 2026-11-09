@@ -53,6 +53,7 @@ ShapeElementData _$ShapeElementDataFromJson(
       'strokeColor',
       'fillColor',
       'strokeWidth',
+      'text',
     ],
   );
   final val = ShapeElementData._json(
@@ -73,6 +74,7 @@ ShapeElementData _$ShapeElementDataFromJson(
     ),
     fillColor: $checkedConvert('fillColor', (v) => _nullableArgbFromJson(v)),
     strokeWidth: $checkedConvert('strokeWidth', (v) => (v as num).toDouble()),
+    text: $checkedConvert('text', (v) => v as String? ?? ''),
     autoArrange: $checkedConvert('autoArrange', (v) => v as bool? ?? true),
   );
   return val;
@@ -89,6 +91,7 @@ Map<String, dynamic> _$ShapeElementDataToJson(ShapeElementData instance) =>
       'strokeColor': ?const _ArgbColorConverter().toJson(instance.strokeColor),
       'fillColor': ?_nullableArgbToJson(instance.fillColor),
       'strokeWidth': instance.strokeWidth,
+      'text': instance.text,
     };
 
 const _$ShapeKindEnumMap = {

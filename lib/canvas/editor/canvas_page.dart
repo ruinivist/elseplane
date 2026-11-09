@@ -109,9 +109,16 @@ class _CanvasPageState extends State<CanvasPage> {
 
   void _editElement(CanvasElementData value, VoidCallback edit) {
     if (_session.element(value.id) == null) return;
+    if (value is ShapeElementData) _endShapeTextEditing(value);
     _session.finishOperation();
     edit();
     _session.finishOperation();
+  }
+
+  void _endShapeTextEditing(ShapeElementData value) {
+    if (_session.editing != (id: value.id, field: EditorField.shapeText)) return;
+    _session.editField(null);
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   void _setCanvasBackground(CanvasBackgroundKind kind) {
@@ -250,31 +257,37 @@ class _CanvasPageState extends State<CanvasPage> {
             onChangeBoundary: _finishHistoryOperation,
           )
         : activeShape != null
-        ? ListenableBuilder(
-            key: const ValueKey('shape-settings-panel'),
-            listenable: _session,
-            builder: (context, _) => ShapeToolSettings(
-              kind: activeShape.kind,
-              strokeColor: activeShape.strokeColor,
-              fillColor: activeShape.fillColor,
-              strokeWidth: activeShape.strokeWidth,
-              outlineColorPickerExpanded: _shapeOutlineColorPickerExpanded,
-              fillColorPickerExpanded: _shapeFillColorPickerExpanded,
-              onKindChanged: (kind) =>
-                  _editElement(activeShape, () => _session.setShapeOptions(activeShape.id, kind: kind)),
-              onStrokeColorChanged: (color) =>
-                  _editElement(activeShape, () => _session.setShapeOptions(activeShape.id, strokeColor: color)),
-              onFillColorChanged: (color) => _editElement(
-                activeShape,
-                () => _session.setShapeOptions(activeShape.id, fillColor: color, clearFillColor: color == null),
-              ),
-              onStrokeWidthChanged: (width) =>
-                  _editElement(activeShape, () => _session.setShapeOptions(activeShape.id, strokeWidth: width)),
-              onFillColorPickerExpandedChanged: (expanded) => setState(
-                () => _shapeFillColorPickerExpanded = expanded,
-              ),
-              onOutlineColorPickerExpandedChanged: (expanded) => setState(
-                () => _shapeOutlineColorPickerExpanded = expanded,
+        ? Listener(
+            onPointerDown: (_) {
+              input.cancelQuickText();
+              _endShapeTextEditing(activeShape);
+            },
+            child: ListenableBuilder(
+              key: const ValueKey('shape-settings-panel'),
+              listenable: _session,
+              builder: (context, _) => ShapeToolSettings(
+                kind: activeShape.kind,
+                strokeColor: activeShape.strokeColor,
+                fillColor: activeShape.fillColor,
+                strokeWidth: activeShape.strokeWidth,
+                outlineColorPickerExpanded: _shapeOutlineColorPickerExpanded,
+                fillColorPickerExpanded: _shapeFillColorPickerExpanded,
+                onKindChanged: (kind) =>
+                    _editElement(activeShape, () => _session.setShapeOptions(activeShape.id, kind: kind)),
+                onStrokeColorChanged: (color) =>
+                    _editElement(activeShape, () => _session.setShapeOptions(activeShape.id, strokeColor: color)),
+                onFillColorChanged: (color) => _editElement(
+                  activeShape,
+                  () => _session.setShapeOptions(activeShape.id, fillColor: color, clearFillColor: color == null),
+                ),
+                onStrokeWidthChanged: (width) =>
+                    _editElement(activeShape, () => _session.setShapeOptions(activeShape.id, strokeWidth: width)),
+                onFillColorPickerExpandedChanged: (expanded) => setState(
+                  () => _shapeFillColorPickerExpanded = expanded,
+                ),
+                onOutlineColorPickerExpandedChanged: (expanded) => setState(
+                  () => _shapeOutlineColorPickerExpanded = expanded,
+                ),
               ),
             ),
           )

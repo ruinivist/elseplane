@@ -40,6 +40,36 @@ Text can remain active without being edited. For code, active currently also mea
 
 Shapes follow the same state separation: clicking or creating a shape makes it active without selecting it. Ctrl-click, Cmd-click, or marquee selection can select a shape without making it active. An active shape may also be selected, but changing either state does not change the other.
 
+### Shape text
+
+- Shapes keep a plain-text label in their saved value. In Select, an ordinary
+  single click retains immediate shape activation and does not enter editing.
+  In Select, primary-mouse double-click on a shape enters or re-enters editing
+  and places the caret at the end. A double-click inside an already focused
+  editor keeps native word selection.
+- Modifiers, controls, Space navigation, other tools, dragging, and click pairs
+  that cross between empty canvas or different shapes do not enter editing.
+  Both presses must resolve to the same live shape. Controls invalidate pending
+  recognition; navigation, interruption, tool changes, and document changes
+  cancel it. Do not delay single-click routing.
+- Labels use plain bundled body typography and the saved shape stroke color;
+  selection highlighting does not tint the text. No custom text styling or
+  Markdown is applied. Text wraps within the conservative bounds for its shape.
+  Fitting preview text is vertically centered; overflowing preview content is
+  clipped and top-aligned. The editor scrolls to keep the caret visible. Shape
+  size and font size stay fixed, with no ellipsis or saved-text truncation.
+- Enter finishes editing unless an IME composition is active; Shift+Enter
+  inserts a newline. Escape and clicking away preserve text and follow normal
+  deactivation and target routing. Move or resize controls finish editing while
+  keeping the shape active. Shape text editing adds no rotation control or new
+  rotation behavior.
+- While focused, native selection, cut, copy, paste, delete, and local undo take
+  priority. Plain-text paste inserts label text, including URL-looking content;
+  it does not start media URL handling or attachment workflows. Shape copy and
+  paste use the existing element serializer and preserve the label. Editor
+  scrolling never pans the canvas, including at its boundaries or without
+  overflow.
+
 ### Appearance
 
 - New users start in Dark theme and Glass surface style.
@@ -98,7 +128,14 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 - [Pending asynchronous edits follow the accepted decision](../adr/0001-cancel-unfinished-pastes.md). Field pastes use the target's live selection; canvas pastes keep their captured destination, and Cut uses its captured targets after a successful clipboard write while the session remains live. Field, selection, activation, tool, focus, and undo/redo changes do not cancel pending clipboard reads or image uploads. Ignore completions after session end or target removal/disposal, and clean up only new unpublished attachment paths on failure or target loss. Live-operation failures keep their existing feedback. Ordinary image loads continue to use their separate source lifetimes.
 
-- Canvas history groups text and code changes by logical field. Moving between code source and title, ending editing, or starting another document operation closes the group. Temporary browser focus loss does not split it. A placement is separate from subsequent typing; its automatic return to Select remains part of placement.
+- Canvas history groups text, code, and shape-label changes by logical field.
+  Moving between code source and title, ending editing, or starting another
+  document operation closes the group. Temporary browser focus loss does not
+  split it. Opening or closing an unchanged shape editor creates no content
+  history entry. Text saves through the session as it changes; undo restores
+  saved label content and clears editing as required by document restoration.
+  A placement is separate from subsequent typing; its automatic return to
+  Select remains part of placement.
 
 - Explicit tool choices, switching tools, toggling a tool off, and Escape disabling a tool each form one undo step.
 - Undoing a stroke keeps the pen enabled. Another Undo reverses choosing the pen. Redo restores these actions in order.

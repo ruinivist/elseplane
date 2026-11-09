@@ -11,6 +11,7 @@ import 'package:archive/archive.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/transfer/canvas_library_archive.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../canvas/test_helpers.dart';
@@ -48,6 +49,25 @@ void main() {
     expect(restored.library.path(restored.library.files.last.id).map((file) => file.name), ['Notes.json', 'Sketch']);
     expect(restored.library.current.name, 'Notes');
     expect(restored.attachments[_path], onePixelPngBytes);
+  });
+
+  test('library backup and restore preserve plain shape text', () async {
+    const shapeText = '  日本語 ☃️\n\n![literal]($_literalPath)\n  ';
+    final document = _document('canvas').withElements((elements) => elements.add(_shape(shapeText)));
+    final library = CanvasLibrary(
+      files: [CanvasFile(id: 'canvas', name: 'Canvas', document: document)],
+      currentId: 'canvas',
+    );
+    final store = _RecordingAttachmentStore({_path: onePixelPngBytes, _literalPath: onePixelPngBytes});
+
+    final bytes = await encodeCanvasLibraryArchive(library, store);
+    final zip = ZipDecoder().decodeBytes(bytes);
+    expect(zip.map((entry) => entry.name), ['library/', 'library/Canvas.json', 'attachments/', _path]);
+    expect(store.readPaths, [_path]);
+
+    final restored = await decodeCanvasLibraryArchive(bytes);
+    expect(restored.library.current.document!.elements.whereType<ShapeElementData>().single.text, shapeText);
+    expect(restored.attachments.keys, {_path});
   });
 
   test('backup and restore reject corrupt referenced images', () async {
@@ -115,6 +135,7 @@ void main() {
 // ---------- Fixtures ----------
 
 const _path = 'attachments/00000000-0000-4000-8000-000000000000.png';
+const _literalPath = 'attachments/00000001-0000-4000-8000-000000000000.png';
 
 CanvasDocument _document(String id) => CanvasDocument(
   background: CanvasBackgroundKind.plain,
@@ -122,6 +143,29 @@ CanvasDocument _document(String id) => CanvasDocument(
     MediaElementData(id: id, position: Offset.zero, width: 120, url: _path),
   ],
 );
+
+ShapeElementData _shape(String text) => ShapeElementData(
+  id: 'shape-1',
+  kind: ShapeKind.rectangle,
+  position: const Offset(100, 200),
+  size: const Size(160, 100),
+  strokeColor: const Color(0xff000000),
+  fillColor: null,
+  strokeWidth: 2,
+  text: text,
+);
+
+class _RecordingAttachmentStore extends TestAttachmentStore {
+  _RecordingAttachmentStore(super.initial);
+
+  final readPaths = <String>[];
+
+  @override
+  Future<Uint8List?> readIfExists(String path) async {
+    readPaths.add(path);
+    return await super.readIfExists(path);
+  }
+}
 
 Future<Uint8List> _mediaArchive(List<String> sources) {
   final document = CanvasDocument(

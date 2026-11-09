@@ -87,10 +87,28 @@ final class _EraserGesture extends _Gesture {
 }
 
 final class _QuickTextTap {
-  _QuickTextTap(this.down, {this.second = false});
+  _QuickTextTap(this.down, {this.previous});
   final PointerDownEvent down;
-  final bool second;
+  _QuickTextTap? previous;
+  CanvasInputTarget? shapeTarget;
+  bool resolved = false;
+  bool empty = false;
   Duration? released;
+
+  void resolveEmpty() {
+    resolved = true;
+    empty = true;
+    if (previous?.empty != true) previous = null;
+  }
+
+  void resolveShape(CanvasInputTarget target) {
+    resolved = true;
+    shapeTarget = target;
+    final earlier = previous?.shapeTarget;
+    if (earlier == null || earlier.id != target.id || !identical(earlier._lifetime, target._lifetime)) {
+      previous = null;
+    }
+  }
 }
 
 // ---------- Pointer ownership ----------
@@ -106,6 +124,7 @@ class CanvasInput extends ChangeNotifier {
     required this.onCloseMenu,
     required this.onOpenMenu,
     required this.onEndEditing,
+    required this.onEndShapeEditing,
     required this.onFocusElement,
     required this.onPlace,
     required this.onQuickText,
@@ -120,8 +139,10 @@ class CanvasInput extends ChangeNotifier {
     pen.addListener(notifyListeners);
     arrow.addListener(notifyListeners);
     shape.addListener(notifyListeners);
+    modifierPressed.addListener(_modifierChanged);
     _restoration = session.restorationGeneration;
     _tool = session.tool;
+    _observedDocument = session.document;
     session.addListener(_sessionChanged);
   }
 
@@ -132,6 +153,7 @@ class CanvasInput extends ChangeNotifier {
   final VoidCallback onCloseMenu;
   final void Function(String? id, Offset globalPosition) onOpenMenu;
   final void Function({bool commitMediaDraft}) onEndEditing;
+  final VoidCallback onEndShapeEditing;
   final void Function(String id, {bool edit}) onFocusElement;
   final ValueChanged<Offset> onPlace;
   final ValueChanged<Offset> onQuickText;
@@ -152,7 +174,13 @@ class CanvasInput extends ChangeNotifier {
   int _generation = 0;
   late int _restoration;
   late CanvasTool _tool;
+  late CanvasDocument _observedDocument;
   bool _disposed = false;
+  bool _promotingForActivation = false;
+
+  void _modifierChanged() {
+    if (modifierPressed.value) cancelQuickText();
+  }
 
   bool get blocked => !enabled() || _blockedPointers.isNotEmpty;
   bool get spaceHeld => _spaceHeld;
@@ -180,11 +208,22 @@ class CanvasInput extends ChangeNotifier {
   CanvasInputTarget target(String id) => CanvasInputTarget._(this, id);
 
   void _sessionChanged() {
+    final document = session.document;
+    if (!identical(document, _observedDocument)) {
+      if (!_promotingForActivation || !_sameElements(_observedDocument, document)) cancelQuickText();
+      _observedDocument = document;
+    }
     if (!session.isLive || _restoration != session.restorationGeneration || _tool != session.tool) {
       interrupt();
       _restoration = session.restorationGeneration;
       _tool = session.tool;
     }
+  }
+
+  bool _sameElements(CanvasDocument first, CanvasDocument second) {
+    if (first.background != second.background || first.elements.length != second.elements.length) return false;
+    final old = {for (final value in first.elements) value.id: value};
+    return second.elements.every((value) => identical(old[value.id], value));
   }
 
   void chooseTool(CanvasTool tool) {
@@ -253,6 +292,7 @@ class CanvasInput extends ChangeNotifier {
     final second =
         previous?.released != null &&
         previous!.down.kind == event.kind &&
+        previous.resolved &&
         event.timeStamp >= previous.released! &&
         event.timeStamp - previous.released! <= kDoubleTapTimeout &&
         event.timeStamp - previous.down.timeStamp >= kDoubleTapMinTime &&
@@ -263,10 +303,10 @@ class CanvasInput extends ChangeNotifier {
         modifierPressed.value ||
         event.buttons != kPrimaryButton ||
         event.kind != PointerDeviceKind.mouse ||
-        (!second && isFocusedEditorAt(event.position))) {
+        isFocusedEditorAt(event.position)) {
       cancelQuickText();
     } else {
-      _quickTextTap = _QuickTextTap(event, second: second);
+      _quickTextTap = _QuickTextTap(event, previous: second ? previous : null);
     }
   }
 
@@ -279,14 +319,29 @@ class CanvasInput extends ChangeNotifier {
       cancelQuickText();
       return false;
     }
-    if (!tap.second) {
+    if (!tap.resolved) {
+      if (viewport.hitTest(tap.down.position).isNotEmpty) {
+        cancelQuickText();
+        return false;
+      }
+      tap.resolveEmpty();
+    }
+    final previous = tap.previous;
+    if (previous == null || previous.released == null || !previous.resolved) {
       tap.released = event.timeStamp;
       return false;
     }
-    final position = viewport.screenToCanvas(viewport.globalToScreen(tap.down.position));
-    endInteraction();
-    session.setSelection(const []);
-    onQuickText(position);
+    cancelQuickText();
+    if (tap.empty) {
+      final position = viewport.screenToCanvas(viewport.globalToScreen(tap.down.position));
+      endInteraction();
+      session.setSelection(const []);
+      onQuickText(position);
+    } else {
+      final target = tap.shapeTarget;
+      if (target == null || !target.attached) return false;
+      target.activate(edit: true);
+    }
     return true;
   }
 
@@ -456,12 +511,31 @@ class CanvasInput extends ChangeNotifier {
 
   void _erase(Offset globalPosition) => session.remove(viewport.hitTest(globalPosition));
 
+  void _resolveQuickTextTarget(CanvasInputTarget target, PointerDownEvent event, {required bool control}) {
+    if (control) {
+      cancelQuickText();
+      if (session.editing == (id: target.id, field: EditorField.shapeText)) onEndShapeEditing();
+      return;
+    }
+    final tap = _quickTextTap;
+    if (tap == null || tap.down.pointer != event.pointer) return;
+    if (!target.attached || session.element(target.id) is! ShapeElementData || event.kind != PointerDeviceKind.mouse) {
+      cancelQuickText();
+      return;
+    }
+    tap.resolveShape(target);
+  }
+
   void _activate(String id, {bool edit = false}) {
     if (blocked || session.element(id) == null) return;
-    if (session.editing?.field == EditorField.markdown) session.editField(null);
-    session
-      ..promoteAuto([id])
-      ..setActive(id);
+    if (session.editing != null && session.editing?.id != id) session.editField(null);
+    _promotingForActivation = true;
+    try {
+      session.promoteAuto([id]);
+    } finally {
+      _promotingForActivation = false;
+    }
+    session.setActive(id);
     onFocusElement(id, edit: edit);
   }
 
@@ -545,7 +619,7 @@ class CanvasInputTarget {
     if (!attached || !_supportsCanvasEditing(event.kind)) return;
     input
       .._observeDown(event)
-      ..cancelQuickText();
+      .._resolveQuickTextTarget(this, event, control: control);
     if (!input.canHandle(event) || !attached) return;
     if (input._gesture case _ObjectGesture(pointer: final pointer, id: final target)
         when pointer == event.pointer && target == id) {
@@ -592,8 +666,11 @@ class CanvasInputTarget {
       session.setActive(null);
       input.onEndEditing();
     }
-    if (value is! TextElementData || session.editing?.field != EditorField.markdown) {
-      if (session.editing?.field == EditorField.markdown) session.editField(null);
+    if (session.editing?.field == EditorField.markdown && (value is! TextElementData || session.editing?.id != id)) {
+      session.editField(null);
+    }
+    if (session.editing?.field == EditorField.shapeText && (value is! ShapeElementData || session.editing?.id != id)) {
+      session.editField(null);
     }
     session.setSelection(const []);
     if (value is ArrowElementData) {

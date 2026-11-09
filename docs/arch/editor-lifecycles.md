@@ -39,9 +39,11 @@ values and grant no mutation rights.
   type, outside lazily culled widgets. Controllers, focus nodes, scroll
   positions, image streams, and geometry caches are resources. Elements receive
   resource objects only when needed. Text and code scroll controllers retain
-  offsets across detachment; culling does not retire resources. Inline Markdown
-  images load lazily and retain source-keyed reads and image streams with text
-  resources; preview widgets only render those resources. Media loads exact
+  offsets across detachment; shape editor resources retain their text
+  controllers, focus nodes, and scroll positions. Culling does not retire these
+  resources. Inline Markdown images load lazily and retain source-keyed reads and
+  image streams with text resources; preview widgets only render those
+  resources. Media loads exact
   local attachment references or external HTTPS image sources resolved at use
   time; raw saved strings remain unchanged. Unsupported or unusable external
   sources remain unresolved and are never requested or opened. Provider metadata
@@ -60,11 +62,16 @@ values and grant no mutation rights.
 - Reconcile surviving IDs and types; update changed content without recreating
   unrelated controllers or restarting unchanged image loads. Removal detaches
   target resources immediately; dispose resources after consumers detach. File
-  switching and document replacement start a fresh editor lifetime.
+  switching and document replacement start a fresh editor lifetime. Shape
+  resources synchronize from restored saved labels without submitting a new
+  edit.
 - Retain 50 typed snapshots of document and tool choice. JSON does not
   participate in ordinary history capture or comparison. Explicit operation
   boundaries group drags, resizes, rotations, strokes, and option changes.
-  Autosave timing is independent of history grouping.
+  Text, code, and shape-label changes group by logical editor field; ending
+  editing or starting another document operation closes the group, while
+  temporary browser focus loss does not. Autosave timing is independent of
+  history grouping.
 - Tool-only undo does not save and does not cancel pending clipboard or upload
   work. Placement and its return to Select share an operation. Auto promotion
   belongs to the interaction that caused it; manual arrangement changes order

@@ -129,6 +129,7 @@ final class ShapeElementData extends CanvasElementData {
     required this.strokeColor,
     required this.fillColor,
     required this.strokeWidth,
+    this.text = '',
     super.autoArrange,
   }) : super(id, 'shape');
 
@@ -141,12 +142,19 @@ final class ShapeElementData extends CanvasElementData {
     required this.strokeColor,
     required this.fillColor,
     required this.strokeWidth,
+    required this.text,
     super.autoArrange,
   }) : super(id, type);
 
-  factory ShapeElementData.fromJson(Object? json) => _decode(json, 'shape element', _$ShapeElementDataFromJson)
-    ..validateType('shape')
-    ..validate();
+  factory ShapeElementData.fromJson(Object? json) {
+    final value = _jsonMap(json, 'shape element');
+    if (value.containsKey('text') && value['text'] is! String) {
+      throw const FormatException('shape.text must be a string');
+    }
+    return _decode(value, 'shape element', _$ShapeElementDataFromJson)
+      ..validateType('shape')
+      ..validate();
+  }
 
   // ---------- State ----------
 
@@ -160,6 +168,8 @@ final class ShapeElementData extends CanvasElementData {
   @JsonKey(fromJson: _nullableArgbFromJson, toJson: _nullableArgbToJson)
   final Color? fillColor;
   final double strokeWidth;
+  @JsonKey(defaultValue: '')
+  final String text;
 
   // ---------- Serialization ----------
 
@@ -179,6 +189,7 @@ final class ShapeElementData extends CanvasElementData {
     Color? fillColor,
     bool clearFillColor = false,
     double? strokeWidth,
+    String? text,
   }) => ShapeElementData(
     autoArrange: autoArrange ?? this.autoArrange,
     id: id ?? this.id,
@@ -188,6 +199,7 @@ final class ShapeElementData extends CanvasElementData {
     strokeColor: strokeColor ?? this.strokeColor,
     fillColor: clearFillColor ? null : fillColor ?? this.fillColor,
     strokeWidth: strokeWidth ?? this.strokeWidth,
+    text: text ?? this.text,
   );
 }
 
@@ -738,8 +750,8 @@ bool _valuesEqual<T>(List<T> first, List<T> second) {
 
 bool _sameElement(CanvasElementData first, CanvasElementData second) => switch ((first, second)) {
   (final ShapeElementData a, final ShapeElementData b) =>
-    (a.kind, a.position, a.size, a.strokeColor, a.fillColor, a.strokeWidth) ==
-        (b.kind, b.position, b.size, b.strokeColor, b.fillColor, b.strokeWidth),
+    (a.kind, a.position, a.size, a.strokeColor, a.fillColor, a.strokeWidth, a.text) ==
+        (b.kind, b.position, b.size, b.strokeColor, b.fillColor, b.strokeWidth, b.text),
   (final MediaElementData a, final MediaElementData b) =>
     (a.position, a.width, a.url, a.rotation) == (b.position, b.width, b.url, b.rotation),
   (final TextElementData a, final TextElementData b) =>
@@ -760,7 +772,15 @@ bool _sameElement(CanvasElementData first, CanvasElementData second) => switch (
 };
 
 int _elementHash(CanvasElementData value) => switch (value) {
-  final ShapeElementData a => Object.hash(a.kind, a.position, a.size, a.strokeColor, a.fillColor, a.strokeWidth),
+  final ShapeElementData a => Object.hash(
+    a.kind,
+    a.position,
+    a.size,
+    a.strokeColor,
+    a.fillColor,
+    a.strokeWidth,
+    a.text,
+  ),
   final MediaElementData a => Object.hash(a.position, a.width, a.url, a.rotation),
   final TextElementData a => Object.hash(a.position, a.textSize, a.markdown, a.style, a.rotation),
   final CodeElementData a => Object.hash(

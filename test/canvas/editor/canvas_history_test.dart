@@ -281,6 +281,53 @@ void main() {
     expect(controller.text, 'changed source');
   });
 
+  testWidgets('shape label edits stay in one history group across focus loss', (tester) async {
+    final store = TestLibraryStore(
+      CanvasDocument(
+        background: CanvasBackgroundKind.plain,
+        elements: [
+          ShapeElementData(
+            id: 'shape',
+            position: const Offset(200, 240),
+            size: const Size(280, 200),
+            kind: ShapeKind.rectangle,
+            strokeColor: const Color(0xff000000),
+            fillColor: null,
+            strokeWidth: 2,
+            text: 'original',
+          ),
+        ],
+      ),
+    );
+    await pumpCanvas(tester, store);
+    final view = tester.widget<ShapeElementView>(find.byType(ShapeElementView));
+    final resources = view.resources;
+    final session = resources.session;
+
+    resources
+      ..enterEditing()
+      ..finishEditing();
+    session.undo();
+    expect((session.element('shape')! as ShapeElementData).text, 'original');
+
+    resources
+      ..enterEditing()
+      ..focusNode.requestFocus();
+    await tester.pumpAndSettle();
+    resources.controller.text = 'first';
+    resources.focusNode.unfocus();
+    resources.controller.text = 'final';
+    resources.finishEditing();
+    session.undo();
+    expect((session.element('shape')! as ShapeElementData).text, 'original');
+    expect(resources.controller.text, 'original');
+    expect(session.editing, isNull);
+    session.redo();
+    expect((session.element('shape')! as ShapeElementData).text, 'final');
+    await pumpPastSave(tester);
+    expect((store.persisted!.elements.single as ShapeElementData).text, 'final');
+  });
+
   testWidgets('media transforms retain image and changed sources reload on restore', (tester) async {
     final attachments = _CountingAttachments({
       'attachments/11111111-1111-4111-8111-111111111111.png': onePixelPngBytes,

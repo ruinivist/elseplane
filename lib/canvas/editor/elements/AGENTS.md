@@ -7,9 +7,10 @@
 - Views receive immutable element values and session-derived interaction flags.
   Request saved changes through `EditorSession` operations.
 - `CanvasView` retains resources by ID and type outside lazily culled widgets.
-  Text, code, media, and pen have resource owners; shapes and arrows render
-  directly from values. Removal invalidates resources immediately; dispose
-  controllers and focus nodes after consumers detach.
+  Text, code, media, shape, and pen have resource owners; arrows render directly
+  from values. Shape text controllers, focus, and scroll state survive culling.
+  Removal invalidates resources immediately; dispose controllers and focus nodes
+  after consumers detach.
 - Inline Markdown attachments and HTTPS image loads belong to retained text
   resources. Load lazily, retain surviving sources across culling and
   restoration, and keep storage reads out of preview widgets.

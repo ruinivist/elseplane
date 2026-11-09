@@ -34,6 +34,45 @@ EditorSession _session(List<CanvasElementData> elements) {
 // ---------- Operations and history ----------
 
 void main() {
+  test('shape text edits validate fields, promote, and group history', () {
+    final shape = _shape('shape', auto: true);
+    final other = _shape('other');
+    final session = _session([shape, other])..editField((id: 'shape', field: EditorField.shapeText));
+    expect(session.editing?.field, EditorField.shapeText);
+    expect(() => session.editField((id: 'other', field: EditorField.shapeText)), returnsNormally);
+    expect(() => session.editField((id: 'missing', field: EditorField.shapeText)), throwsArgumentError);
+    expect(() => session.editField((id: 'other', field: EditorField.markdown)), throwsArgumentError);
+    session.editField((id: 'shape', field: EditorField.shapeText));
+
+    var publications = 0;
+    session.documentChanges.addListener(() => publications++);
+    const text = 'label — 世界 🌿';
+    session.setShapeText('shape', text);
+    expect(session.document.elements.map((element) => element.id), ['other', 'shape']);
+    expect((session.element('shape')! as ShapeElementData).text, text);
+    session.setShapeText('shape', text);
+    expect(publications, 1);
+    session
+      ..editField(null)
+      ..undo();
+    expect(session.editing, isNull);
+    expect(session.document.elements.map((element) => element.id), ['shape', 'other']);
+    expect((session.element('shape')! as ShapeElementData).text, '');
+    session.redo();
+    expect((session.element('shape')! as ShapeElementData).text, text);
+  });
+
+  test('unchanged shape text edits preserve redo history', () {
+    final session = _session([_shape('shape')])
+      ..move(['shape'], const Offset(10, 0))
+      ..finishOperation()
+      ..undo()
+      ..setShapeText('shape', '')
+      ..finishOperation()
+      ..redo();
+    expect((session.element('shape')! as ShapeElementData).position, const Offset(10, 0));
+  });
+
   test('typed equality compares independently decoded nested values', () {
     final document = _document([
       _shape('shape'),

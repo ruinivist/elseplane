@@ -22,6 +22,7 @@ import 'package:elseplane/canvas/editor/elements/media/media_resources.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_preview.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_resources.dart';
+import 'package:elseplane/canvas/editor/elements/shape/shape_editor_resources.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_preview.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
@@ -162,6 +163,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       onCloseMenu: _closeContextMenu,
       onOpenMenu: (id, position) => _openCanvasContextMenu(_element(id), position),
       onEndEditing: _clearElementEditing,
+      onEndShapeEditing: _clearShapeTextEditing,
       onFocusElement: _focusElement,
       onPlace: (position) => switch (_session.tool) {
         CanvasTool.text => _addTextBlock(position),
@@ -318,6 +320,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     final TextEditorResources resource => resource.focusNode,
     final CodeEditorResources resource => resource.focusNode,
     final MediaResources resource => resource.focusNode,
+    final ShapeEditorResources resource => resource.focusNode,
     _ => null,
   };
 
@@ -329,6 +332,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         final CodeEditorResources code when identical(node, code.focusNode) => EditorField.source,
         final CodeEditorResources code when identical(node, code.titleFocusNode) => EditorField.title,
         final MediaResources media when identical(node, media.focusNode) => EditorField.mediaUrl,
+        final ShapeEditorResources shape when identical(node, shape.focusNode) => EditorField.shapeText,
         _ => null,
       };
       if (field != null) return (id: value.id, field: field);
@@ -400,6 +404,26 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       _session.editField((id: id, field: EditorField.markdown));
       _editorFocusNode(value)?.requestFocus();
     }
+    if (value is ShapeElementData) {
+      final resource = _resources[id] as ShapeEditorResources?;
+      if (resource == null) return;
+      if (edit) {
+        resource.enterEditing();
+        final lifetime = _session.elementLifetime(id);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted &&
+              _session.activeId == id &&
+              _session.editing == (id: id, field: EditorField.shapeText) &&
+              identical(_session.elementLifetime(id), lifetime) &&
+              identical(_resources[id], resource) &&
+              resource.attached) {
+            resource.focusNode.requestFocus();
+          }
+        });
+      } else if (_session.editing == (id: id, field: EditorField.shapeText)) {
+        resource.focusNode.requestFocus();
+      }
+    }
     if (value is CodeElementData) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _session.activeId == id && _session.element(id) is CodeElementData) {
@@ -418,6 +442,13 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
 
   void _clearTextEditing() {
     if (_session.editing?.field == EditorField.markdown) _session.editField(null);
+  }
+
+  void _clearShapeTextEditing() {
+    if (_session.editing?.field == EditorField.shapeText) _session.editField(null);
+    for (final resource in _resources.values.whereType<ShapeEditorResources>()) {
+      if (resource.focusNode.hasFocus) resource.focusNode.unfocus();
+    }
   }
 
   void _clearElementEditing({bool commitMediaDraft = true}) {
@@ -768,6 +799,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     final CodeElementData a => CodeEditorResources(_session, a),
     final MediaElementData a => MediaResources(_session, a, _attachmentStore),
     final PenElementData a => PenResources(_session, a),
+    final ShapeElementData a => ShapeEditorResources(_session, a),
     _ => null,
   };
 
@@ -856,6 +888,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       ),
       final ShapeElementData a => ShapeElementView(
         data: a,
+        resources: _resources[a.id]! as ShapeEditorResources,
         selected: selected,
         active: active,
         onActivate: target.activate,
@@ -1018,7 +1051,11 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         ) ||
         _elements.whereType<MediaElementData>().any(
           (model) => _editorFocusNode(model)?.hasFocus ?? false,
-        );
+        ) ||
+        _elements.whereType<ShapeElementData>().any(
+          (model) => _editorFocusNode(model)?.hasFocus ?? false,
+        ) ||
+        _session.editing?.field == EditorField.shapeText;
   }
 
   List<CanvasElementData> get _selectedInStackingOrder =>
@@ -1155,6 +1192,8 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
                           if (_canvasInputBlocked) return;
                           if (editing is TextElementData) {
                             _clearTextEditing();
+                          } else if (editing is ShapeElementData) {
+                            _clearShapeTextEditing();
                           } else {
                             _finishHistoryOperation();
                           }
