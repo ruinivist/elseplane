@@ -44,6 +44,7 @@ class CanvasPage extends StatefulWidget {
     this.themeMode = ThemeMode.light,
     this.onSurfaceStyleChanged,
     this.onThemeModeChanged,
+    this.bottomLeftPanelBuilder,
     super.key,
   });
 
@@ -61,6 +62,7 @@ class CanvasPage extends StatefulWidget {
   final ThemeMode themeMode;
   final Future<void> Function(SurfaceStyle)? onSurfaceStyleChanged;
   final Future<void> Function(ThemeMode)? onThemeModeChanged;
+  final Widget Function(VoidCallback finishInteraction)? bottomLeftPanelBuilder;
 
   @override
   State<CanvasPage> createState() => _CanvasPageState();
@@ -184,6 +186,7 @@ class _CanvasPageState extends State<CanvasPage> {
   }
 
   Widget _buildChrome(BuildContext context, CanvasInput? input) {
+    final bottomLeftPanel = widget.bottomLeftPanelBuilder?.call(() => input?.endInteraction());
     return CanvasChrome(
       title: CanvasTitle(
         path: widget.libraryPath,
@@ -195,10 +198,23 @@ class _CanvasPageState extends State<CanvasPage> {
       settingsButton: SurfaceIconButton(
         key: const ValueKey('settings-button'),
         tooltip: 'Settings',
-        onPressed: input == null ? null : () => _showSettingsDialog(input),
+        onPressed: !_documentLoaded || input == null ? null : () => _showSettingsDialog(input),
         icon: const Icon(LucideIcons.settings),
       ),
-      toolOptions: input == null ? null : _buildToolOptions(input),
+      toolOptions: !_documentLoaded || input == null ? null : _buildToolOptions(input),
+      bottomLeftPanel: bottomLeftPanel == null
+          ? null
+          : Focus(
+              canRequestFocus: false,
+              onFocusChange: (focused) {
+                if (focused) input?.endInteraction();
+              },
+              child: Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: (_) => input?.endInteraction(),
+                child: bottomLeftPanel,
+              ),
+            ),
     );
   }
 
@@ -220,7 +236,7 @@ class _CanvasPageState extends State<CanvasPage> {
           compact: compact,
           key: ValueKey('toolbar-$key'),
           selected: _activeTool == tool,
-          onPressed: input == null ? null : () => input.toggleTool(tool),
+          onPressed: !_documentLoaded || input == null ? null : () => input.toggleTool(tool),
           child: Icon(icon, semanticLabel: label),
         ),
       ),

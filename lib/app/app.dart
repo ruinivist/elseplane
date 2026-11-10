@@ -5,6 +5,8 @@ import 'package:elseplane/app/feature_flags.dart';
 import 'package:elseplane/app/workspace.dart';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/attachment_store_web.dart';
+import 'package:elseplane/github/github_api.dart';
+import 'package:elseplane/github/github_browser.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_project_files.dart';
 import 'package:elseplane/theme/starless.dart';
@@ -45,6 +47,10 @@ class ElseplaneApp extends StatefulWidget {
     this.attachmentStore,
     this.libraryStore,
     this.projectFiles,
+    this.githubApi,
+    this.navigateGitHubAuthorization,
+    this.consumeGitHubCompletion,
+    this.openGitHubLink,
     super.key,
   });
 
@@ -54,6 +60,10 @@ class ElseplaneApp extends StatefulWidget {
   final AttachmentStore? attachmentStore;
   final LibraryStore? libraryStore;
   final CanvasProjectFiles? projectFiles;
+  final GitHubApi? githubApi;
+  final void Function(Uri)? navigateGitHubAuthorization;
+  final bool Function()? consumeGitHubCompletion;
+  final void Function(String url)? openGitHubLink;
 
   @override
   State<ElseplaneApp> createState() => _ElseplaneAppState();
@@ -71,6 +81,22 @@ class _ElseplaneAppState extends State<ElseplaneApp> {
   late final LibraryStore _libraryStore = widget.libraryStore ?? PreferencesLibraryStore();
   late final AttachmentStore _attachmentStore = widget.attachmentStore ?? PlatformAttachmentStore();
   late final CanvasProjectFiles _projectFiles = widget.projectFiles ?? createCanvasProjectFiles();
+  late final GitHubApi? _githubApi = widget.githubApi ?? _createConfiguredGitHubApi();
+
+  GitHubApi? _createConfiguredGitHubApi() {
+    const configuredUrl = String.fromEnvironment('GITHUB_MEDIATOR_URL');
+    if (configuredUrl.isEmpty) return null;
+    final uri = Uri.tryParse(configuredUrl);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      throw const FormatException('GITHUB_MEDIATOR_URL must be an HTTPS service URL.');
+    }
+    return createBrowserGitHubApi(uri);
+  }
 
   Future<void> _setThemeMode(ThemeMode mode) {
     setState(() => _themeMode = mode);
@@ -108,6 +134,10 @@ class _ElseplaneAppState extends State<ElseplaneApp> {
         attachmentStore: _attachmentStore,
         libraryStore: _libraryStore,
         projectFiles: _projectFiles,
+        githubApi: _githubApi,
+        navigateGitHubAuthorization: widget.navigateGitHubAuthorization,
+        consumeGitHubCompletion: widget.consumeGitHubCompletion,
+        openGitHubLink: widget.openGitHubLink,
         themeMode: _themeMode,
         onThemeModeChanged: FeatureFlags.themeSelection ? _setThemeMode : null,
         onSurfaceStyleChanged: FeatureFlags.surfaceStyleSelection ? _setSurfaceStyle : null,

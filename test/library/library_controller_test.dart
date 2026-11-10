@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/library/canvas_library.dart';
+import 'package:elseplane/library/github_metadata.dart';
 import 'package:elseplane/library/library_controller.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_project.dart';
@@ -97,6 +98,227 @@ void main() {
     expect(controller.library.file(originalId).name, 'Renamed');
     expect(controller.library.file(originalId).document, same(lateDocument));
     expect(controller.library.current.document, same(other.document));
+  });
+
+  test('ordinary file operations and edits preserve GitHub metadata', () async {
+    final id = controller.library.currentId;
+    final tracking = _tracking();
+    final pending = _pendingTracking();
+    await controller.setGitHubDestination(_destination());
+    await controller.setGitHubTracking(id, tracking, pendingTracking: pending);
+    await controller.create(
+      const CanvasFile(id: 'folder', name: 'Folder'),
+      openId: id,
+    );
+    await controller.create(
+      CanvasFile(id: 'other', name: 'Other', parentId: 'folder', document: CanvasLibrary.emptyDocument),
+    );
+    await controller.rename(id, 'Renamed');
+    await controller.move(id, parentId: 'folder');
+    controller.updateDocument(id, _document(CanvasBackgroundKind.plain));
+    await controller.flush();
+    await controller.select('other');
+
+    expect(controller.library.githubDestination?.toJson(), _destination().toJson());
+    expect(controller.library.file(id).githubTracking?.toJson(), tracking.toJson());
+    expect(controller.library.file(id).githubPendingTracking?.toJson(), pending.toJson());
+    expect(controller.library.file(id).githubWriteUnconfirmed, isTrue);
+  });
+
+  test('failed tracking confirmation keeps the confirmed baseline and pending write', () async {
+    final id = controller.library.currentId;
+    final confirmed = _tracking();
+    final pending = _pendingTracking();
+    await controller.setGitHubTracking(id, confirmed, pendingTracking: pending);
+    final proposed = _pendingTracking(path: 'Canvas-next.canvas');
+    store.fail = true;
+
+    await expectLater(controller.setGitHubTracking(id, proposed), throwsStateError);
+
+    expect(controller.library.file(id).githubTracking?.toJson(), confirmed.toJson());
+    expect(controller.library.file(id).githubPendingTracking?.toJson(), pending.toJson());
+    store.fail = false;
+  });
+
+  test('same destination identity retains tracking, while a changed branch resets all guards', () async {
+    final id = controller.library.currentId;
+    final document = controller.library.current.document;
+    await controller.setGitHubDestination(_destination());
+    await controller.setGitHubTracking(id, _tracking(), pendingTracking: _pendingTracking());
+    await controller.create(CanvasFile(id: 'other', name: 'Other', document: CanvasLibrary.emptyDocument));
+    await controller.setGitHubTracking('other', _tracking(), pendingTracking: _pendingTracking());
+    await controller.setGitHubDestination(
+      const GitHubDestination(accountId: 1, repositoryId: 2, owner: 'renamed', repository: 'repo', branch: 'main'),
+    );
+    expect(controller.library.file(id).githubTracking, isNotNull);
+    expect(controller.library.file(id).githubWriteUnconfirmed, isTrue);
+    expect(controller.library.file(id).githubPendingTracking, isNotNull);
+    expect(controller.library.file('other').githubTracking, isNotNull);
+    expect(controller.library.file('other').githubWriteUnconfirmed, isTrue);
+
+    await controller.setGitHubDestination(
+      const GitHubDestination(accountId: 1, repositoryId: 2, owner: 'renamed', repository: 'repo', branch: 'next'),
+    );
+    expect(controller.library.file(id).githubTracking, isNull);
+    expect(controller.library.file(id).githubPendingTracking, isNull);
+    expect(controller.library.file(id).githubWriteUnconfirmed, isFalse);
+    expect(controller.library.file('other').githubTracking, isNull);
+    expect(controller.library.file('other').githubWriteUnconfirmed, isFalse);
+    expect(controller.library.file(id).document, same(document));
+  });
+
+  test('GitHub canvas import stages and remaps attachments in one selected write', () async {
+    final originalId = controller.library.currentId;
+    await controller.setGitHubDestination(_destination());
+    final confirmed = _tracking(path: 'University/Physics/Sketch.canvas');
+    await controller.setGitHubTracking(
+      originalId,
+      confirmed,
+      pendingTracking: _pendingTracking(path: 'University/Physics/Sketch-next.canvas'),
+    );
+    await controller.create(
+      const CanvasFile(id: 'university', name: 'University'),
+      openId: originalId,
+    );
+    store.writes.clear();
+    attachments.attempted.clear();
+
+    final id = await controller.addGitHubCanvas(
+      folders: ['University', 'Physics'],
+      name: 'Sketch',
+      project: CanvasProject(
+        document: _imageDocument(),
+        attachments: {
+          _path: Uint8List.fromList([2]),
+        },
+      ),
+      tracking: GitHubCanvasTracking(
+        path: 'University/Physics/Sketch.canvas',
+        documentSha: 'remote-document-sha',
+        attachmentShas: const {'University/Physics/attachments/original.png': 'remote-blob-sha'},
+        attachmentNames: {_path: 'attachments/original.png'},
+      ),
+      clearPendingFileId: originalId,
+    );
+
+    final imported = controller.library.file(id);
+    final localPath = canvasAttachmentPaths(imported.document!).single;
+    expect(controller.library.currentId, id);
+    expect(controller.library.path(id).map((file) => file.name), ['University', 'Physics', 'Sketch']);
+    expect(localPath, isNot(_path));
+    expect(attachments.bytes[localPath], [2]);
+    expect(imported.githubTracking!.path, 'University/Physics/Sketch.canvas');
+    expect(imported.githubTracking!.attachmentShas, {'University/Physics/attachments/original.png': 'remote-blob-sha'});
+    expect(imported.githubTracking!.attachmentNames, {localPath: 'attachments/original.png'});
+    expect(controller.library.file(originalId).githubWriteUnconfirmed, isFalse);
+    expect(controller.library.file(originalId).githubTracking?.toJson(), confirmed.toJson());
+    expect(controller.library.githubDestination?.toJson(), _destination().toJson());
+    expect(store.writes, hasLength(1));
+    expect(attachments.attempted, [localPath]);
+  });
+
+  test('GitHub canvas import rejects collisions and unsafe segments without writing', () async {
+    final id = controller.library.currentId;
+    await controller.create(
+      CanvasFile(id: 'blocked', name: 'Blocked', document: CanvasLibrary.emptyDocument),
+      openId: id,
+    );
+    store.writes.clear();
+    final project = CanvasProject(document: CanvasLibrary.emptyDocument, attachments: {});
+    final tracking = GitHubCanvasTracking(
+      path: 'Imported.canvas',
+      documentSha: 'sha',
+      attachmentShas: const {},
+      attachmentNames: const {},
+    );
+
+    for (final (folders, name) in [
+      (['Blocked'], 'Imported'),
+      (<String>[], 'Untitled'),
+      (['..'], 'Imported'),
+      (['Bad/Path'], 'Imported'),
+      ([r'Bad\Path'], 'Imported'),
+      (['Bad\u0000Path'], 'Imported'),
+      (<String>[], ''),
+    ]) {
+      await expectLater(
+        controller.addGitHubCanvas(folders: folders, name: name, project: project, tracking: tracking),
+        throwsFormatException,
+      );
+    }
+    expect(store.writes, isEmpty);
+    expect(controller.library.files, hasLength(2));
+  });
+
+  for (final failMetadata in [false, true]) {
+    test('failed GitHub canvas ${failMetadata ? 'metadata' : 'attachment'} staging rolls back', () async {
+      final originalId = controller.library.currentId;
+      await controller.setGitHubTracking(originalId, _tracking(), pendingTracking: _pendingTracking());
+      store.writes.clear();
+      attachments.attempted.clear();
+      attachments.deleted.clear();
+      store.fail = failMetadata;
+      attachments.fail = !failMetadata;
+      final before = controller.library;
+
+      await expectLater(
+        controller.addGitHubCanvas(
+          folders: ['New', 'Nested'],
+          name: 'Imported',
+          project: CanvasProject(
+            document: _imageDocument(),
+            attachments: {
+              _path: Uint8List.fromList([2]),
+            },
+          ),
+          tracking: GitHubCanvasTracking(
+            path: 'New/Nested/Imported.canvas',
+            documentSha: 'sha',
+            attachmentShas: const {},
+            attachmentNames: {_path: 'attachments/image.png'},
+          ),
+          clearPendingFileId: originalId,
+        ),
+        throwsStateError,
+      );
+
+      expect(identical(controller.library, before), isTrue);
+      expect(controller.library.file(originalId).githubWriteUnconfirmed, isTrue);
+      expect(controller.library.files.where((file) => file.name == 'New'), isEmpty);
+      expect(attachments.deleted, attachments.attempted);
+      expect(store.writes, hasLength(failMetadata ? 1 : 0));
+      store.fail = false;
+      attachments.fail = false;
+    });
+  }
+
+  test('ZIP replacement clears canvas tracking and restore clears the destination', () async {
+    final id = controller.library.currentId;
+    await controller.setGitHubDestination(_destination());
+    await controller.setGitHubTracking(id, _tracking(), pendingTracking: _pendingTracking());
+    await controller.replaceCanvas(id, CanvasProject(document: _document(CanvasBackgroundKind.plain), attachments: {}));
+    expect(controller.library.githubDestination, isNotNull);
+    expect(controller.library.file(id).githubTracking, isNull);
+    expect(controller.library.file(id).githubWriteUnconfirmed, isFalse);
+
+    final tracked = CanvasFile(
+      id: 'restored',
+      name: 'Restored',
+      document: CanvasLibrary.emptyDocument,
+      githubTracking: _tracking(),
+      githubPendingTracking: _pendingTracking(),
+    );
+    await controller.restore((
+      library: CanvasLibrary(
+        currentId: tracked.id,
+        files: [tracked],
+        githubDestination: _destination(),
+      ),
+      attachments: {},
+    ));
+    expect(controller.library.githubDestination, isNull);
+    expect(controller.library.current.githubTracking, isNull);
+    expect(controller.library.current.githubWriteUnconfirmed, isFalse);
   });
 
   test('the editor lifetime changes only after a successful switch or replacement', () async {
@@ -272,6 +494,30 @@ void main() {
 // ---------- Fixtures ----------
 
 const _path = 'attachments/00000000-0000-4000-8000-000000000000.png';
+
+GitHubDestination _destination() => const GitHubDestination(
+  accountId: 1,
+  repositoryId: 2,
+  owner: 'owner',
+  repository: 'repo',
+  branch: 'main',
+);
+
+GitHubCanvasTracking _tracking({String path = 'Canvas.canvas'}) => GitHubCanvasTracking(
+  path: path,
+  documentSha: 'document-sha',
+  attachmentShas: {'${path.contains('/') ? '${path.substring(0, path.lastIndexOf('/'))}/' : ''}$_path': 'blob-sha'},
+  attachmentNames: {_path: _path},
+);
+
+GitHubCanvasTracking _pendingTracking({String path = 'Canvas-pending.canvas'}) => GitHubCanvasTracking(
+  path: path,
+  documentSha: 'pending-document-sha',
+  attachmentShas: {
+    '${path.contains('/') ? '${path.substring(0, path.lastIndexOf('/'))}/' : ''}$_path': 'pending-blob-sha',
+  },
+  attachmentNames: {_path: _path},
+);
 
 CanvasDocument _document(CanvasBackgroundKind background) => CanvasDocument(background: background, elements: []);
 

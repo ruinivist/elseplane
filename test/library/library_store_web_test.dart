@@ -5,10 +5,14 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/library/canvas_library.dart';
+import 'package:elseplane/library/github_metadata.dart';
 import 'package:elseplane/library/library_store.dart';
+import 'package:elseplane/library/transfer/canvas_library_archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
@@ -107,4 +111,132 @@ void main() {
     expect(restoredLibrary.file('b').parentId, isNull);
     expect(restoredLibrary.current.document!.toJson(), library.current.document!.toJson());
   });
+
+  test('persists confirmed and pending GitHub tracking but excludes both from ZIP backup', () async {
+    final tracking = GitHubCanvasTracking(
+      path: 'Notes.canvas',
+      documentSha: 'document-sha',
+      attachmentShas: {'Notes/attachments/image.png': 'blob-sha'},
+      attachmentNames: {'attachments/00000000-0000-4000-8000-000000000000.png': 'attachments/image.png'},
+    );
+    final pending = GitHubCanvasTracking(
+      path: 'Notes-next.canvas',
+      documentSha: 'pending-document-sha',
+      attachmentShas: const {},
+      attachmentNames: const {},
+    );
+    final library = CanvasLibrary(
+      currentId: 'canvas',
+      githubDestination: const GitHubDestination(
+        accountId: 1,
+        repositoryId: 2,
+        owner: 'owner',
+        repository: 'repo',
+        branch: 'main',
+      ),
+      files: [
+        CanvasFile(
+          id: 'canvas',
+          name: 'Notes',
+          document: CanvasLibrary.emptyDocument,
+          githubTracking: tracking,
+          githubPendingTracking: pending,
+        ),
+      ],
+    );
+
+    expect(tracking.attachmentShas.clear, throwsUnsupportedError);
+    expect(tracking.attachmentNames.clear, throwsUnsupportedError);
+    await PreferencesLibraryStore().save(library);
+
+    final restored = (await PreferencesLibraryStore().load())!;
+    expect(restored.githubDestination?.toJson(), library.githubDestination!.toJson());
+    expect(restored.current.githubTracking?.toJson(), tracking.toJson());
+    expect(restored.current.githubPendingTracking?.toJson(), pending.toJson());
+    expect(restored.current.githubWriteUnconfirmed, isTrue);
+
+    final portable = await decodeCanvasLibraryArchive(await encodeCanvasLibraryArchive(library, _EmptyAttachments()));
+    expect(portable.library.githubDestination, isNull);
+    expect(portable.library.current.githubTracking, isNull);
+    expect(portable.library.current.githubPendingTracking, isNull);
+    expect(portable.library.current.githubWriteUnconfirmed, isFalse);
+  });
+
+  test('rejects malformed persisted GitHub metadata', () {
+    final initial = CanvasLibrary.initial();
+    final library = initial.toJson();
+    final file = initial.current.toJson()
+      ..['githubTracking'] = {
+        'path': 'Canvas.canvas',
+        'documentSha': 'sha',
+        'attachmentShas': <String, Object?>{'attachments/image.png': 3},
+        'attachmentNames': <String, String>{},
+      };
+    library['files'] = [file];
+
+    expect(() => CanvasLibrary.fromJson(library), throwsFormatException);
+
+    final pendingLibrary = initial.toJson();
+    final pendingFile = initial.current.toJson()
+      ..['githubPendingTracking'] = {
+        'path': 'Canvas.canvas',
+        'documentSha': 'sha',
+        'attachmentShas': <String, Object?>{},
+        'attachmentNames': 3,
+      };
+    pendingLibrary['files'] = [pendingFile];
+    expect(() => CanvasLibrary.fromJson(pendingLibrary), throwsFormatException);
+  });
+
+  test('rejects folder GitHub tracking in either state', () {
+    final tracking = GitHubCanvasTracking(
+      path: 'Notes.canvas',
+      documentSha: 'sha',
+      attachmentShas: const {},
+      attachmentNames: const {},
+    );
+    for (final key in ['githubTracking', 'githubPendingTracking']) {
+      final library = CanvasLibrary.initial().toJson();
+      library['files'] = [
+        {
+          'id': 'folder',
+          'name': 'Folder',
+          'parentId': null,
+          'document': null,
+          key: tracking.toJson(),
+        },
+        (library['files']! as List).single,
+      ];
+      expect(() => CanvasLibrary.fromJson(library), throwsFormatException);
+    }
+  });
+
+  test('loads library snapshots written before GitHub metadata existed', () {
+    final library = CanvasLibrary.initial().toJson()..remove('githubDestination');
+    for (final file in library['files']! as List<dynamic>) {
+      (file as Map<String, dynamic>)
+        ..remove('githubTracking')
+        ..remove('githubPendingTracking')
+        ..remove('githubWriteUnconfirmed');
+    }
+
+    final restored = CanvasLibrary.fromJson(library);
+    expect(restored.githubDestination, isNull);
+    expect(restored.current.githubTracking, isNull);
+    expect(restored.current.githubWriteUnconfirmed, isFalse);
+  });
+}
+
+class _EmptyAttachments implements AttachmentStore {
+  @override
+  Future<void> delete(String path) async => throw UnimplementedError();
+
+  @override
+  Future<Uint8List> read(String path) async => throw UnimplementedError();
+
+  @override
+  Future<Uint8List?> readIfExists(String path) async => null;
+
+  @override
+  Future<void> write(String path, Uint8List bytes) async => throw UnimplementedError();
 }

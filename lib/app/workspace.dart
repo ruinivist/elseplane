@@ -7,6 +7,8 @@ import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
+import 'package:elseplane/github/github_api.dart';
+import 'package:elseplane/github/github_workspace_panel.dart';
 import 'package:elseplane/library/library_controller.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_project_files.dart';
@@ -28,6 +30,10 @@ class Workspace extends StatefulWidget {
     this.themeMode = ThemeMode.light,
     this.onSurfaceStyleChanged,
     this.onThemeModeChanged,
+    this.githubApi,
+    this.navigateGitHubAuthorization,
+    this.consumeGitHubCompletion,
+    this.openGitHubLink,
     super.key,
   });
 
@@ -39,6 +45,10 @@ class Workspace extends StatefulWidget {
   final ThemeMode themeMode;
   final Future<void> Function(SurfaceStyle)? onSurfaceStyleChanged;
   final Future<void> Function(ThemeMode)? onThemeModeChanged;
+  final GitHubApi? githubApi;
+  final void Function(Uri)? navigateGitHubAuthorization;
+  final bool Function()? consumeGitHubCompletion;
+  final void Function(String url)? openGitHubLink;
 
   @override
   State<Workspace> createState() => _WorkspaceState();
@@ -73,6 +83,24 @@ class _WorkspaceState extends State<Workspace> {
     } on Object {
       if (mounted) _showMessage('Could not load saved canvas');
     }
+  }
+
+  bool _beginTransfer() {
+    if (_transferActive || _blocked || _editor == null) return false;
+    setState(() {
+      _transferActive = true;
+      _blocked = true;
+    });
+    FocusManager.instance.primaryFocus?.unfocus();
+    return true;
+  }
+
+  void _endTransfer() {
+    if (!mounted) return;
+    setState(() {
+      _transferActive = false;
+      _blocked = false;
+    });
   }
 
   void _libraryChanged() {
@@ -149,6 +177,7 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   Future<void> _replace(Future<void> Function() commit) async {
+    final wasBlocked = _blocked;
     setState(() => _blocked = true);
     FocusManager.instance.primaryFocus?.unfocus();
     try {
@@ -157,41 +186,40 @@ class _WorkspaceState extends State<Workspace> {
       await commit();
       if (mounted) _replaceEditor();
     } finally {
-      if (mounted) setState(() => _blocked = false);
+      if (mounted) setState(() => _blocked = wasBlocked);
     }
   }
 
   // ---------- Settings transfers ----------
 
   Future<void> _exportCanvas() async {
-    if (_transferActive || _fileId == null) return;
-    _transferActive = true;
+    if (_fileId == null || !_beginTransfer()) return;
     try {
+      await _library.flush();
       if (await _library.exportCanvas(_fileId!)) _showMessage('Canvas exported');
     } on Object {
       _showMessage('Could not export canvas');
     } finally {
-      _transferActive = false;
+      _endTransfer();
     }
   }
 
   Future<void> _backupLibrary() async {
-    if (_transferActive || _fileId == null) return;
-    _transferActive = true;
+    if (_fileId == null || !_beginTransfer()) return;
     try {
+      await _library.flush();
       if (await _library.backup()) _showMessage('Library backed up');
     } on FormatException catch (error) {
       _showMessage(error.message);
     } on Object {
       _showMessage('Could not back up library');
     } finally {
-      _transferActive = false;
+      _endTransfer();
     }
   }
 
   Future<bool> _importCanvas() async {
-    if (_transferActive || _fileId == null) return false;
-    _transferActive = true;
+    if (_fileId == null || !_beginTransfer()) return false;
     final fileId = _fileId!;
     try {
       final project = await _library.readProject();
@@ -211,13 +239,12 @@ class _WorkspaceState extends State<Workspace> {
       _showMessage('Could not import canvas');
       return false;
     } finally {
-      _transferActive = false;
+      _endTransfer();
     }
   }
 
   Future<bool> _restoreLibrary() async {
-    if (_transferActive || _fileId == null) return false;
-    _transferActive = true;
+    if (_fileId == null || !_beginTransfer()) return false;
     try {
       final archive = await _library.readArchive();
       if (archive == null) return false;
@@ -238,7 +265,7 @@ class _WorkspaceState extends State<Workspace> {
       _showMessage('Could not restore library');
       return false;
     } finally {
-      _transferActive = false;
+      _endTransfer();
     }
   }
 
@@ -269,6 +296,22 @@ class _WorkspaceState extends State<Workspace> {
       themeMode: widget.themeMode,
       onSurfaceStyleChanged: widget.onSurfaceStyleChanged,
       onThemeModeChanged: widget.onThemeModeChanged,
+      bottomLeftPanelBuilder: widget.githubApi == null || _editor == null
+          ? null
+          : (finishInteraction) => GitHubWorkspacePanel(
+              api: widget.githubApi!,
+              library: _library,
+              attachmentStore: widget.attachmentStore,
+              currentFileId: fileId!,
+              blocked: _blocked || _transferActive,
+              beginTransfer: _beginTransfer,
+              endTransfer: _endTransfer,
+              onImported: _replaceEditor,
+              finishInteraction: finishInteraction,
+              navigateGitHubAuthorization: widget.navigateGitHubAuthorization,
+              consumeGitHubCompletion: widget.consumeGitHubCompletion,
+              openGitHubLink: widget.openGitHubLink,
+            ),
     );
   }
 }

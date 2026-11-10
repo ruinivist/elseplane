@@ -52,6 +52,39 @@ content; cleanup attempts only new unpublished attachment paths. Successful
 replacement invalidates queued revisions from the outgoing document. Existing
 attachments remain available to saved documents and retained history.
 
+## GitHub metadata
+
+The browser library snapshot may include a shared GitHub destination (account
+and repository identities plus owner, repository, and branch) and per-canvas
+last-confirmed tracking (remote path, document and attachment blob SHAs, and
+attachment-name mapping) plus optional pending tracking for an intended write.
+These are non-secret local metadata; access tokens remain in memory. Older
+snapshots without these optional fields load without a destination or tracking.
+Changing the account, repository, or branch clears both tracking values without
+changing documents. Logging out retains the destination and tracking for a
+later reconnection.
+
+Canvas document and ZIP transfers contain no GitHub destination, tracking, or
+write guard. Restoring a portable library backup therefore does not restore a
+GitHub connection or commit baseline.
+
+Before a commit updates the remote branch reference, the GitHub feature
+orchestrator persists the last-confirmed tracking unchanged and the proposed
+tracking as pending. A confirmed result advances the confirmed baseline and
+clears pending tracking; a definitive pre-update failure clears pending
+tracking. If the reference update may have succeeded, or GitHub succeeds but
+the final local tracking save fails, pending tracking remains durable and
+blocks another write. The user must explicitly check remote status: a fresh
+repository snapshot either confirms the pending document and attachment SHAs,
+or verifies the prior baseline and an unused proposed path (including an absent
+first-publication path) before allowing a manual retry. Other remote states keep
+the guard and can be imported as another canvas. Never automatically retry an
+uncertain remote write. GitHub imports validate the canvas and referenced
+attachments, stage fresh local attachment paths, and ask the library to persist
+the imported canvas, folders, and tracking in one write; a related pending guard
+is cleared only by that successful write. Failure leaves published library
+state unchanged.
+
 Media source strings are raw user content, not a transfer validation boundary.
 Clipboard, project, and library decoding preserve them without URL
 normalization or source rejection. At runtime, the editor resolves a trimmed

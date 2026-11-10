@@ -19,6 +19,9 @@ supported workflow.
   follow the accepted asynchronous-edit ADR.
 - Keep file switching and import/restore behavior consistent with the
   persistence and failure rules below.
+- Keep GitHub transfers manual and limited to one selected canvas, saving
+  completed edits first and preserving local work when remote outcomes fail or
+  are uncertain.
 
 ## Behavior
 
@@ -217,3 +220,58 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Settings > Data exports or imports one canvas as `canvas.elseplane.zip` with the `application/zip` media type. Its `document.json` is the pretty-printed existing versioned `CanvasDocument` JSON. The archive includes each referenced local image once as byte-identical data under `attachments/<uuid>.png`, `.jpg`, `.gif`, or `.webp`; external image URLs remain external. ZIP is a download container, not a canvas document format. Base64 JSON canvas import and export are not supported. The accepted [canvas document and media decision](../adr/0002-separate-documents-and-media.md) records the format and rationale.
 - Before expanding entries, canvas archive validation allows only the document and attachment entries, rejects duplicate or unsafe paths and symlinks, and checks declared sizes. After expansion, it verifies actual sizes and checksums and validates document values, image bytes, and attachment references. The compressed archive and total uncompressed content are each limited to 140 MiB; each image is limited to 10 MiB. Import confirms replacement of the active canvas, stages images at fresh unused paths, and remaps their references. Canceling or failing import leaves the current canvas and existing attachments unchanged.
 - Library backup and restore keep the existing ZIP layout of the folder tree, canvas JSON files, and images. Restore validates the ZIP and confirms replacement of the whole library; canceling leaves the library unchanged. Restore opens the first canvas by ZIP path; file order is not preserved.
+
+### GitHub canvas transfers
+
+- In production, the bottom-left GitHub panel appears only when an HTTPS
+  `GITHUB_MEDIATOR_URL` is configured. It connects an account, selects one repository using
+  `owner/repository` and that repository's default branch, commits the current
+  canvas, opens one remote canvas, and logs out. Operations are manual; there
+  is no background synchronization or automatic remote-write retry. Busy
+  transfers block conflicting workspace actions.
+- Connecting saves completed canvas edits before navigation and does not begin
+  OAuth if that save fails. The returned authorization URL must be HTTPS on
+  GitHub's expected authorization endpoint. On return, the completion marker
+  is consumed, the account is verified, and a previously saved destination is
+  reused only for the same account. Access tokens stay in memory. Logout ends
+  the local session after mediator success but does not revoke GitHub access;
+  it keeps the local destination and tracking for reconnection, and a failed
+  logout can be retried.
+- Choosing a different account, repository identity, or default branch
+  confirms that all per-canvas tracking will reset; local canvases and remote
+  files are not changed. The repository is entered as `owner/repository`; URLs and branch
+  selection are not supported. A repository tree that GitHub reports as
+  truncated cannot be browsed.
+- Commit saves completed edits and captures the current canvas, then asks for
+  an explicit commit with a nonempty lowercase Conventional Commit subject of
+  at most 72 characters. Only that canvas document and referenced local images
+  are published. Its path mirrors the local folder and title with a final
+  `.canvas` suffix; unrelated repository files and other canvases are retained.
+  A tracked canvas can be updated only if its remote baseline still matches.
+  Rename or move publishes the new path and removes only that canvas's old
+  document path. Occupied/colliding paths, changed tracked content, branch
+  races, and protected-branch failures stop without overwriting remote work.
+- Attachment bytes are included with the document in one branch update. Reuse
+  identical remote images; when an occupied image path has different bytes,
+  allocate a fresh image name rather than overwrite it. External media URLs
+  remain external. A commit with no content changes creates no commit.
+- Before updating the branch reference, persist a per-canvas pending tracking
+  value while retaining the last-confirmed baseline. If the update's outcome is
+  uncertain, block another write for that canvas and do not retry automatically.
+  If GitHub confirms the commit but local tracking cannot be saved, report both
+  outcomes and keep the pending guard. The panel's explicit Check remote status
+  action reads a fresh repository snapshot: it either confirms the pending
+  document and attachment SHAs, or verifies the last-confirmed baseline and an
+  unused proposed path (or an absent initial-publication path) before allowing a
+  manual retry. Other remote states keep the guard and offer opening a remote
+  copy as another canvas. Importing a remote canvas clears a related pending
+  guard only after the validated canvas and tracking are durably saved together.
+  Remote conflicts preserve local work and offer opening the remote copy as
+  another canvas or, for an initial path collision, choosing another local name.
+- Opening a remote canvas reads one repository snapshot, selects a regular
+  `.canvas` file, fetches only that document and its referenced sibling images,
+  then validates the complete candidate. It recreates matching parent folders
+  locally, prompts for a different name rather than replacing a local canvas,
+  and stages attachments and tracking with the new canvas in one library write.
+  The imported canvas is opened after success. Invalid data, collisions,
+  cancellation, or persistence failure leave existing local content intact.

@@ -2,32 +2,62 @@
 // Used by library operations, storage codecs, and file presentation.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/library/github_metadata.dart';
 import 'package:uuid/uuid.dart';
+
+const _unset = Object();
 
 // ---------- Entries ----------
 
 class CanvasFile {
-  const CanvasFile({required this.id, required this.name, this.parentId, this.document});
+  const CanvasFile({
+    required this.id,
+    required this.name,
+    this.parentId,
+    this.document,
+    this.githubTracking,
+    this.githubPendingTracking,
+  });
 
-  factory CanvasFile.fromJson(Map<String, dynamic> json) => CanvasFile(
-    id: json['id'] as String,
-    name: json['name'] as String,
-    parentId: json['parentId'] as String?,
-    document: json['document'] == null ? null : CanvasDocument.fromJson(json['document']),
-  );
+  factory CanvasFile.fromJson(Map<String, dynamic> json) {
+    final tracking = json['githubTracking'];
+    final pendingTracking = json['githubPendingTracking'];
+    return CanvasFile(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      parentId: json['parentId'] as String?,
+      document: json['document'] == null ? null : CanvasDocument.fromJson(json['document']),
+      githubTracking: tracking == null ? null : GitHubCanvasTracking.fromJson(tracking),
+      githubPendingTracking: pendingTracking == null ? null : GitHubCanvasTracking.fromJson(pendingTracking),
+    );
+  }
 
   final String id;
   final String name;
   final String? parentId;
   final CanvasDocument? document;
+  // Last confirmed remote baseline; pending tracking is only an intended write.
+  final GitHubCanvasTracking? githubTracking;
+  final GitHubCanvasTracking? githubPendingTracking;
+
+  bool get githubWriteUnconfirmed => githubPendingTracking != null;
 
   bool get isFolder => document == null;
 
-  CanvasFile copyWith({String? name, CanvasDocument? document}) => CanvasFile(
+  CanvasFile copyWith({
+    String? name,
+    CanvasDocument? document,
+    Object? githubTracking = _unset,
+    Object? githubPendingTracking = _unset,
+  }) => CanvasFile(
     id: id,
     name: name ?? this.name,
     parentId: parentId,
     document: document ?? this.document,
+    githubTracking: identical(githubTracking, _unset) ? this.githubTracking : githubTracking as GitHubCanvasTracking?,
+    githubPendingTracking: identical(githubPendingTracking, _unset)
+        ? this.githubPendingTracking
+        : githubPendingTracking as GitHubCanvasTracking?,
   );
 
   Map<String, Object?> toJson() => {
@@ -35,13 +65,16 @@ class CanvasFile {
     'name': name,
     'parentId': parentId,
     'document': document?.toJson(),
+    'githubTracking': githubTracking?.toJson(),
+    'githubPendingTracking': githubPendingTracking?.toJson(),
   };
 }
 
 // ---------- Library ----------
 
 class CanvasLibrary {
-  CanvasLibrary({required List<CanvasFile> files, required this.currentId}) : files = List.unmodifiable(files);
+  CanvasLibrary({required List<CanvasFile> files, required this.currentId, this.githubDestination})
+    : files = List.unmodifiable(files);
 
   factory CanvasLibrary.initial([CanvasDocument? document]) {
     final file = CanvasFile(id: const Uuid().v4(), name: 'Untitled', document: document ?? emptyDocument);
@@ -57,11 +90,17 @@ class CanvasLibrary {
           .map((file) => CanvasFile.fromJson(file as Map<String, dynamic>))
           .toList(),
       currentId: source['currentId'] as String,
+      githubDestination: source['githubDestination'] == null
+          ? null
+          : GitHubDestination.fromJson(source['githubDestination']),
     );
     final ids = <String>{};
     for (final file in library.files) {
       if (file.id.isEmpty || file.name.trim().isEmpty || !ids.add(file.id)) {
         throw const FormatException('Invalid file name or id');
+      }
+      if (file.isFolder && (file.githubTracking != null || file.githubPendingTracking != null)) {
+        throw const FormatException('Folders cannot have GitHub canvas metadata');
       }
       final ancestors = <String>{file.id};
       var parent = file.parentId;
@@ -80,6 +119,7 @@ class CanvasLibrary {
 
   final List<CanvasFile> files;
   final String currentId;
+  final GitHubDestination? githubDestination;
 
   CanvasFile file(String id) => files.firstWhere((file) => file.id == id);
   CanvasFile get current => file(currentId);
@@ -95,6 +135,7 @@ class CanvasLibrary {
         if (entry.id == replacement.id) replacement else entry,
     ],
     currentId: currentId,
+    githubDestination: githubDestination,
   );
 
   CanvasLibrary move(String id, {required String? parentId, String? beforeId}) {
@@ -119,16 +160,23 @@ class CanvasLibrary {
       return this;
     }
 
-    final moved = CanvasFile(id: source.id, name: source.name, parentId: parentId, document: source.document);
+    final moved = CanvasFile(
+      id: source.id,
+      name: source.name,
+      parentId: parentId,
+      document: source.document,
+      githubTracking: source.githubTracking,
+      githubPendingTracking: source.githubPendingTracking,
+    );
     final next = files.where((entry) => entry.id != id).toList();
     final insertAt = beforeId == null ? next.length : next.indexWhere((entry) => entry.id == beforeId);
     next.insert(insertAt, moved);
-    return CanvasLibrary(files: next, currentId: currentId);
+    return CanvasLibrary(files: next, currentId: currentId, githubDestination: githubDestination);
   }
 
   CanvasLibrary select(String id) {
     if (file(id).isFolder) throw ArgumentError('Cannot open a folder as a canvas');
-    return CanvasLibrary(files: files, currentId: id);
+    return CanvasLibrary(files: files, currentId: id, githubDestination: githubDestination);
   }
 
   String? nameError(String name, String? parentId, {String? exceptId}) {
@@ -146,6 +194,7 @@ class CanvasLibrary {
   Map<String, Object?> toJson() => {
     'version': 1,
     'currentId': currentId,
+    'githubDestination': githubDestination?.toJson(),
     'files': files.map((file) => file.toJson()).toList(),
   };
 }

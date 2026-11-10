@@ -9,6 +9,7 @@ lib/
     app.dart                         # Compose dependencies, theme, and root UI
     workspace.dart                   # Connect editor, library, settings lifetimes
     feature_flags.dart
+  github/                             # GitHub UI, API, session, and browser boundary
   canvas/
     document/
       canvas_document.dart           # Immutable ordered document
@@ -31,9 +32,10 @@ lib/
       previews/                      # Canvas component previews
   library/
     canvas_library.dart               # File/folder values and hierarchy rules
+    github_metadata.dart               # Non-secret destination and canvas tracking
     library_controller.dart           # Library operations and save queue
     library_store.dart                # Storage contract and implementation
-    transfer/                         # Project/backup codecs and import staging
+    transfer/                         # Project/backup codecs, import staging, remote prep
     widgets/                          # File picker and file tree
     previews/
   attachments/
@@ -59,8 +61,9 @@ empty scaffolding.
 | `document` | Value types and serialization support | No widgets, theme lookup, loading, storage, or browser APIs. |
 | `geometry` | Document values and graphics/math primitives | Computes geometry without application state or I/O. |
 | Editor logic | Document, geometry, narrow I/O contracts, Flutter input/notifier primitives | No widget construction or concrete storage implementations. |
-| Editor presentation | Editor logic, Flutter, theme, shared UI, grid | Requests edits; never writes document fields. |
-| `library` | Document and attachments | Never imports the editor; library widgets additionally use Flutter, theme, and shared UI. |
+| Editor presentation | Editor logic, Flutter, theme, shared UI, grid | Requests edits; never writes document fields. Its generic bottom-left panel slot has no feature dependency. |
+| `library` | Document, attachments, local GitHub metadata values | No editor or GitHub networking imports; widgets additionally use Flutter, theme, and shared UI. |
+| `github` | GitHub/mediator HTTP and browser APIs, library metadata and transfer contracts, Flutter/theme/shared UI | Owns GitHub UI, session controller, API orchestration, and browser boundary; Workspace supplies library/editor state and transfer callbacks. |
 | `attachments` | Byte/image primitives and platform storage | Browser imports stay in the browser implementation. |
 | `ui/common` | Flutter and theme | Never imports a feature. |
 | `theme` | Flutter, font and highlighting dependencies | Never imports features or app composition. |
@@ -97,6 +100,17 @@ library. Settings preferences are independent of document history; resolve
 defaults when creating elements, and do not rewrite existing content when
 appearance settings change. Library durability details are in
 [persistence](persistence.md).
+
+`app/app.dart` creates the browser GitHub client only when the HTTPS
+`GITHUB_MEDIATOR_URL` build value is configured; tests can inject the API and
+browser callbacks. `Workspace` composes `GitHubWorkspacePanel` with the library
+and editor. It owns the editor, settings transfers, shared transfer interlock,
+and imported-editor replacement callback. The GitHub feature widget owns the
+session controller, account restoration, dialogs, save-before-GitHub-action
+flow, API orchestration, and browser navigation; it persists destination,
+tracking, and write guards through the library controller. `CanvasPage` exposes
+a generic bottom-left panel builder and passes it an editor
+interaction-finishing callback; editor code does not import GitHub.
 
 ## Design and file rules
 

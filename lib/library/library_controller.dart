@@ -7,6 +7,7 @@ import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/debug/demo_canvas.dart';
+import 'package:elseplane/library/github_metadata.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_library_archive.dart';
 import 'package:elseplane/library/transfer/canvas_project.dart';
@@ -102,6 +103,7 @@ class LibraryController extends ChangeNotifier {
         draft.copyWith(name: draft.name.trim()),
       ],
       currentId: library.currentId,
+      githubDestination: library.githubDestination,
     );
     final selected = openId ?? (draft.isFolder ? null : draft.id);
     if (selected != null) next = next.select(selected);
@@ -141,7 +143,7 @@ class LibraryController extends ChangeNotifier {
         ? library.currentId
         : remaining.firstWhere((entry) => !entry.isFolder).id;
     final changed = currentId != library.currentId;
-    await _persist(CanvasLibrary(files: remaining, currentId: currentId));
+    await _persist(CanvasLibrary(files: remaining, currentId: currentId, githubDestination: library.githubDestination));
     _discardPending(_pending.keys.where((id) => !remaining.any((file) => file.id == id)).toList());
     return changed ? currentId : null;
   });
@@ -150,6 +152,126 @@ class LibraryController extends ChangeNotifier {
     if (parentId != null && !library.file(parentId).isFolder) throw const FormatException('Choose a folder');
     final error = library.nameError(name, parentId, exceptId: exceptId);
     if (error != null) throw FormatException(error);
+  }
+
+  Future<void> setGitHubDestination(GitHubDestination destination) => _change(() async {
+    final previous = library.githubDestination;
+    final sameIdentity =
+        previous != null &&
+        previous.accountId == destination.accountId &&
+        previous.repositoryId == destination.repositoryId &&
+        previous.branch == destination.branch;
+    final files = sameIdentity
+        ? library.files
+        : [
+            for (final file in library.files) file.copyWith(githubTracking: null, githubPendingTracking: null),
+          ];
+    await _persist(CanvasLibrary(files: files, currentId: library.currentId, githubDestination: destination));
+  });
+
+  Future<void> setGitHubTracking(
+    String fileId,
+    GitHubCanvasTracking? tracking, {
+    GitHubCanvasTracking? pendingTracking,
+  }) => _change(() async {
+    final file = library.file(fileId);
+    if (file.isFolder) throw ArgumentError('Cannot track a folder as a canvas');
+    await _persist(
+      library.replace(
+        file.copyWith(githubTracking: tracking, githubPendingTracking: pendingTracking),
+      ),
+    );
+  });
+
+  Future<String> addGitHubCanvas({
+    required List<String> folders,
+    required String name,
+    required CanvasProject project,
+    required GitHubCanvasTracking tracking,
+    String? clearPendingFileId,
+  }) => _change(() async {
+    [...folders, name].forEach(_validateRemoteSegment);
+
+    final files = library.files.toList();
+    String? parentId;
+    for (final folderName in folders) {
+      final siblings = files
+          .where((file) => file.parentId == parentId && file.name.toLowerCase() == folderName.toLowerCase())
+          .toList();
+      if (siblings.length > 1) throw FormatException('Ambiguous folder path: $folderName');
+      if (siblings.isNotEmpty) {
+        final match = siblings.single;
+        if (!match.isFolder) throw FormatException('A canvas blocks the folder $folderName');
+        parentId = match.id;
+      } else {
+        final folder = CanvasFile(id: const Uuid().v4(), name: folderName, parentId: parentId);
+        final error = _nameError(files, folderName, parentId);
+        if (error != null) throw FormatException(error);
+        files.add(folder);
+        parentId = folder.id;
+      }
+    }
+    final nameError = _nameError(files, name, parentId);
+    if (nameError != null) throw FormatException(nameError);
+    if (tracking.attachmentNames.keys.any((path) => !project.attachments.containsKey(path))) {
+      throw const FormatException('GitHub attachment mapping does not match the canvas');
+    }
+    final referenced = canvasAttachmentPaths(project.document);
+    if (referenced.length != project.attachments.length || !referenced.containsAll(project.attachments.keys)) {
+      throw const FormatException('Canvas attachment references do not match the project');
+    }
+
+    final clearFile = clearPendingFileId == null ? null : library.file(clearPendingFileId);
+    if (clearFile?.isFolder ?? false) throw ArgumentError('Cannot clear a folder write guard');
+    final id = const Uuid().v4();
+    await _stage(project.attachments, (replacements) {
+      final rebasedTracking = GitHubCanvasTracking(
+        path: tracking.path,
+        documentSha: tracking.documentSha,
+        attachmentShas: tracking.attachmentShas,
+        attachmentNames: {
+          for (final entry in tracking.attachmentNames.entries) replacements[entry.key]!: entry.value,
+        },
+      );
+      final stagedFile = CanvasFile(
+        id: id,
+        name: name,
+        parentId: parentId,
+        document: rebaseCanvasDocumentAttachments(project.document, replacements),
+        githubTracking: rebasedTracking,
+      );
+      return CanvasLibrary(
+        files: [
+          for (final file in files)
+            if (clearFile != null && file.id == clearFile.id) file.copyWith(githubPendingTracking: null) else file,
+          stagedFile,
+        ],
+        currentId: id,
+        githubDestination: library.githubDestination,
+      );
+    });
+    return id;
+  });
+
+  String? _nameError(List<CanvasFile> files, String name, String? parentId) {
+    if (name.trim().isEmpty) return 'Enter a name';
+    if (files.any(
+      (file) => file.parentId == parentId && file.name.toLowerCase() == name.trim().toLowerCase(),
+    )) {
+      return 'This name is already in use';
+    }
+    return null;
+  }
+
+  void _validateRemoteSegment(String segment) {
+    if (segment.isEmpty ||
+        segment == '.' ||
+        segment == '..' ||
+        segment.contains('/') ||
+        segment.contains(r'\') ||
+        RegExp(r'[\x00-\x1f\x7f-\x9f]').hasMatch(segment)) {
+      throw FormatException('Invalid GitHub path segment: $segment');
+    }
   }
 
   // ---------- Transfers ----------
@@ -179,7 +301,15 @@ class LibraryController extends ChangeNotifier {
   Future<void> replaceCanvas(String fileId, CanvasProject project) => _change(() async {
     await _stage(project.attachments, (replacements) {
       final document = rebaseCanvasDocumentAttachments(project.document, replacements);
-      return library.replace(library.file(fileId).copyWith(document: document));
+      return library.replace(
+        library
+            .file(fileId)
+            .copyWith(
+              document: document,
+              githubTracking: null,
+              githubPendingTracking: null,
+            ),
+      );
     });
     _discardPending([fileId]);
   });
@@ -190,10 +320,11 @@ class LibraryController extends ChangeNotifier {
       (replacements) => CanvasLibrary(
         files: [
           for (final file in archive.library.files)
-            if (file.isFolder)
-              file
-            else
-              file.copyWith(document: rebaseCanvasDocumentAttachments(file.document!, replacements)),
+            file.copyWith(
+              document: file.isFolder ? null : rebaseCanvasDocumentAttachments(file.document!, replacements),
+              githubTracking: null,
+              githubPendingTracking: null,
+            ),
         ],
         currentId: archive.library.currentId,
       ),
@@ -217,6 +348,7 @@ class LibraryController extends ChangeNotifier {
           CanvasFile(id: id, name: name, document: rebaseCanvasDocumentAttachments(project.document, replacements)),
         ],
         currentId: id,
+        githubDestination: library.githubDestination,
       ),
     );
     return id;
