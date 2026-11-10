@@ -67,9 +67,9 @@ String canvasRemotePath(CanvasLibrary library, String fileId) {
     _validateRemoteSegment(entry.name);
   }
   final folders = lineage.take(lineage.length - 1).toList();
-  if (folders.any((folder) => folder.name.toLowerCase() == 'attachments') ||
+  if (folders.any((folder) => folder.name == 'attachments') ||
       library.files.any(
-        (file) => file.isFolder && file.parentId == canvas.parentId && file.name.toLowerCase() == 'attachments',
+        (file) => file.isFolder && file.parentId == canvas.parentId && file.name == 'attachments',
       )) {
     throw const FormatException('A local attachments folder conflicts with GitHub images');
   }

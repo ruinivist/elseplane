@@ -51,6 +51,28 @@ void main() {
     expect(restored.attachments[_path], onePixelPngBytes);
   });
 
+  test('library archive paths preserve case-distinct names', () async {
+    final library = CanvasLibrary(
+      currentId: 'upper-canvas',
+      files: [
+        const CanvasFile(id: 'upper-folder', name: 'School'),
+        const CanvasFile(id: 'lower-folder', name: 'school'),
+        CanvasFile(id: 'upper-canvas', name: 'Map', parentId: 'upper-folder', document: CanvasLibrary.emptyDocument),
+        CanvasFile(id: 'lower-canvas', name: 'map', parentId: 'lower-folder', document: CanvasLibrary.emptyDocument),
+      ],
+    );
+
+    final bytes = await encodeCanvasLibraryArchive(library, TestAttachmentStore());
+    final paths = ZipDecoder().decodeBytes(bytes).map((entry) => entry.name).toSet();
+    final restored = await decodeCanvasLibraryArchive(bytes);
+
+    expect(
+      paths,
+      containsAll(['library/School/', 'library/school/', 'library/School/Map.json', 'library/school/map.json']),
+    );
+    expect(restored.library.files.map((file) => file.name), ['School', 'school', 'Map', 'map']);
+  });
+
   test('library backup and restore preserve plain shape text', () async {
     const shapeText = '  日本語 ☃️\n\n![literal]($_literalPath)\n  ';
     final document = _document('canvas').withElements((elements) => elements.add(_shape(shapeText)));

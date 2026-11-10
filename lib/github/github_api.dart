@@ -1024,7 +1024,7 @@ final class GitHubApi {
 
   void _validateCanvasPath(String path) {
     if (!_isSafeRepoPath(path) || !path.endsWith('.canvas')) _invalid('Canvas path is invalid');
-    if (path.split('/').take(path.split('/').length - 1).any((segment) => segment.toLowerCase() == 'attachments')) {
+    if (path.split('/').take(path.split('/').length - 1).any((segment) => segment == 'attachments')) {
       _invalid('Canvas paths cannot be inside the reserved attachments directory');
     }
   }

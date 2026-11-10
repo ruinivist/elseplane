@@ -109,6 +109,18 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('only the literal attachments folder is reserved', () {
+    final library = CanvasLibrary(
+      currentId: 'canvas',
+      files: [
+        const CanvasFile(id: 'folder', name: 'Attachments'),
+        CanvasFile(id: 'canvas', name: 'Map', parentId: 'folder', document: CanvasLibrary.emptyDocument),
+      ],
+    );
+
+    expect(canvasRemotePath(library, 'canvas'), 'Attachments/Map.canvas');
+  });
 }
 
 String _path(int index) => 'attachments/0000000$index-0000-4000-8000-000000000000.png';

@@ -130,11 +130,7 @@ class LibraryController extends ChangeNotifier {
     final remaining = library.files.where((entry) => !library.path(entry.id).any((part) => part.id == id)).toList();
     if (!remaining.any((entry) => !entry.isFolder)) {
       var name = 'Untitled';
-      for (
-        var suffix = 2;
-        remaining.any((entry) => entry.parentId == null && entry.name.toLowerCase() == name.toLowerCase());
-        suffix++
-      ) {
+      for (var suffix = 2; remaining.any((entry) => entry.parentId == null && entry.name == name); suffix++) {
         name = 'Untitled $suffix';
       }
       remaining.add(CanvasLibrary.initial().current.copyWith(name: name));
@@ -195,9 +191,7 @@ class LibraryController extends ChangeNotifier {
     final files = library.files.toList();
     String? parentId;
     for (final folderName in folders) {
-      final siblings = files
-          .where((file) => file.parentId == parentId && file.name.toLowerCase() == folderName.toLowerCase())
-          .toList();
+      final siblings = files.where((file) => file.parentId == parentId && file.name == folderName).toList();
       if (siblings.length > 1) throw FormatException('Ambiguous folder path: $folderName');
       if (siblings.isNotEmpty) {
         final match = siblings.single;
@@ -256,7 +250,7 @@ class LibraryController extends ChangeNotifier {
   String? _nameError(List<CanvasFile> files, String name, String? parentId) {
     if (name.trim().isEmpty) return 'Enter a name';
     if (files.any(
-      (file) => file.parentId == parentId && file.name.toLowerCase() == name.trim().toLowerCase(),
+      (file) => file.parentId == parentId && file.name == name.trim(),
     )) {
       return 'This name is already in use';
     }

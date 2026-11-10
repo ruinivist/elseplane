@@ -76,9 +76,9 @@ normalize, or URL-decode stored paths or rewrite external media sources as part
 of storage resolution.
 
 Directory spelling is literal, including spaces, Unicode spelling, and case.
-OPFS key identity is case-sensitive; case-folding and sibling-name conflicts
-remain library-owned policies. Do not create basename fallbacks, aliases,
-hashes, generated replacement names, or a persisted filename map.
+OPFS key and library name identity are case-sensitive; exact duplicate sibling
+names remain a library-owned rejection policy. Do not create basename fallbacks,
+aliases, hashes, generated replacement names, or a persisted filename map.
 
 ### Validation and browser storage
 

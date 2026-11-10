@@ -522,6 +522,34 @@ void main() {
       expect(snapshot.canvasPaths, ['valid.canvas']);
     });
 
+    test('reserves only the literal attachments path segment', () async {
+      final requests = <String>[];
+      final api = _api(
+        github: (request) async {
+          requests.add(request.url.path);
+          if (request.url.path == '/user') return _user();
+          if (request.url.path == '/repos/owner/repo') return _repositoryIdentity();
+          return _json({'message': 'not found'}, status: 404);
+        },
+      );
+      final snapshot = GitHubSnapshot(commitSha: _commitSha, treeSha: _treeSha, entries: const {});
+
+      await expectLater(
+        api.openCanvas(_destination(), snapshot, 'attachments/Map.canvas'),
+        throwsA(
+          isA<GitHubApiException>().having((error) => error.message, 'message', contains('reserved attachments')),
+        ),
+      );
+      await expectLater(
+        api.openCanvas(_destination(), snapshot, 'Attachments/Map.canvas'),
+        throwsA(
+          isA<GitHubApiException>().having((error) => error.message, 'message', contains('not a regular GitHub file')),
+        ),
+      );
+
+      expect(requests, ['/user', '/repos/owner/repo', '/user', '/repos/owner/repo']);
+    });
+
     test('reads one recursive tree and rejects truncated results', () async {
       var recursiveReads = 0;
       final api = _api(

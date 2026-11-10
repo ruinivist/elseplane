@@ -182,10 +182,7 @@ class CanvasLibrary {
   String? nameError(String name, String? parentId, {String? exceptId}) {
     if (name.trim().isEmpty) return 'Enter a name';
     if (name.contains('/') || name.contains(r'\')) return 'Names cannot contain slashes';
-    if (files.any(
-      (file) =>
-          file.parentId == parentId && file.id != exceptId && file.name.toLowerCase() == name.trim().toLowerCase(),
-    )) {
+    if (files.any((file) => file.parentId == parentId && file.id != exceptId && file.name == name.trim())) {
       return 'This name is already in use';
     }
     return null;

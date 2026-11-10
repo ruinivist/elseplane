@@ -34,7 +34,7 @@ Future<Uint8List> encodeCanvasLibraryArchive(CanvasLibrary library, AttachmentSt
   for (final folder in library.files.where((file) => file.isFolder)) {
     final path = 'library/${library.path(folder.id).map((part) => _segment(part.name)).join('/')}/';
     paths[folder.id] = path;
-    if (!occupied.add(path.substring(0, path.length - 1).toLowerCase())) {
+    if (!occupied.add(path.substring(0, path.length - 1))) {
       throw const FormatException('Duplicate folder path');
     }
     archive.add(ArchiveFile.directory(path));
@@ -46,7 +46,7 @@ Future<Uint8List> encodeCanvasLibraryArchive(CanvasLibrary library, AttachmentSt
     if (parent == null) throw const FormatException('Missing folder');
     final name = _segment(canvas.name);
     var path = '$parent$name.json';
-    for (var suffix = 2; !occupied.add(path.toLowerCase()); suffix++) {
+    for (var suffix = 2; !occupied.add(path); suffix++) {
       path = '$parent$name (canvas $suffix).json';
     }
     final document = canvas.document!;

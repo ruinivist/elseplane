@@ -89,18 +89,23 @@ void main() {
     );
   });
 
-  test('nested and root keys with the same leaf round-trip independently', () async {
+  test('case-distinct and root keys with the same leaf round-trip independently', () async {
     const leaf = '123e4567-e89b-42d3-a456-426614174000.png';
     const rootPath = 'attachments/$leaf';
     const nestedPath = 'School/attachments/$leaf';
+    const caseDistinctPath = 'school/attachments/$leaf';
     final rootBytes = Uint8List.fromList([1, 2, 3]);
     final nestedBytes = Uint8List.fromList([4, 5, 6]);
+    final caseDistinctBytes = Uint8List.fromList([7, 8, 9]);
     final store = PlatformAttachmentStore();
 
     await store.write(rootPath, rootBytes);
     await store.write(nestedPath, nestedBytes);
+    await store.write(caseDistinctPath, caseDistinctBytes);
     expect(await store.read(rootPath), rootBytes);
     expect(await store.read(nestedPath), nestedBytes);
+    expect(await store.read(caseDistinctPath), caseDistinctBytes);
+    await store.delete(caseDistinctPath);
     await store.delete(nestedPath);
     expect(await store.read(rootPath), rootBytes);
     await store.delete(rootPath);

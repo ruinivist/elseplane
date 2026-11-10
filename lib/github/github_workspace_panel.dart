@@ -252,7 +252,7 @@ class _GitHubWorkspacePanelState extends State<GitHubWorkspacePanel> {
     String? parentId;
     for (final name in folders) {
       final sibling = widget.library.library.files
-          .where((file) => file.parentId == parentId && file.name.toLowerCase() == name.toLowerCase())
+          .where((file) => file.parentId == parentId && file.name == name)
           .firstOrNull;
       if (sibling == null) return null;
       if (!sibling.isFolder) throw FormatException('A canvas blocks the required folder “$name”.');

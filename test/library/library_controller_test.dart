@@ -125,6 +125,47 @@ void main() {
     expect(controller.library.file(id).githubWriteUnconfirmed, isTrue);
   });
 
+  test('library names compare case-sensitively and reject exact duplicates', () async {
+    await controller.create(const CanvasFile(id: 'school', name: 'School'));
+    await controller.create(const CanvasFile(id: 'lower-school', name: 'school'));
+    await expectLater(
+      controller.create(const CanvasFile(id: 'duplicate-school', name: 'School')),
+      throwsFormatException,
+    );
+    await controller.create(CanvasFile(id: 'map', name: 'Map', document: CanvasLibrary.emptyDocument));
+    await controller.create(CanvasFile(id: 'lower-map', name: 'map', document: CanvasLibrary.emptyDocument));
+    await expectLater(
+      controller.create(CanvasFile(id: 'duplicate-map', name: 'Map', document: CanvasLibrary.emptyDocument)),
+      throwsFormatException,
+    );
+
+    await controller.rename('lower-map', 'MAP');
+    await expectLater(controller.rename('lower-map', 'Map'), throwsFormatException);
+
+    await controller.create(const CanvasFile(id: 'source', name: 'Source'));
+    await controller.create(
+      CanvasFile(id: 'nested-guide', name: 'Guide', parentId: 'source', document: CanvasLibrary.emptyDocument),
+    );
+    await controller.create(CanvasFile(id: 'root-guide', name: 'guide', document: CanvasLibrary.emptyDocument));
+    await controller.move('nested-guide', parentId: null);
+    expect(controller.library.file('nested-guide').parentId, isNull);
+
+    await controller.create(const CanvasFile(id: 'destination', name: 'Destination'));
+    await controller.create(
+      CanvasFile(id: 'nested-map', name: 'Map', parentId: 'destination', document: CanvasLibrary.emptyDocument),
+    );
+    await expectLater(controller.move('nested-map', parentId: null), throwsFormatException);
+  });
+
+  test('last-canvas replacement checks Untitled with exact spelling', () async {
+    await controller.create(const CanvasFile(id: 'lower-folder', name: 'untitled'));
+
+    await controller.delete(controller.library.currentId);
+
+    expect(controller.library.files.where((file) => file.name == 'Untitled' && !file.isFolder), hasLength(1));
+    expect(controller.library.files.where((file) => file.name == 'untitled' && file.isFolder), hasLength(1));
+  });
+
   test('failed tracking confirmation keeps the confirmed baseline and pending write', () async {
     final id = controller.library.currentId;
     final confirmed = _tracking();
@@ -205,6 +246,7 @@ void main() {
     final localPath = canvasAttachmentPaths(imported.document!).single;
     expect(controller.library.currentId, id);
     expect(controller.library.path(id).map((file) => file.name), ['University', 'Physics', 'Sketch']);
+    expect(controller.library.files.where((file) => file.isFolder && file.name == 'University'), hasLength(1));
     expect(localPath, isNot(_path));
     expect(attachments.bytes[localPath], [2]);
     expect(imported.githubTracking!.path, 'University/Physics/Sketch.canvas');
@@ -215,6 +257,30 @@ void main() {
     expect(controller.library.githubDestination?.toJson(), _destination().toJson());
     expect(store.writes, hasLength(1));
     expect(attachments.attempted, [localPath]);
+  });
+
+  test('GitHub import accepts case-distinct local canvas names only', () async {
+    await controller.create(CanvasFile(id: 'map', name: 'Map', document: CanvasLibrary.emptyDocument));
+    final project = CanvasProject(document: CanvasLibrary.emptyDocument, attachments: const {});
+    final tracking = GitHubCanvasTracking(
+      path: 'map.canvas',
+      documentSha: 'remote-document-sha',
+      attachmentShas: const {},
+      attachmentNames: const {},
+    );
+
+    final importedId = await controller.addGitHubCanvas(
+      folders: const [],
+      name: 'map',
+      project: project,
+      tracking: tracking,
+    );
+
+    expect(controller.library.file(importedId).name, 'map');
+    await expectLater(
+      controller.addGitHubCanvas(folders: const [], name: 'Map', project: project, tracking: tracking),
+      throwsFormatException,
+    );
   });
 
   test('GitHub canvas import rejects collisions and unsafe segments without writing', () async {

@@ -94,6 +94,13 @@ void main() {
     final store = TestLibraryStore(localDocument)
       ..library = CanvasLibrary(
         files: [
+          const CanvasFile(id: 'university-lower', name: 'university'),
+          CanvasFile(
+            id: 'physics-lower',
+            name: 'Physics',
+            parentId: 'university-lower',
+            document: _document('Local lower-case folder'),
+          ),
           CanvasFile(
             id: 'physics',
             name: 'Physics',
@@ -182,7 +189,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('github-canvas-University/Physics.canvas')));
     await pumpUntil(
       tester,
-      () => store.library.files.any((file) => file.parentId != null && file.name == 'Physics'),
+      () => store.library.files.any((file) => file.githubTracking?.path == 'University/Physics.canvas'),
     );
     expect(tester.takeException(), isNull, reason: 'importing nested remote canvas');
 
@@ -194,6 +201,8 @@ void main() {
     expect(rootCanvas.githubPendingTracking, isNull);
     final folder = store.library.files.singleWhere((file) => file.name == 'University' && file.isFolder);
     final imported = store.library.files.singleWhere((file) => file.parentId == folder.id && file.name == 'Physics');
+    expect(store.library.file('physics-lower').parentId, 'university-lower');
+    expect(folder.id, isNot('university-lower'));
     expect(imported.document?.elements.whereType<TextElementData>().single.markdown, 'Remote Physics');
     expect(store.library.current.id, imported.id);
     expect(imported.githubTracking?.path, 'University/Physics.canvas');

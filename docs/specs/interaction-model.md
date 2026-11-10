@@ -213,7 +213,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Clicking a canvas saves the current file and opens the chosen one. Each file has separate contents; switching clears undo and selection state.
 - Clicking a folder expands or collapses it. Header actions create root-level canvases and folders; right-click a folder to create items inside it.
 - Debug builds also show a Demo header button beside New folder and Close. Activating it loads the bundled sample on demand (not at startup), including its image, into a new root-level canvas and opens it. Names use Demo, Demo 2, and the first available numbered suffix; existing canvases are preserved. The button and sample-loading action are debug-only; the ZIP asset is included in all build modes and is not loaded in release or profile builds.
-- Names are edited inline. Enter or clicking away saves; Escape or an empty name cancels, and duplicate sibling names are rejected. Clicking another canvas saves the edit and opens that canvas. Right-click an item to rename or delete it; deletion requires confirmation.
+- Names are edited inline. Enter or clicking away saves; Escape or an empty name cancels. After the existing whitespace handling, sibling names are compared case-sensitively: `School` and `school` are distinct, while exact duplicate sibling names are rejected. Clicking another canvas saves the edit and opens that canvas. Right-click an item to rename or delete it; deletion requires confirmation.
 - Drag a file or folder above or below a row to place it beside that item. Drop on the center of a folder row to move inside it. A folder moves with its contents; moves that create a folder cycle or duplicate sibling name are rejected.
 - While the picker is open, keyboard input belongs to the picker. Escape, the close button, or clicking outside dismisses it; a pending nonempty name is saved before click-away dismissal, while Escape in a name field cancels only that edit.
 - Files, folders, and the last-opened canvas persist in this browser. Failed saves keep the current canvas open and preserve entered names for retry.
@@ -247,6 +247,9 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
   at most 72 characters. Only that canvas document and referenced local images
   are published. Its path mirrors the local folder and title with a final
   `.canvas` suffix; unrelated repository files and other canvases are retained.
+  Mirrored paths retain literal case: case-distinct names are distinct paths, and
+  only exact path collisions conflict. The literal `attachments` directory is
+  reserved; case variants are not.
   A tracked canvas can be updated only if its remote baseline still matches.
   Rename or move publishes the new path and removes only that canvas's old
   document path. Occupied/colliding paths, changed tracked content, branch
