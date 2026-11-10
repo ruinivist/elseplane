@@ -1,10 +1,10 @@
 # Address attachments by full root-relative paths
 
-Status: proposed
+Status: accepted (storage foundation only)
 
 Date: 2026-11-10
 
-Related proposal: [root-relative attachment path specification](../specs/attachment-paths.md).
+Related accepted specification: [root-relative attachment paths](../specs/attachment-paths.md).
 The [folder snapshot specification](../specs/folder-snapshots.md),
 [design](../arch/folder-snapshots-design.md), and
 [ADR 0005](0005-folder-based-snapshot-transfers.md) are also proposals, not
@@ -12,12 +12,12 @@ accepted contracts.
 
 ## Context
 
-The current [`AttachmentStore`](../../lib/attachments/attachment_store.dart)
-accepts path strings, but the [web implementation](../../lib/attachments/attachment_store_web.dart)
-accepts only root-level keys and uses `attachmentFileName` to access the UUID
-filename beneath one root `attachments` directory. Nested keys are rejected,
+Before this decision, the [`AttachmentStore`](../../lib/attachments/attachment_store.dart)
+accepted path strings, but the [web implementation](../../lib/attachments/attachment_store_web.dart)
+accepted only root-level keys and used `attachmentFileName` to access the UUID
+filename beneath one root `attachments` directory. Nested keys were rejected,
 not silently flattened. Document references are relative to each canvas, so
-different canvas folders can contain the same valid attachment path while the
+different canvas folders can contain the same valid attachment path while a
 flat store gives them one byte identity. The proposed folder snapshot tree
 preserves canvas parent paths and sibling `attachments` folders. Its current
 fresh-filename recommendation avoids some local collisions by changing image
@@ -29,14 +29,14 @@ keeps image bytes separate and references relative to the canvas. The accepted
 [persistence contract](../arch/persistence.md) and
 [asynchronous edit ADR 0001](0001-cancel-unfinished-pastes.md) require failure-
 safe staging and cleanup limited to new, unpublished paths. Neither is changed
-by this proposal.
+by this ADR.
 
 ## Decision
 
-Propose that `AttachmentStore` use the complete library-root-relative attachment
-key as its byte identity, preserving its current `write`, `read`, `readIfExists`,
-and `delete` operations. A root canvas keeps `attachments/<uuid>.<ext>`; a canvas
-in `School` may resolve its saved relative reference to
+`AttachmentStore` uses the complete library-root-relative attachment key as its
+byte identity, preserving its current `write`, `read`, `readIfExists`, and
+`delete` operations. A root canvas keeps `attachments/<uuid>.<ext>`; a canvas in
+`School` may resolve its saved relative reference to
 `School/attachments/<uuid>.<ext>`. Equal leaf filenames in different folders
 are distinct keys, and writes never substitute a new filename.
 
@@ -52,9 +52,11 @@ flowchart LR
 The store validates the complete path and traverses it beneath the OPFS origin
 root. It remains a byte-only owner: it does not infer the current canvas,
 import library or editor models, or rewrite saved JSON. A higher layer supplies
-the containing-directory context explicitly and uses the resulting full key
-consistently for reads, writes, and cleanup. Existing flat callers keep their
-root keys until that owner adopts directory context.
+the containing-directory context explicitly when it adopts nested addressing
+and uses the resulting full key consistently for reads, writes, and cleanup.
+Existing callers continue using root-level keys, including callers for canvases
+in nested explorer folders; this acceptance does not adopt directory context in
+those callers.
 
 Keep recognition of a canvas-relative `attachments/<uuid>.<ext>` reference
 separate from validation of a full storage key. Preserve the existing UUID
@@ -90,27 +92,27 @@ separate decisions.
 
 ## Consequences
 
-When accepted and adopted by callers, this changes the interpretation of the
-flat storage mapping described in ADR 0002. It does not change the separation of
-document JSON and media bytes, relative document references, file formats,
-image validation, or current import atomicity requirements. No accepted contract
-changes until this ADR and any affected behavior or ownership contracts are
-explicitly aligned.
+This acceptance establishes the byte-store addressing contract only. It does
+not change the separation of document JSON and media bytes, canvas-relative
+document references, file formats, image validation, or current import staging
+and failure guarantees. Existing callers continue to use root-level keys,
+including for canvases in nested explorer folders. Adopting nested keys in a
+caller requires that owner to supply and capture the canvas-directory context.
 
 Full paths solve namespace collisions while preserving literal filenames. They
 do not make overwriting an already-published same-path attachment safe during a
-multi-canvas restore. The folder-snapshot fresh-filename recommendation is
-under review pending this foundation and failure-safe import integration. This
-ADR does not select a replacement import algorithm: current staged fresh-path
-import and cleanup rules remain authoritative until the snapshot proposals are
-aligned and accepted.
+multi-canvas restore. The folder-snapshot fresh-filename recommendation remains
+a proposal; nested storage support alone does not establish a safe same-key
+publication protocol. This ADR does not select a replacement import algorithm:
+current staged fresh-path import and cleanup rules remain authoritative until
+the snapshot proposals and import behavior are separately aligned and accepted.
 
-The store can be implemented and verified with nested-key byte operations
-without moving existing files, rewriting library documents, clearing OPFS, or
-changing import behavior. No compatibility layer or data reset is proposed.
+Nested-key byte operations require no file moves, library-document rewrites,
+OPFS clearing, or import changes. No compatibility layer or data reset is part
+of this decision.
 
 ## Supersedes or superseded by
 
-This proposal does not supersede an accepted document. If accepted, update the
-affected storage ownership and behavior contracts before adopting nested keys
-in callers.
+This ADR does not supersede an accepted document. It establishes storage-key
+addressing; caller adoption and import-publication behavior remain follow-up
+decisions for their respective owners.

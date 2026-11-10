@@ -8,6 +8,25 @@ without a second mutable library. Workspace passes editor snapshots to the
 library and flushes the outgoing file before replacing its editor. Structural
 library operations use the same queue.
 
+## Attachment storage
+
+`AttachmentStore` owns bytes only. It validates complete root-relative keys and
+does not inspect canvas, library, or editor state or rewrite document
+references. The web implementation stores files under the browser's OPFS origin
+root. The 10 MiB limit applies to writes before directory creation and to reads
+before buffering, with a second check of the actual read length. `read` fails
+for a missing file; `readIfExists` returns `null` only for genuine absence.
+Deletes affect only the exact file and tolerate absence. A write succeeds only
+after its writer closes; failures propagate after a best-effort abort. See the
+accepted [attachment path specification](../specs/attachment-paths.md) for path
+validation and operation details.
+
+This storage foundation does not adopt nested keys in current callers. They
+continue using root-level keys, including for canvases in nested explorer
+folders. Canvas-relative references remain unchanged. Import and restore keep
+the existing fresh-path staging and publication protocol, with cleanup limited
+to new unpublished attachments.
+
 ## Saving
 
 - Every queued write captures file identity, revision, and snapshot. Failed
@@ -90,8 +109,10 @@ Clipboard, project, and library decoding preserve them without URL
 normalization or source rejection. At runtime, the editor resolves a trimmed
 copy for loading or opening, defaulting bare addresses and protocol-relative
 addresses to HTTPS; unsupported or unusable sources remain unresolved and are
-never requested or opened. Attachment path discovery, image validation,
-reference matching, archive validation, and staged publication remain unchanged.
+never requested or opened. Canvas-relative attachment-reference discovery,
+image validation, archive validation, and staged publication remain unchanged.
+Storage-key validation follows the accepted
+[attachment path specification](../specs/attachment-paths.md).
 
 Preserve path, byte-size, archive-entry, image, and attachment-reference
 validation. Attachment preparation must not overwrite bytes reachable from the

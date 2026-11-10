@@ -24,10 +24,11 @@ then read the authority relevant to the work. Do not create a separate
   [ADR 0005](adr/0005-folder-based-snapshot-transfers.md). These are design
   proposals, not accepted behavior or ownership; current contracts remain
   authoritative until the proposal is accepted.
-- **Proposed:** [root-relative attachment path specification](specs/attachment-paths.md)
-  and [ADR 0006](adr/0006-path-aware-attachment-store.md). This storage
-  foundation does not change accepted attachment or import behavior until the
-  proposal and affected contracts are accepted and aligned.
+- **Accepted, storage foundation only:** [root-relative attachment path
+  specification](specs/attachment-paths.md) and [ADR 0006](adr/0006-path-aware-attachment-store.md).
+  Existing callers still use root-level keys, including for canvases in nested
+  explorer folders. Caller adoption and import-publication changes remain
+  follow-up work; the folder snapshot proposals above remain unaccepted.
 - [Backlog](backlog.md) contains reported defects, proposals, and open
   verification. Entries are not accepted behavior or architecture.
 - [Plans](plans/) track active work and its checks; they do not

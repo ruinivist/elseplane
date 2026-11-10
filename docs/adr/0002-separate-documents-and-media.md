@@ -13,8 +13,11 @@ second canvas value format or tying the archive to one storage provider.
 ## Decision
 
 Canvas values are JSON. Media stays in separate, byte-identical files at
-relative `attachments/<uuid>.<extension>` paths matching the logical paths used
-by the Origin Private File System (OPFS).
+canvas-relative `attachments/<uuid>.<extension>` paths. These are the portable
+document and single-canvas archive paths. The accepted [attachment storage
+decision](0006-path-aware-attachment-store.md) distinguishes them from full
+root-relative storage keys; existing callers still use root-level keys until
+they explicitly adopt canvas-directory context.
 
 A single-canvas download is `canvas.elseplane.zip` with the `application/zip`
 media type. The ZIP is a transport container, not a conceptual canvas document
