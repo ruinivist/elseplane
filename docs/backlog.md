@@ -80,6 +80,13 @@ confirmed behavior.
 - **Sticky Arrow shortcut:** An old idea asks for holding `A` to remain in
   Arrow mode instead of one-shot placement. This differs from current behavior;
   treat it as a proposal, not a requirement.
+- **Deferred — transfer entry count and depth:** Many zero-byte files or deeply
+  nested folders may consume CPU and memory despite byte caps. No entry-count or
+  depth limit is currently implemented or required; this is not a current
+  blocker. Next: reevaluate realistic inputs and limits before expanding
+  workloads. See [transfer tree
+  adapter rules](arch/folder-based-canvas-transfers-design.md#tree-adapters-and-path-rules)
+  and [failure boundaries](specs/folder-based-canvas-transfers.md#validation-and-failure-boundaries).
 
 ## Verification
 

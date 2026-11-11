@@ -5,9 +5,9 @@ Status: accepted (storage foundation only)
 Date: 2026-11-10
 
 Related accepted specification: [root-relative attachment paths](../specs/attachment-paths.md).
-The [folder snapshot specification](../specs/folder-snapshots.md),
-[design](../arch/folder-snapshots-design.md), and
-[ADR 0005](0005-folder-based-snapshot-transfers.md) are also proposals, not
+The [folder-based canvas transfer specification](../specs/folder-based-canvas-transfers.md),
+[design](../arch/folder-based-canvas-transfers-design.md), and
+[ADR 0005](0005-folder-based-canvas-transfers.md) are also proposals, not
 accepted contracts.
 
 ## Context
@@ -18,11 +18,9 @@ accepted only root-level keys and used `attachmentFileName` to access the UUID
 filename beneath one root `attachments` directory. Nested keys were rejected,
 not silently flattened. Document references are relative to each canvas, so
 different canvas folders can contain the same valid attachment path while a
-flat store gives them one byte identity. The proposed folder snapshot tree
-preserves canvas parent paths and sibling `attachments` folders. Its current
-fresh-filename recommendation avoids some local collisions by changing image
-names, but that conflicts with retaining literal image paths and does not
-establish a path-aware storage foundation.
+flat store gives them one byte identity. The proposed folder transfer tree
+preserves canvas parent paths and sibling `attachments` folders. Its import
+algorithm is outside the scope of this storage decision.
 
 The accepted [document and media ADR 0002](0002-separate-documents-and-media.md)
 keeps image bytes separate and references relative to the canvas. The accepted
@@ -101,11 +99,11 @@ caller requires that owner to supply and capture the canvas-directory context.
 
 Full paths solve namespace collisions while preserving literal filenames. They
 do not make overwriting an already-published same-path attachment safe during a
-multi-canvas restore. The folder-snapshot fresh-filename recommendation remains
-a proposal; nested storage support alone does not establish a safe same-key
-publication protocol. This ADR does not select a replacement import algorithm:
-current staged fresh-path import and cleanup rules remain authoritative until
-the snapshot proposals and import behavior are separately aligned and accepted.
+multi-canvas import. The earlier transfer proposal used fresh-filename staging;
+ADR 0006 did not choose its replacement import algorithm. Current accepted
+staging—the staged fresh-path import and cleanup rules—remains authoritative
+until the transfer proposal and import behavior are separately aligned and
+accepted. This ADR does not select a replacement import algorithm.
 
 Nested-key byte operations require no file moves, library-document rewrites,
 OPFS clearing, or import changes. No compatibility layer or data reset is part

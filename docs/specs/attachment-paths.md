@@ -94,8 +94,7 @@ allow traversal outside the OPFS origin root.
 The web implementation traverses validated directory segments from
 `navigator.storage.getDirectory()` and reaches the `attachments` directory and
 file beneath that root. Writes create only the required parent directories.
-Reads and deletes do not create directories. This uses OPFS; it does not add a
-public filesystem picker or the folder-transfer adapter proposed separately.
+Reads and deletes do not create directories. This uses OPFS.
 
 Every operation validates the full key before touching OPFS. A malformed key
 must fail before root lookup or directory creation. `read` reports a missing
@@ -133,16 +132,16 @@ string.
 | --- | --- |
 | Media and Markdown rendering ([`media_resources.dart`](../../lib/canvas/editor/elements/media/media_resources.dart), [`text_markdown_images.dart`](../../lib/canvas/editor/elements/text/text_markdown_images.dart)) | Resolve the saved relative source using the owning canvas directory; key retained reads by the resolved storage identity. |
 | Upload and clipboard edits ([`canvas_clipboard.dart`](../../lib/canvas/editor/canvas_clipboard.dart), [`text_markdown_editor.dart`](../../lib/canvas/editor/elements/text/text_markdown_editor.dart)) | Resolve the target's captured canvas directory once; write and clean up only that full, unpublished key. |
-| Project and snapshot discovery ([`canvas_project.dart`](../../lib/library/transfer/canvas_project.dart)) | Resolve each reference against its document path before reading bytes; preserve the portable reference separately. |
+| Project and transfer discovery ([`canvas_project.dart`](../../lib/library/transfer/canvas_project.dart)) | Resolve each reference against its document path before reading bytes; preserve the portable reference separately. |
 | Library import and [`_stage`](../../lib/library/library_controller.dart) | Keep staging and publication in the library owner. Do not write over a published key as preparation; retain cleanup limited to new unpublished keys and existing async lifetime guards. |
 | Existing flat callers | Keep using current root-level keys until a higher layer explicitly adopts directory context, including for canvases in nested explorer folders. The store must not infer a new key from explorer paths. |
 
 Full-path keys distinguish files in different canvas folders, but do not by
 themselves make replacement of already-published bytes at the same key safe.
-The folder-snapshot proposal's overwrite and failure-safety behavior therefore
-needs a separate integration decision before callers adopt nested keys. This
-specification does not replace current fresh-path staging or make multi-file
-import atomic.
+The folder-based canvas transfer proposal's overwrite and failure-safety
+behavior therefore needs a separate integration decision before callers adopt
+nested keys. This specification does not replace current fresh-path staging or
+make multi-file import atomic.
 
 ### Follow-up acceptance criteria
 

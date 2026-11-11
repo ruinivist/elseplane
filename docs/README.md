@@ -19,16 +19,20 @@ then read the authority relevant to the work. Do not create a separate
   and its [migration plan](plans/input-delegation.md). They remain proposals;
   accepted architecture and behavior remain authoritative until the ADR is
   accepted.
-- **Proposed:** [folder snapshot specification](specs/folder-snapshots.md),
-  [architecture design](arch/folder-snapshots-design.md), and
-  [ADR 0005](adr/0005-folder-based-snapshot-transfers.md). These are design
+- **Proposed:** [folder-based canvas transfer specification](specs/folder-based-canvas-transfers.md),
+  [architecture design](arch/folder-based-canvas-transfers-design.md), and
+  [ADR 0005](adr/0005-folder-based-canvas-transfers.md). These are design
   proposals, not accepted behavior or ownership; current contracts remain
   authoritative until the proposal is accepted.
+  The [implementation plan](plans/folder-based-canvas-transfers.md) is a draft
+  covering caller adoption, shared transfers, integration, and verification;
+  implementation has not started.
 - **Accepted, storage foundation only:** [root-relative attachment path
   specification](specs/attachment-paths.md) and [ADR 0006](adr/0006-path-aware-attachment-store.md).
   Existing callers still use root-level keys, including for canvases in nested
   explorer folders. Caller adoption and import-publication changes remain
-  follow-up work; the folder snapshot proposals above remain unaccepted.
+  follow-up work; the folder-based canvas transfer proposals above remain
+  unaccepted.
 - [Backlog](backlog.md) contains reported defects, proposals, and open
   verification. Entries are not accepted behavior or architecture.
 - [Plans](plans/) track active work and its checks; they do not
