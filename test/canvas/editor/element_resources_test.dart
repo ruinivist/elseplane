@@ -5,14 +5,16 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/editor/canvas_view.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_resources.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
+import 'package:elseplane/theme/starless.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts_lite.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
@@ -328,7 +330,139 @@ void main() {
     expect(attachments.reads, 1);
   });
 
+  testWidgets('directory changes and full-key invalidation refresh retained local images', (tester) async {
+    await _cacheImage(tester);
+    const reference = 'attachments/11111111-1111-4111-8111-111111111111.png';
+    const oldPath = 'Old/Folder/$reference';
+    const newPath = 'New/Folder/$reference';
+    final delayedOldRead = Completer<Uint8List>();
+    final attachments = _ContextAttachments(oldPath, delayedOldRead);
+    final document = CanvasDocument(
+      background: CanvasBackgroundKind.plain,
+      elements: [
+        TextElementData(
+          id: 'text',
+          position: const ui.Offset(30, 80),
+          width: 300,
+          height: 200,
+          markdown: '![local]($reference)',
+          style: const TextNodeStyle(fontFamily: 'JetBrains Mono'),
+        ),
+        MediaElementData(id: 'media', position: const ui.Offset(30, 360), width: 120, url: reference),
+      ],
+    );
+    final session = testSession(document);
+    void Function(Set<String>)? invalidate;
+    void registerInvalidator(void Function(Set<String>)? value) => invalidate = value;
+    Widget canvas(String directory) => MaterialApp(
+      theme: starlessLightThemeData,
+      home: Scaffold(
+        body: CanvasView(
+          key: const ValueKey('canvas-view'),
+          session: session,
+          attachmentStore: attachments,
+          canvasDirectory: directory,
+          onAttachmentInvalidatorChanged: registerInvalidator,
+          chromeBuilder: (_, _) => const SizedBox.shrink(),
+          onOpenLibrary: (_) async {},
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(canvas('Old/Folder'));
+    await tester.pumpAndSettle();
+    final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+    final media = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
+    text.images.resolve(Uri.parse(reference));
+    await tester.pumpAndSettle();
+    expect(invalidate, isNotNull);
+    expect(attachments.readPaths, contains(oldPath));
+
+    await tester.pumpWidget(canvas('New/Folder'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextElementView>(find.byType(TextElementView)).resources, same(text));
+    expect(tester.widget<MediaElementView>(find.byType(MediaElementView)).resources, same(media));
+    expect(text.canvasDirectory, 'New/Folder');
+    expect(media.canvasDirectory, 'New/Folder');
+    expect(attachments.readPaths, contains(newPath));
+    expect(media.hasImage, isFalse);
+    expect(text.images.resolve(Uri.parse(reference)).failed, isTrue);
+
+    delayedOldRead.complete(onePixelPngBytes);
+    await tester.pumpAndSettle();
+    expect(media.hasImage, isFalse, reason: 'the old-folder read must not replace the current source');
+    expect(text.images.resolve(Uri.parse(reference)).failed, isTrue);
+
+    attachments.files[newPath] = onePixelPngBytes;
+    invalidate!({newPath});
+    await tester.pumpAndSettle();
+    expect(media.hasImage, isTrue);
+    expect(text.images.resolve(Uri.parse(reference)).provider, isA<MemoryImage>());
+    expect(attachments.readPaths.where((path) => path == newPath), hasLength(4));
+    expect(session.document, same(document));
+
+    final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
+    final oldMediaProvider = media.image;
+    controller
+      ..onScaleStart(ScaleStartDetails())
+      ..onScaleUpdate(ScaleUpdateDetails(focalPointDelta: const ui.Offset(-20000, 0)));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextElementView), findsNothing);
+    expect(find.byType(MediaElementView), findsNothing);
+    invalidate!({newPath});
+    await tester.pumpAndSettle();
+    expect(media.image, isNot(same(oldMediaProvider)));
+    expect(attachments.readPaths.where((path) => path == newPath), hasLength(5));
+    controller
+      ..onScaleStart(ScaleStartDetails())
+      ..onScaleUpdate(ScaleUpdateDetails(focalPointDelta: const ui.Offset(20000, 0)));
+    await tester.pumpAndSettle();
+    expect(text.images.resolve(Uri.parse(reference)).provider, isA<MemoryImage>());
+    expect(attachments.readPaths.where((path) => path == newPath), hasLength(6));
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(invalidate, isNull, reason: 'CanvasView unregisters when detached');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('CanvasView re-registers the invalidator across callback and session changes', (tester) async {
+    final document = CanvasDocument(background: CanvasBackgroundKind.plain, elements: const []);
+    final firstSession = testSession(document);
+    final nextSession = testSession(document);
+    final firstRegistrations = <void Function(Set<String>)?>[];
+    final nextRegistrations = <void Function(Set<String>)?>[];
+    void registerFirst(void Function(Set<String>)? callback) => firstRegistrations.add(callback);
+    void registerNext(void Function(Set<String>)? callback) => nextRegistrations.add(callback);
+
+    Widget view(EditorSession session, void Function(void Function(Set<String>)?) callback) => MaterialApp(
+      theme: starlessLightThemeData,
+      home: Scaffold(
+        body: CanvasView(
+          key: const ValueKey('canvas-view'),
+          session: session,
+          attachmentStore: TestAttachmentStore(),
+          chromeBuilder: (_, _) => const SizedBox.shrink(),
+          onOpenLibrary: (_) async {},
+          onAttachmentInvalidatorChanged: callback,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(view(firstSession, registerFirst));
+    expect(firstRegistrations, [isNotNull]);
+    await tester.pumpWidget(view(firstSession, registerNext));
+    expect(firstRegistrations, [isNotNull, isNull]);
+    expect(nextRegistrations, [isNotNull]);
+    await tester.pumpWidget(view(nextSession, registerNext));
+    expect(nextRegistrations, [isNotNull, isNull, isNotNull]);
+    await tester.pumpWidget(const SizedBox());
+    expect(nextRegistrations, [isNotNull, isNull, isNotNull, isNull]);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('removal invalidates a delayed image read before resources dispose', (tester) async {
+    PaintingBinding.instance.imageCache.clear();
     await _cacheImage(tester);
     const path = 'attachments/11111111-1111-4111-8111-111111111111.png';
     final result = Completer<Uint8List>();
@@ -358,6 +492,21 @@ class _CountingAttachments extends TestAttachmentStore {
   Future<Uint8List> read(String path) {
     reads++;
     return delay?.future ?? super.read(path);
+  }
+}
+
+class _ContextAttachments extends TestAttachmentStore {
+  _ContextAttachments(this.delayedPath, this.delayedRead);
+
+  final String delayedPath;
+  final Completer<Uint8List> delayedRead;
+  final readPaths = <String>[];
+
+  @override
+  Future<Uint8List> read(String path) {
+    readPaths.add(path);
+    if (path == delayedPath) return delayedRead.future;
+    return super.read(path);
   }
 }
 

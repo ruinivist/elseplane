@@ -12,6 +12,7 @@ import 'package:elseplane/github/github_workspace_panel.dart';
 import 'package:elseplane/library/library_controller.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_project_files.dart';
+import 'package:elseplane/library/transfer/canvas_transfer.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
@@ -61,6 +62,7 @@ class _WorkspaceState extends State<Workspace> {
     store: widget.libraryStore,
     attachments: widget.attachmentStore,
     files: widget.projectFiles,
+    onAttachmentPathsChanged: _invalidateAttachments,
   );
   EditorSession? _editor;
   VoidCallback? _documentListener;
@@ -68,6 +70,7 @@ class _WorkspaceState extends State<Workspace> {
   Object? _reportedSaveError;
   var _blocked = false;
   var _transferActive = false;
+  void Function(Set<String>)? _attachmentInvalidator;
 
   @override
   void initState() {
@@ -110,6 +113,12 @@ class _WorkspaceState extends State<Workspace> {
     _reportedSaveError = error;
     setState(() {});
   }
+
+  void _invalidateAttachments(Set<String> paths) => _attachmentInvalidator?.call(paths);
+
+  // Keep a stable callback tear-off so CanvasView does not re-register on every rebuild.
+  // ignore: use_setters_to_change_properties
+  void _registerAttachmentInvalidator(void Function(Set<String>)? invalidator) => _attachmentInvalidator = invalidator;
 
   void _replaceEditor() => setState(() {
     final previous = _editor;
@@ -160,36 +169,6 @@ class _WorkspaceState extends State<Workspace> {
     }
   }
 
-  Future<bool> _confirmReplacement({required String title, required String message, required String action}) async {
-    if (!mounted) return false;
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => SurfaceConfirmationDialog(
-            title: Text(title),
-            content: Text(message),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-              TextButton(onPressed: () => Navigator.pop(context, true), child: Text(action)),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
-  Future<void> _replace(Future<void> Function() commit) async {
-    final wasBlocked = _blocked;
-    setState(() => _blocked = true);
-    FocusManager.instance.primaryFocus?.unfocus();
-    try {
-      await _library.flush();
-      if (!mounted) return;
-      await commit();
-      if (mounted) _replaceEditor();
-    } finally {
-      if (mounted) setState(() => _blocked = wasBlocked);
-    }
-  }
-
   // ---------- Settings transfers ----------
 
   Future<void> _exportCanvas() async {
@@ -204,69 +183,166 @@ class _WorkspaceState extends State<Workspace> {
     }
   }
 
-  Future<void> _backupLibrary() async {
+  Future<void> _exportLibrary() async {
     if (_fileId == null || !_beginTransfer()) return;
     try {
       await _library.flush();
-      if (await _library.backup()) _showMessage('Library backed up');
-    } on FormatException catch (error) {
-      _showMessage(error.message);
+      if (await _library.exportLibrary()) _showMessage('Library exported');
     } on Object {
-      _showMessage('Could not back up library');
+      _showMessage('Could not export library');
     } finally {
       _endTransfer();
     }
   }
 
-  Future<bool> _importCanvas() async {
+  Future<bool> _import() async {
     if (_fileId == null || !_beginTransfer()) return false;
-    final fileId = _fileId!;
     try {
-      final project = await _library.readProject();
-      if (project == null ||
-          !await _confirmReplacement(
-            title: 'Replace canvas?',
-            message: 'Importing replaces “${_library.library.file(fileId).name}”.',
-            action: 'Replace canvas',
-          )) {
-        return false;
-      }
-      if (!mounted) return false;
-      await _replace(() => _library.replaceCanvas(fileId, project));
-      _showMessage('Canvas imported');
-      return true;
-    } on Object {
-      _showMessage('Could not import canvas');
+      final source = await _library.readTransferSource();
+      if (!mounted || source == null) return false;
+      final result = await _importTransfer(source);
+      return result.failure == null && result.metadataSaved;
+    } on FormatException {
+      await _showTransferReport(
+        TransferImportResult(
+          skippedCanvases: const [],
+          writtenImagePaths: const [],
+          metadataSaved: false,
+          failure: const TransferFailure(reason: 'Could not prepare transfer', stage: TransferFailureStage.preparation),
+        ),
+      );
+      return false;
+    } on Exception {
+      await _showTransferReport(
+        TransferImportResult(
+          skippedCanvases: const [],
+          writtenImagePaths: const [],
+          metadataSaved: false,
+          failure: const TransferFailure(reason: 'Could not prepare transfer', stage: TransferFailureStage.preparation),
+        ),
+      );
       return false;
     } finally {
       _endTransfer();
     }
   }
 
-  Future<bool> _restoreLibrary() async {
-    if (_fileId == null || !_beginTransfer()) return false;
+  Future<TransferImportResult> _importTransfer(TransferSource source) async {
+    TransferImport? candidate;
     try {
-      final archive = await _library.readArchive();
-      if (archive == null) return false;
-      final count = archive.library.files.where((file) => !file.isFolder).length;
-      if (!await _confirmReplacement(
-        title: 'Replace library?',
-        message:
-            'Restore $count ${count == 1 ? 'canvas' : 'canvases'}? This replaces all existing canvases and folders.',
-        action: 'Replace library',
-      )) {
-        return false;
+      await _library.flush();
+      candidate = await decodeTransfer(source);
+      final merge = await _library.previewTransferImport(candidate);
+      if (!mounted) {
+        return _transferResult(candidate.skippedCanvases);
       }
-      if (!mounted) return false;
-      await _replace(() => _library.restore(archive));
-      _showMessage('Library restored');
-      return true;
-    } on Object {
-      _showMessage('Could not restore library');
-      return false;
-    } finally {
-      _endTransfer();
+      if (merge.overwritePaths.isNotEmpty && !await _confirmTransferOverwrite(merge.overwritePaths)) {
+        final result = _transferResult(candidate.skippedCanvases);
+        await _showTransferReport(result, cancelled: true);
+        return result;
+      }
+      if (!mounted) return _transferResult(candidate.skippedCanvases);
+
+      final token = _library.documentToken;
+      final result = await _library.importTransfer(merge, confirmedOverwritePaths: merge.overwritePaths);
+      final affected = <String>{
+        ...result.writtenImagePaths,
+        if (result.failure?.stage == TransferFailureStage.imageWrite) result.failure!.path!,
+      };
+      if (affected.isNotEmpty) _invalidateAttachments(affected);
+      if (result.metadataSaved && !identical(token, _library.documentToken) && mounted) _replaceEditor();
+      await _showTransferReport(result, candidate: candidate);
+      return result;
+    } on FormatException {
+      final result = _transferResult(
+        candidate?.skippedCanvases ?? const [],
+        failure: const TransferFailure(reason: 'Could not prepare transfer', stage: TransferFailureStage.preparation),
+      );
+      await _showTransferReport(result);
+      return result;
+    } on GitHubApiException catch (error) {
+      final result = _transferResult(
+        candidate?.skippedCanvases ?? const [],
+        failure: TransferFailure(reason: error.message, stage: TransferFailureStage.preparation),
+      );
+      await _showTransferReport(result);
+      return result;
+    } on Exception {
+      final result = _transferResult(
+        candidate?.skippedCanvases ?? const [],
+        failure: const TransferFailure(reason: 'Could not prepare transfer', stage: TransferFailureStage.preparation),
+      );
+      await _showTransferReport(result);
+      return result;
     }
+  }
+
+  TransferImportResult _transferResult(
+    List<TransferIssue> skipped, {
+    TransferFailure? failure,
+  }) => TransferImportResult(
+    skippedCanvases: skipped,
+    writtenImagePaths: const [],
+    metadataSaved: false,
+    failure: failure,
+  );
+
+  Future<bool> _confirmTransferOverwrite(Set<String> paths) async {
+    if (!mounted) return false;
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => SurfaceConfirmationDialog(
+            title: const Text('Overwrite canvases?'),
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'The following canvas paths already exist. Shared images may also change in other canvases.',
+                ),
+                const SizedBox(height: 12),
+                for (final path in paths.toList()..sort()) Text(path),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Overwrite and import')),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _showTransferReport(
+    TransferImportResult result, {
+    TransferImport? candidate,
+    bool cancelled = false,
+  }) async {
+    if (!mounted) return;
+    final lines = <String>[
+      if (cancelled) 'Import canceled.',
+      if (!cancelled && result.metadataSaved)
+        'Imported ${candidate?.canvases.length ?? 0} ${candidate?.canvases.length == 1 ? 'canvas' : 'canvases'}.',
+      if (!cancelled && !result.metadataSaved && result.writtenImagePaths.isNotEmpty && result.failure == null)
+        'Images changed; the library metadata was unchanged.',
+      if (result.failure case final failure?) ...[
+        if (failure.stage == TransferFailureStage.imageWrite ||
+            (failure.stage == TransferFailureStage.publication && result.writtenImagePaths.isNotEmpty))
+          'Images may have changed; imported canvases were not saved.',
+        '${failure.reason}${failure.path == null ? '' : ': ${failure.path}'}',
+      ],
+      if (result.skippedCanvases.isNotEmpty) 'Skipped canvases:',
+      for (final issue in result.skippedCanvases) '${issue.path}: ${issue.reason}',
+      if (!cancelled && result.failure == null && !result.metadataSaved && result.writtenImagePaths.isEmpty)
+        'No changes to import.',
+    ];
+    await showDialog<void>(
+      context: context,
+      builder: (context) => SurfaceConfirmationDialog(
+        title: const Text('Import result'),
+        content: Text(lines.join('\n')),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Done'))],
+      ),
+    );
   }
 
   void _showMessage(String message) {
@@ -279,6 +355,7 @@ class _WorkspaceState extends State<Workspace> {
   @override
   Widget build(BuildContext context) {
     final fileId = _fileId;
+    final fileExists = fileId != null && _library.library.files.any((file) => file.id == fileId);
     return CanvasPage(
       session: _editor,
       blocked: _blocked,
@@ -287,10 +364,11 @@ class _WorkspaceState extends State<Workspace> {
           : _library.library.path(_library.library.currentId).map((file) => file.name).toList(),
       attachmentStore: widget.attachmentStore,
       onOpenLibrary: _showLibrary,
-      onImportCanvas: _importCanvas,
+      onImport: _import,
       onExportCanvas: _exportCanvas,
-      onBackupLibrary: _backupLibrary,
-      onRestoreLibrary: _restoreLibrary,
+      onExportLibrary: _exportLibrary,
+      canvasDirectory: fileExists ? _library.library.parentDirectory(fileId) : '',
+      onAttachmentInvalidatorChanged: _registerAttachmentInvalidator,
       readClipboard: widget.readClipboard,
       writeClipboardText: widget.writeClipboardText,
       themeMode: widget.themeMode,
@@ -306,7 +384,7 @@ class _WorkspaceState extends State<Workspace> {
               blocked: _blocked || _transferActive,
               beginTransfer: _beginTransfer,
               endTransfer: _endTransfer,
-              onImported: _replaceEditor,
+              onImportTransfer: _importTransfer,
               finishInteraction: finishInteraction,
               navigateGitHubAuthorization: widget.navigateGitHubAuthorization,
               consumeGitHubCompletion: widget.consumeGitHubCompletion,

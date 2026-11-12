@@ -18,9 +18,13 @@ import 'package:flutter/material.dart';
 class TextEditorResources extends ElementResources<TextElementData> {
   // ---------- Construction ----------
 
-  TextEditorResources(EditorSession session, TextElementData data, AttachmentStore attachmentStore)
-    : super(session, data) {
-    images = TextMarkdownImages(data.markdown, attachmentStore);
+  TextEditorResources(
+    EditorSession session,
+    TextElementData data,
+    AttachmentStore attachmentStore, {
+    String canvasDirectory = '',
+  }) : super(session, data) {
+    images = TextMarkdownImages(data.markdown, attachmentStore, canvasDirectory: canvasDirectory);
     controller = TextEditingController(text: data.markdown);
     controller.addListener(_syncMarkdown);
   }
@@ -30,6 +34,7 @@ class TextEditorResources extends ElementResources<TextElementData> {
   TextElementData get node => data;
   late final TextEditingController controller;
   late final TextMarkdownImages images;
+  String get canvasDirectory => images.canvasDirectory;
   final FocusNode focusNode = FocusNode();
   final scrollController = RetainedScrollController();
 
@@ -47,6 +52,8 @@ class TextEditorResources extends ElementResources<TextElementData> {
   // ---------- Content insertion ----------
 
   void insertPastedText(String text) => _insertText(text);
+
+  void setCanvasDirectory(String directory) => images.setCanvasDirectory(directory);
 
   // ---------- Private helpers ----------
 

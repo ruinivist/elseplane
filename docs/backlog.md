@@ -87,9 +87,34 @@ confirmed behavior.
   workloads. See [transfer tree
   adapter rules](arch/folder-based-canvas-transfers-design.md#tree-adapters-and-path-rules)
   and [failure boundaries](specs/folder-based-canvas-transfers.md#validation-and-failure-boundaries).
+- **Deferred — moving a canvas during pending image work:** Moving a canvas in
+  the file tree, or moving or renaming a containing folder, while an upload or
+  attachment-backed paste is pending can leave a broken image reference. Bytes
+  stay at the captured old-folder key; the late relative reference resolves in
+  the new folder. The current [async-edit policy](arch/editor-lifecycles.md)
+  deliberately keeps captured keys and allows late publication. Retain that
+  policy for now; frequency is unmeasured. Next: decide whether a directory
+  change should suppress late attachment-backed edits before changing the
+  contract and tests.
+- **Deferred — debug Demo image collision:** Demo creation can replace existing
+  bytes at its fixed attachment key. This affects debug builds only and does not
+  block release. If addressed later, preserve existing image bytes. Tests should
+  not require overwriting them or redundant writes.
+- **Deferred — late edit during overwrite publication:** An edit accepted while
+  overwrite metadata save is awaited can be discarded after successful
+  publication, leaving the controller clean. This is an unresolved race, not an
+  intended loss. Next: decide the race policy before changing the contract or
+  code and adding a desired-outcome regression.
 
 ## Verification
 
+- **Nested-layout browser acceptance remains open.** Manually clear this app's
+  browser data, then complete the live acceptance checks in the [active
+  transfer plan](plans/folder-based-canvas-transfers.md#verification-and-completion).
+- **Authenticated GitHub acceptance remains open.** Mocked transport tests do
+  not establish live OAuth, repository import, or commit behavior; perform the
+  plan's live checks only with available credentials, suitable repositories,
+  and permission ([active transfer plan](plans/folder-based-canvas-transfers.md#verification-and-completion)).
 - **Physical touchpad and stylus checks remain open.** Implementation and
   automated checks are complete; perform the remaining hardware checks in the
   [active Grid migration plan](plans/grid-migration.md#7-verify-and-finish).

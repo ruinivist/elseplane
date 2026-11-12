@@ -32,10 +32,10 @@ lib/
       previews/                      # Canvas component previews
   library/
     canvas_library.dart               # File/folder values and hierarchy rules
-    github_metadata.dart               # Non-secret destination and canvas tracking
+    github_metadata.dart              # Non-secret GitHub destination
     library_controller.dart           # Library operations and save queue
     library_store.dart                # Storage contract and implementation
-    transfer/                         # Project/backup codecs, import staging, remote prep
+    transfer/                         # Shared tree codec and ZIP transport
     widgets/                          # File picker and file tree
     previews/
   attachments/
@@ -62,8 +62,8 @@ empty scaffolding.
 | `geometry` | Document values and graphics/math primitives | Computes geometry without application state or I/O. |
 | Editor logic | Document, geometry, narrow I/O contracts, Flutter input/notifier primitives | No widget construction or concrete storage implementations. |
 | Editor presentation | Editor logic, Flutter, theme, shared UI, grid | Requests edits; never writes document fields. Its generic bottom-left panel slot has no feature dependency. |
-| `library` | Document, attachments, local GitHub metadata values | No editor or GitHub networking imports; widgets additionally use Flutter, theme, and shared UI. |
-| `github` | GitHub/mediator HTTP and browser APIs, library metadata and transfer contracts, Flutter/theme/shared UI | Owns GitHub UI, session controller, API orchestration, and browser boundary; Workspace supplies library/editor state and transfer callbacks. |
+| `library` | Document, attachments, GitHub destination values, shared transfer contracts | No editor or GitHub networking imports; widgets additionally use Flutter, theme, and shared UI. |
+| `github` | GitHub/mediator HTTP and browser APIs, library metadata and transfer contracts, Flutter/theme/shared UI | Owns GitHub UI, session controller, transport orchestration, and browser boundary; Workspace supplies library/editor state and shared-import callbacks. |
 | `attachments` | Byte/image primitives and platform storage | Browser imports stay in the browser implementation. |
 | `ui/common` | Flutter and theme | Never imports a feature. |
 | `theme` | Flutter, font and highlighting dependencies | Never imports features or app composition. |
@@ -96,21 +96,25 @@ appearance callbacks, and Settings derives control availability from those
 callbacks without importing app composition.
 
 Workspace owns the open editor session and connects its snapshots to the
-library. Settings preferences are independent of document history; resolve
-defaults when creating elements, and do not rewrite existing content when
-appearance settings change. Library durability details are in
-[persistence](persistence.md).
+library. It also owns the shared local/GitHub import coordinator, transfer
+interlock, settings transfer callbacks, active canvas-directory context, and
+editor replacement after durable overwrite. Settings preferences are
+independent of document history; resolve defaults when creating elements, and
+do not rewrite existing content when appearance settings change. Library
+durability details are in [persistence](persistence.md).
 
 `app/app.dart` creates the browser GitHub client only when the HTTPS
 `GITHUB_MEDIATOR_URL` build value is configured; tests can inject the API and
 browser callbacks. `Workspace` composes `GitHubWorkspacePanel` with the library
-and editor. It owns the editor, settings transfers, shared transfer interlock,
-and imported-editor replacement callback. The GitHub feature widget owns the
-session controller, account restoration, dialogs, save-before-GitHub-action
-flow, API orchestration, and browser navigation; it persists destination,
-tracking, and write guards through the library controller. `CanvasPage` exposes
-a generic bottom-left panel builder and passes it an editor
-interaction-finishing callback; editor code does not import GitHub.
+and editor. It owns settings transfers, the shared transfer interlock, the
+provider-neutral import coordinator, and imported-editor replacement after
+durable success. The GitHub feature widget owns the session controller, account
+restoration, repository UI, transport orchestration, and browser navigation; it
+uses Workspace callbacks for common import and persists only the selected
+destination through the library controller. No remote content baseline,
+per-canvas tracking, or pending-write guard is persisted. `CanvasPage` exposes a
+generic bottom-left panel builder and passes it an editor interaction-finishing
+callback; editor code does not import GitHub.
 
 ## Design and file rules
 

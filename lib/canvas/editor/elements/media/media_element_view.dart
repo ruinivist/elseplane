@@ -143,8 +143,9 @@ class _MediaElementViewState extends State<MediaElementView> {
   }
 
   Future<void> _pickImage() async {
-    widget.onActivate();
     final model = widget.resources;
+    final canvasDirectory = model.canvasDirectory;
+    widget.onActivate();
     try {
       final file = await openFile(acceptedTypeGroups: const [_imageTypes]);
       if (file == null || !model.attached) return;
@@ -158,6 +159,7 @@ class _MediaElementViewState extends State<MediaElementView> {
       await model.setDeviceImage(
         bytes,
         file.name.substring(separator + 1),
+        canvasDirectory: canvasDirectory,
       );
     } on Object {
       if (!mounted || !model.attached) return;
@@ -652,13 +654,14 @@ Widget _mediaTransition(
 
 extension MediaClipboardEdits on MediaResources {
   Future<void> paste(Future<ClipboardReader> readerFuture) async {
+    final canvasDirectory = this.canvasDirectory;
     try {
       final reader = await readerFuture;
       if (!attached) return;
       final clipboard = await readCanvasClipboard(reader);
       if (!attached) return;
       if (clipboard.image case final image?) {
-        await setDeviceImage(image.bytes, image.extension);
+        await setDeviceImage(image.bytes, image.extension, canvasDirectory: canvasDirectory);
       } else if (clipboard.text case final text?) {
         insertPastedText(text);
         if (!focusNode.hasFocus) commitUrl();
@@ -669,7 +672,11 @@ extension MediaClipboardEdits on MediaResources {
     }
   }
 
-  Future<void> setDeviceImage(Uint8List bytes, String extension) async {
+  Future<void> setDeviceImage(
+    Uint8List bytes,
+    String extension, {
+    required String canvasDirectory,
+  }) async {
     try {
       final normalizedExtension = extension.toLowerCase() == 'jpeg' ? 'jpg' : extension.toLowerCase();
       if (!const {'png', 'jpg', 'gif', 'webp'}.contains(normalizedExtension)) {
@@ -677,7 +684,8 @@ extension MediaClipboardEdits on MediaResources {
       }
       validateAttachmentSize(bytes.length, 'Image exceeds 10 MiB');
 
-      final path = 'attachments/${const Uuid().v4()}.$normalizedExtension';
+      final reference = 'attachments/${const Uuid().v4()}.$normalizedExtension';
+      final path = resolveAttachmentPath(canvasDirectory, reference);
       final ratio = (await readCanvasImageSize(bytes)).aspectRatio;
       if (!attached) return;
       var written = false;
@@ -695,7 +703,11 @@ extension MediaClipboardEdits on MediaResources {
       }
       if (!attached) return;
 
-      applyDeviceImage(bytes, ratio, path);
+      if (canvasDirectory == this.canvasDirectory) {
+        applyDeviceImage(bytes, ratio, reference);
+      } else {
+        session.setMediaUrl(data.id, reference);
+      }
     } on Object {
       if (!attached) return;
       rethrow;

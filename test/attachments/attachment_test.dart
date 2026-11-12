@@ -34,7 +34,9 @@ void main() {
                   )
                 : null;
             final reader = Completer<ClipboardReader>();
-            final pending = media ? image!.paste(reader.future) : text!.paste(reader.future, store);
+            final pending = media
+                ? image!.paste(reader.future)
+                : text!.paste(reader.future, store, canvasDirectory: '');
             if (dispose) {
               (text ?? image!).dispose();
             } else if (media) {
@@ -63,7 +65,7 @@ void main() {
           ? testMediaModel(MediaElementData(id: 'media', position: Offset.zero, width: 200, url: 'original'), store)
           : null;
       final reader = Completer<ClipboardReader>();
-      final pending = media ? image!.paste(reader.future) : text!.paste(reader.future, store);
+      final pending = media ? image!.paste(reader.future) : text!.paste(reader.future, store, canvasDirectory: '');
       final check = expectLater(pending, throwsStateError);
       reader.completeError(StateError('clipboard failed'));
       await check;
@@ -82,7 +84,7 @@ void main() {
         );
       final bytes = onePixelPngBytes;
 
-      await model.insertPastedImage(bytes, 'png', store);
+      await model.insertPastedImage(bytes, 'png', store, canvasDirectory: '');
 
       final path = store.files.keys.single;
       expect(attachmentPathPattern.hasMatch(path), isTrue);
@@ -100,6 +102,7 @@ void main() {
         Uint8List(attachmentMaximumBytes + 1),
         'png',
         TestAttachmentStore(),
+        canvasDirectory: '',
       ),
       throwsFormatException,
     );
@@ -110,6 +113,7 @@ void main() {
         onePixelPngBytes,
         'png',
         _FailingAttachmentStore(failWrites: true),
+        canvasDirectory: '',
       ),
       throwsStateError,
     );
@@ -124,7 +128,12 @@ void main() {
     final document = model.session.document;
 
     await expectLater(
-      model.insertPastedImage(Uint8List.fromList([1, 2, 3]), 'png', store),
+      model.insertPastedImage(
+        Uint8List.fromList([1, 2, 3]),
+        'png',
+        store,
+        canvasDirectory: '',
+      ),
       throwsFormatException,
     );
 

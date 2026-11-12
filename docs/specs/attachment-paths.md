@@ -5,19 +5,21 @@ Status: accepted (storage foundation only)
 Related accepted decision: [ADR 0006](../adr/0006-path-aware-attachment-store.md).
 The accepted [document and media decision](../adr/0002-separate-documents-and-media.md),
 [persistence contract](../arch/persistence.md), and
-[interaction model](interaction-model.md) retain the existing caller and import
-protocols described below; this specification accepts only the byte-store
-foundation.
+[interaction model](interaction-model.md) define caller and import behavior.
+The accepted [folder-based transfer specification](folder-based-canvas-transfers.md)
+adopts parent-aware keys in callers, and that adoption is implemented. This
+specification remains limited to the byte-store foundation.
 
 ## Scope
 
 This specification lets the byte-only `AttachmentStore` address image files
 beneath their canvas folders in the browser's Origin Private File System (OPFS). It
 retains each existing UUID-based image filename and keeps document references
-relative to their canvas. It changes storage addressing, not image formats,
-document schema, or import transactions. It does not adopt nested keys in
-existing callers: they continue to use root-level keys, even for canvases in
-nested explorer folders.
+relative to their canvas. It changes storage addressing, not image formats or
+document schema. Caller and import behavior is defined by the accepted
+[folder-based transfer specification](folder-based-canvas-transfers.md); source
+callers adopted nested keys after the recorded pre-implementation baseline
+`1c4839a`.
 
 Current storage and image validation live in
 [`attachment_store.dart`](../../lib/attachments/attachment_store.dart),
@@ -51,9 +53,9 @@ to another filename. The key is not an operating-system absolute path or a URL.
 
 Saved media continues to use its current canvas-relative reference, for
 example `attachments/123e4567-e89b-42d3-a456-426614174000.png`. A root-level
-canvas can use that same string as its full storage key. Callers use nested
-storage keys only after explicitly adopting canvas-directory context; see
-[caller integration follow-up](#caller-integration-follow-up).
+canvas can use that same string as its full storage key. Callers resolve nested
+storage keys from explicit canvas-directory context; see
+[caller adoption status](#caller-adoption-status).
 
 ### Reference recognition and resolution
 
@@ -117,36 +119,36 @@ on a best-effort basis and propagate the original failure. Do not report an
 empty successful read or successful write after failure. This defines no
 store-wide transaction, crash rollback, or concurrent-writer guarantee.
 
-### Caller integration follow-up
+### Caller adoption status
 
-The `AttachmentStore` does not supply canvas context. Current callers keep using
-root-level keys, including when a canvas is nested in the explorer. A future
-caller-integration change must capture the canvas directory and resolve a full
-key before asynchronous work, then use that same key for its read, write, and
-cleanup. Navigation must not let a delayed operation retarget a different
-folder. Retained image caches and asynchronous resource identity must include
-the resolved key or its captured canvas context, not only the relative source
-string.
+The `AttachmentStore` does not supply canvas context. The pre-implementation
+baseline `1c4839a` used root-level keys even when a canvas was nested in the
+explorer; parent-aware caller adoption is now implemented under the accepted
+folder-based transfer contract. Each caller captures the canvas directory and
+resolves a full key before asynchronous work, then uses that same key for reads,
+writes, and cleanup. Navigation must not let a delayed operation retarget a
+different folder. Retained image caches and asynchronous resource identity
+include the resolved key or its captured canvas context, not only the relative
+source string.
 
-| Caller area | Required handling when adopting nested keys |
+| Caller area | Parent-aware handling |
 | --- | --- |
 | Media and Markdown rendering ([`media_resources.dart`](../../lib/canvas/editor/elements/media/media_resources.dart), [`text_markdown_images.dart`](../../lib/canvas/editor/elements/text/text_markdown_images.dart)) | Resolve the saved relative source using the owning canvas directory; key retained reads by the resolved storage identity. |
 | Upload and clipboard edits ([`canvas_clipboard.dart`](../../lib/canvas/editor/canvas_clipboard.dart), [`text_markdown_editor.dart`](../../lib/canvas/editor/elements/text/text_markdown_editor.dart)) | Resolve the target's captured canvas directory once; write and clean up only that full, unpublished key. |
-| Project and transfer discovery ([`canvas_project.dart`](../../lib/library/transfer/canvas_project.dart)) | Resolve each reference against its document path before reading bytes; preserve the portable reference separately. |
-| Library import and [`_stage`](../../lib/library/library_controller.dart) | Keep staging and publication in the library owner. Do not write over a published key as preparation; retain cleanup limited to new unpublished keys and existing async lifetime guards. |
-| Existing flat callers | Keep using current root-level keys until a higher layer explicitly adopts directory context, including for canvases in nested explorer folders. The store must not infer a new key from explorer paths. |
+| Transfer codec ([`canvas_transfer.dart`](../../lib/library/transfer/canvas_transfer.dart), [`canvas_transfer_zip.dart`](../../lib/library/transfer/canvas_transfer_zip.dart), [`attachment_references.dart`](../../lib/canvas/document/attachment_references.dart)) | Resolve each reference against its document path before reading bytes; preserve the portable reference separately. |
+| Library import and upload staging ([`library_controller.dart`](../../lib/library/library_controller.dart)) | `LibraryController` owns publication. Transfer import writes to exact full keys under its accepted best-effort policy; uploads and pending editor operations retain cleanup limited to their own new unpublished keys. |
+| All callers | Capture explicit canvas-directory context and resolve full keys, including for nested explorer folders; the store does not infer keys from explorer paths. |
 
 Full-path keys distinguish files in different canvas folders, but do not by
 themselves make replacement of already-published bytes at the same key safe.
-The folder-based canvas transfer proposal's overwrite and failure-safety
-behavior therefore needs a separate integration decision before callers adopt
-nested keys. This specification does not replace current fresh-path staging or
-make multi-file import atomic.
+The accepted folder-based transfer contract defines same-key import writes and
+their best-effort failure behavior. This storage specification does not define
+that multi-file import policy or make import atomic.
 
-### Follow-up acceptance criteria
+### Caller acceptance criterion
 
-- After caller adoption, cleanup uses its originally captured full key and
-  cannot delete or retarget a file in another canvas directory.
+- Cleanup uses the originally captured full key and cannot delete or retarget a
+  file in another canvas directory.
 
 ## Acceptance criteria
 
@@ -170,8 +172,8 @@ make multi-file import atomic.
 ## Non-goals
 
 This specification does not change image formats or filenames, document schema,
-portable relative references, import/restore staging, publication atomicity,
-library case-conflict rules, canvas-move semantics, cross-folder clipboard
-semantics, remote transfer behavior, or external media sources. It does not
+portable relative references, or define import publication, library
+case-conflict rules, canvas-move semantics, cross-folder clipboard semantics,
+remote transfer behavior, or external media sources. It does not
 introduce transactions, versioning, journals, pointer indirection, sync,
 filename mappings, or a generic storage-provider framework.

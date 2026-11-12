@@ -6,33 +6,33 @@ then read the authority relevant to the work. Do not create a separate
 
 ## Map and authority
 
-- [Architecture](arch/README.md) is the accepted implementation ownership and
+- [Architecture](arch/README.md) is the accepted ownership and
   dependency contract. Its detail is split into
   [ownership](arch/ownership.md), [editor lifecycles](arch/editor-lifecycles.md),
   [persistence](arch/persistence.md), and [UI](arch/ui.md).
 - [Interaction model](specs/interaction-model.md) is the accepted product
   behavior contract. The accepted [asynchronous edit decision](adr/0001-cancel-unfinished-pastes.md),
   [canvas document and media decision](adr/0002-separate-documents-and-media.md),
-  and [media link cards decision](adr/0003-media-link-cards-without-embeds.md)
-  record their rationale and consequences.
+  [media link cards decision](adr/0003-media-link-cards-without-embeds.md), and
+  [folder-based transfer decision](adr/0005-folder-based-canvas-transfers.md)
+  record their rationale and consequences. ADR 0002 remains accepted for
+  document/media separation; its transfer and replacement-import portions are
+  superseded by ADR 0005.
 - **Deferred:** [canvas input delegation ADR 0004](adr/0004-delegate-canvas-input-behavior.md)
   and its [migration plan](plans/input-delegation.md). They remain proposals;
   accepted architecture and behavior remain authoritative until the ADR is
   accepted.
-- **Proposed:** [folder-based canvas transfer specification](specs/folder-based-canvas-transfers.md),
-  [architecture design](arch/folder-based-canvas-transfers-design.md), and
-  [ADR 0005](adr/0005-folder-based-canvas-transfers.md). These are design
-  proposals, not accepted behavior or ownership; current contracts remain
-  authoritative until the proposal is accepted.
-  The [implementation plan](plans/folder-based-canvas-transfers.md) is a draft
-  covering caller adoption, shared transfers, integration, and verification;
-  implementation has not started.
+- **Accepted target; caller adoption implemented; final integration pending:** [folder-based canvas transfer
+  specification](specs/folder-based-canvas-transfers.md), [architecture
+  design](arch/folder-based-canvas-transfers-design.md), and [ADR
+  0005](adr/0005-folder-based-canvas-transfers.md). The aligned interaction,
+  persistence, ownership, and editor-lifecycle contracts govern the target.
+  Parent-aware caller adoption is implemented. The [active plan](plans/folder-based-canvas-transfers.md)
+  tracks final integration, automated checks, and required reviews.
 - **Accepted, storage foundation only:** [root-relative attachment path
   specification](specs/attachment-paths.md) and [ADR 0006](adr/0006-path-aware-attachment-store.md).
-  Existing callers still use root-level keys, including for canvases in nested
-  explorer folders. Caller adoption and import-publication changes remain
-  follow-up work; the folder-based canvas transfer proposals above remain
-  unaccepted.
+  These remain the byte-store contract; parent-aware caller adoption and import
+  publication are accepted by ADR 0005 and implemented.
 - [Backlog](backlog.md) contains reported defects, proposals, and open
   verification. Entries are not accepted behavior or architecture.
 - [Plans](plans/) track active work and its checks; they do not

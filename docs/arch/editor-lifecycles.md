@@ -41,10 +41,13 @@ values and grant no mutation rights.
   resource objects only when needed. Text and code scroll controllers retain
   offsets across detachment; shape editor resources retain their text
   controllers, focus nodes, and scroll positions. Culling does not retire these
-  resources. Inline Markdown images load lazily and retain source-keyed reads and
-  image streams with text resources; preview widgets only render those
-  resources. Media loads exact
-  local attachment references or external HTTPS image sources resolved at use
+  resources. Inline Markdown images load lazily and retain reads and image
+  streams keyed by resolved full storage path with text resources; preview
+  widgets only render those resources. Local media and Markdown image loads resolve
+  relative references against the owning canvas directory; the resolved full
+  storage key identifies the retained read and cache entry. Context changes
+  refresh only local-image loads, not history, controllers, or unrelated
+  resources. Media may also load external HTTPS image sources resolved at use
   time; raw saved strings remain unchanged. Unsupported or unusable external
   sources remain unresolved and are never requested or opened. Provider metadata
   and thumbnail requests start when visible and retain
@@ -54,6 +57,10 @@ values and grant no mutation rights.
 - **CanvasPage:** composes page chrome and dialogs. CanvasView retains the grid
   and element resources. Replacing a session creates fresh input, clipboard,
   and resource lifetimes while preserving the viewport.
+- **Workspace:** owns the active canvas's parent-directory context and passes it
+  to local media, Markdown, clipboard, and upload operations. After a durable
+  move, update that context in place; do not replace an otherwise unchanged
+  editor or clear its history.
 - **Creation tools:** produce element values or raw pen samples; they do not
   mount widgets or save documents. EditorSession commits document changes.
 
@@ -108,10 +115,16 @@ values and grant no mutation rights.
   [asynchronous edit decision](../adr/0001-cancel-unfinished-pastes.md).
   Field, selection, tool, focus, and history changes do not cancel them; they
   apply to the live selection or original surviving target. Session end and
-  target removal or disposal still prevent writes, and cleanup removes only new
-  unpublished attachment paths. Navigation flushes completed snapshots without
+  target removal or disposal still prevent writes. Upload cleanup removes only
+  new, unpublished attachment paths. Transfer and cross-folder copy writes use
+  their separate best-effort failure rules and are not rolled back. Navigation
+  flushes completed snapshots without
   waiting for pending clipboard reads or uploads; pending work has no persistence
-  guarantee. Media metadata and thumbnail completions retain their separate
+  guarantee. Image operations capture their parent context and resolved full key
+  before awaiting and retain that key through reads, writes, and cleanup. A
+  durable move changes context only for later work; pending operations remain
+  bound to the captured old key and cannot retarget the new folder. Media
+  metadata and thumbnail completions retain their separate
   source and document lifetime checks, and image display loads track source
   identity independently.
 

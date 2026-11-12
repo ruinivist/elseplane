@@ -3,6 +3,7 @@
 
 import 'dart:typed_data';
 
+import 'package:elseplane/library/transfer/canvas_transfer.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -11,7 +12,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 /// Defines host file operations for portable canvas projects.
 /// Used by the canvas page and implemented with the platform file selector.
 abstract interface class CanvasProjectFiles {
-  Future<Uint8List?> open();
+  Future<({String name, Uint8List bytes})?> open();
 
   Future<bool> save(Uint8List bytes, {required String suggestedName, required String mimeType});
 }
@@ -24,7 +25,22 @@ CanvasProjectFiles createCanvasProjectFiles() => _PlatformCanvasProjectFiles();
 
 final class _PlatformCanvasProjectFiles implements CanvasProjectFiles {
   @override
-  Future<Uint8List?> open() async => await (await openFile())?.readAsBytes();
+  Future<({String name, Uint8List bytes})?> open() async {
+    final selected = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'Canvas transfer', extensions: ['canvas.json', 'zip']),
+      ],
+    );
+    if (selected == null) return null;
+    final name = selected.name;
+    if (!name.endsWith('.canvas.json') && !name.endsWith('.zip')) {
+      throw const FormatException('Unsupported transfer file');
+    }
+    validateCanvasTransferSize(await selected.length());
+    final bytes = await selected.readAsBytes();
+    validateCanvasTransferSize(bytes.length);
+    return (name: name, bytes: bytes);
+  }
 
   @override
   Future<bool> save(Uint8List bytes, {required String suggestedName, required String mimeType}) async {

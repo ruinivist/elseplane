@@ -83,7 +83,7 @@ class _CanvasFilePickerState extends State<CanvasFilePicker> {
       }
       return true;
     }
-    final error = _library.nameError(_name.text, editing.parentId, exceptId: editing.id);
+    final error = _library.nameError(_name.text, editing.parentId, exceptId: editing.id, isFolder: editing.isFolder);
     if (error != null) {
       setState(() => _error = error);
       _nameFocus.requestFocus();

@@ -1,16 +1,13 @@
-// Owns GitHub and mediator HTTP boundaries for manual single-canvas transfers.
+// Owns GitHub and mediator HTTP boundaries for manual tree transfers.
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:elseplane/attachments/attachment_store.dart';
-import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/library/github_metadata.dart';
-import 'package:elseplane/library/transfer/canvas_project.dart';
-import 'package:elseplane/library/transfer/canvas_remote_transfer.dart';
+import 'package:elseplane/library/transfer/canvas_transfer.dart';
 import 'package:http/http.dart' as http;
-import 'package:uuid/uuid.dart';
 
 const Duration _requestTimeout = Duration(seconds: 15);
 const int _maximumJsonResponseBytes = 32 * 1024 * 1024;
@@ -54,17 +51,12 @@ final class GitHubConflict extends GitHubApiException {
 
 final class GitHubUnconfirmedCommit extends GitHubApiException {
   const GitHubUnconfirmedCommit({
-    required this.commitSha,
+    required this.sha,
     required this.url,
-    required this.tracking,
-  }) : super(
-         'GitHub may have updated the branch. Check remote status before writing again.',
-         kind: GitHubErrorKind.network,
-       );
+  }) : super('GitHub may have updated the branch.', kind: GitHubErrorKind.network);
 
-  final String commitSha;
+  final String sha;
   final String url;
-  final GitHubCanvasTracking tracking;
 }
 
 final class GitHubAccount {
@@ -84,6 +76,7 @@ final class GitHubTreeEntry {
   final int? size;
 
   bool get isRegularBlob => type == 'blob' && (mode == '100644' || mode == '100755');
+  bool get isDirectory => type == 'tree' && mode == '040000';
 }
 
 final class GitHubSnapshot {
@@ -93,25 +86,16 @@ final class GitHubSnapshot {
   final String commitSha;
   final String treeSha;
   final Map<String, GitHubTreeEntry> entries;
-
-  List<String> get canvasPaths => [
-    for (final entry in entries.values)
-      if (entry.isRegularBlob && entry.path.endsWith('.canvas')) entry.path,
-  ]..sort();
 }
 
 final class GitHubCommitResult {
   const GitHubCommitResult({
-    required this.noChanges,
     required this.commitSha,
     required this.url,
-    required this.tracking,
   });
 
-  final bool noChanges;
-  final String? commitSha;
+  final String commitSha;
   final String url;
-  final GitHubCanvasTracking tracking;
 }
 
 /// Returns whether [message] is a short lowercase Conventional Commit subject.
@@ -218,225 +202,41 @@ final class GitHubApi {
     );
   }
 
-  Future<GitHubSnapshot> snapshot(GitHubDestination destination) async {
+  /// Captures one latest-default-branch tree and reads supported files lazily by
+  /// their immutable blob SHAs.
+  Future<TransferSource> readRepository(GitHubDestination destination) async {
     final token = await _currentToken();
-    await _verifyDestinationAccount(destination, token);
-    return await _snapshot(destination, token.value);
-  }
-
-  Future<GitHubCanvasTracking?> checkPendingWrite(
-    GitHubDestination destination, {
-    required GitHubCanvasTracking pendingTracking,
-    GitHubCanvasTracking? tracking,
-  }) async {
-    final current = await snapshot(destination);
-    if (tracking != null) _validateTracking(tracking);
-    _validateTracking(pendingTracking);
-
-    final moved = tracking != null && tracking.path != pendingTracking.path;
-    if (_matchesTracking(current, pendingTracking) && (!moved || !current.entries.containsKey(tracking.path))) {
-      return pendingTracking;
-    }
-    if (tracking != null &&
-        _matchesTracking(current, tracking) &&
-        (!moved || !current.entries.containsKey(pendingTracking.path))) {
-      _checkDestinationCollisions(current, pendingTracking.path, tracking);
-      return tracking;
-    }
-    if (tracking == null && !current.entries.containsKey(pendingTracking.path)) {
-      _checkDestinationCollisions(current, pendingTracking.path, null);
-      return null;
-    }
-    _conflict(
-      'The remote branch matches neither the confirmed canvas nor the pending write. Open the remote copy before writing again.',
-      pendingTracking.path,
+    await _verifyTransferDestination(destination, token);
+    final snapshot = await _snapshot(destination, token.value);
+    final entries = _transferEntries(snapshot);
+    final byPath = {for (final entry in snapshot.entries.values) entry.path: entry};
+    return _GitHubTransferSource(
+      entries,
+      (path) => _readTransferBlob(destination, token.value, byPath, path),
     );
   }
 
-  Future<CanvasProject> openCanvas(GitHubDestination destination, GitHubSnapshot snapshot, String path) async {
-    final token = await _currentToken();
-    await _verifyDestinationAccount(destination, token);
-    _validateCanvasPath(path);
-    final documentEntry = snapshot.entries[path];
-    if (documentEntry == null || !documentEntry.isRegularBlob) {
-      _invalid('The selected canvas is not a regular GitHub file');
-    }
-    if ((documentEntry.size ?? 0) > canvasProjectMaximumBytes) {
-      _invalid('Canvas exceeds 140 MiB');
-    }
-    final documentBytes = await _fetchBlob(
-      destination,
-      token.value,
-      documentEntry,
-      maximumBytes: canvasProjectMaximumBytes,
-    );
-    late final CanvasDocument document;
-    try {
-      document = CanvasDocument.fromJson(jsonDecode(utf8.decode(documentBytes, allowMalformed: false)));
-    } on Object {
-      _invalid('Invalid canvas document');
-    }
-    final paths = canvasAttachmentPaths(document);
-    var totalBytes = documentBytes.length;
-    final attachments = <String, Uint8List>{};
-    final parent = _parentPath(path);
-    for (final localPath in paths.toList()..sort()) {
-      if (!attachmentPathPattern.hasMatch(localPath)) _invalid('Invalid canvas attachment path');
-      final remotePath = _joinPath(parent, localPath);
-      final entry = snapshot.entries[remotePath];
-      if (entry == null || !entry.isRegularBlob) _invalid('Canvas attachment is missing or unsupported: $remotePath');
-      if ((entry.size ?? 0) > attachmentMaximumBytes) _invalid('Canvas attachment exceeds 10 MiB: $remotePath');
-      final bytes = await _fetchBlob(destination, token.value, entry, maximumBytes: attachmentMaximumBytes);
-      totalBytes += bytes.length;
-      if (totalBytes > canvasProjectMaximumBytes) _invalid('Canvas exceeds 140 MiB');
-      attachments[localPath] = bytes;
-    }
-    try {
-      return await decodeCanvasRemoteTransfer(documentBytes, attachments);
-    } on Object {
-      _invalid('Invalid canvas document or attachments');
-    }
-  }
-
-  GitHubCanvasTracking trackingForCanvas(GitHubSnapshot snapshot, String path, CanvasProject project) {
-    _validateCanvasPath(path);
-    final document = snapshot.entries[path];
-    if (document == null || !document.isRegularBlob) _invalid('Canvas is not a regular GitHub file');
-    final localPaths = canvasAttachmentPaths(project.document);
-    if (localPaths.length != project.attachments.length || !localPaths.containsAll(project.attachments.keys)) {
-      _invalid('Canvas attachments do not match the document');
-    }
-    final parent = _parentPath(path);
-    final attachmentShas = <String, String>{};
-    final attachmentNames = <String, String>{};
-    for (final localPath in localPaths) {
-      if (!attachmentPathPattern.hasMatch(localPath)) _invalid('Invalid local attachment path');
-      final remotePath = _joinPath(parent, localPath);
-      final entry = snapshot.entries[remotePath];
-      if (entry == null || !entry.isRegularBlob) _invalid('Canvas attachment is missing or unsupported');
-      attachmentShas[remotePath] = entry.sha;
-      attachmentNames[localPath] = localPath;
-    }
-    return GitHubCanvasTracking(
-      path: path,
-      documentSha: document.sha,
-      attachmentShas: attachmentShas,
-      attachmentNames: attachmentNames,
-    );
-  }
-
-  Future<GitHubCommitResult> commitCanvas({
-    required GitHubDestination destination,
-    required String path,
-    required CanvasProject project,
+  /// Publishes a prepared transfer tree in one commit on a freshly captured
+  /// default-branch head, without content tracking or remote blob comparisons.
+  Future<GitHubCommitResult> commitTransfer(
+    GitHubDestination destination,
+    TransferTree tree, {
     required String message,
-    required Future<void> Function(String commitSha, GitHubCanvasTracking tracking) beforeRefUpdate,
-    GitHubCanvasTracking? tracking,
   }) async {
-    _validateCanvasPath(path);
     if (!isValidGitHubCommitMessage(message)) {
       _invalid('Enter a lowercase Conventional Commit subject of 72 characters or fewer');
     }
-    _validateProject(project);
+    _validateTransferTree(tree);
+
     final token = await _currentToken();
-    await _verifyDestinationAccount(destination, token);
+    await _verifyTransferDestination(destination, token);
     final current = await _snapshot(destination, token.value);
-    _checkTracking(current, tracking);
-    _checkDestinationCollisions(current, path, tracking);
+    _validateTransferOutput(current, tree);
 
-    final parent = _parentPath(path);
-    final oldNames = tracking?.attachmentNames ?? const <String, String>{};
-    final remappings = <String, String>{};
-    final nextAttachmentShas = <String, String>{};
-    final nextAttachmentNames = <String, String>{};
     final changes = <Map<String, Object?>>[];
-    final plannedAttachments = <String, String>{};
-    final attachmentBytesByPath = <String, Uint8List>{};
-    final existingAttachmentEntries = <String, GitHubTreeEntry>{};
-
-    for (final localPath in project.attachments.keys.toList()..sort()) {
-      var relativePath = oldNames[localPath] ?? localPath;
-      if (!attachmentPathPattern.hasMatch(relativePath)) _invalid('Invalid tracked attachment mapping');
-      var remotePath = _joinPath(parent, relativePath);
-      var entry = current.entries[remotePath];
-      final bytes = project.attachments[localPath]!;
-      _checkFilePathCollisions(current, remotePath, allowExistingFile: entry != null);
-      if (entry != null) {
-        if (!entry.isRegularBlob) _invalid('Attachment destination is not a regular file: $remotePath');
-        final oldBytes = await _fetchBlob(destination, token.value, entry, maximumBytes: attachmentMaximumBytes);
-        if (!_sameBytes(bytes, oldBytes)) {
-          relativePath = _unusedAttachmentName(relativePath, parent, current, nextAttachmentNames.values.toSet());
-          remotePath = _joinPath(parent, relativePath);
-          _checkFilePathCollisions(current, remotePath, allowExistingFile: false);
-          entry = null;
-        }
-      }
-      final previousLocalPath = plannedAttachments[remotePath];
-      if (previousLocalPath != null) {
-        if (_sameBytes(bytes, project.attachments[previousLocalPath]!)) {
-          remappings[localPath] = relativePath;
-          nextAttachmentNames[localPath] = relativePath;
-          continue;
-        }
-        relativePath = _unusedAttachmentName(relativePath, parent, current, nextAttachmentNames.values.toSet());
-        remotePath = _joinPath(parent, relativePath);
-        _checkFilePathCollisions(current, remotePath, allowExistingFile: false);
-        entry = null;
-      }
-      plannedAttachments[remotePath] = localPath;
-      attachmentBytesByPath[remotePath] = bytes;
-      if (entry != null) existingAttachmentEntries[remotePath] = entry;
-      remappings[localPath] = relativePath;
-      nextAttachmentNames[localPath] = relativePath;
-    }
-
-    final outgoingDocument = rebaseCanvasDocumentAttachments(project.document, remappings);
-    final documentBytes = encodeRemoteCanvasDocument(outgoingDocument);
-    final attachmentBytes = project.attachments.values.fold<int>(0, (total, bytes) => total + bytes.length);
-    if (documentBytes.length > _maximumGitHubBlobBytes) {
-      _invalid("Canvas document exceeds GitHub's 100 MiB blob limit");
-    }
-    if (documentBytes.length > canvasProjectMaximumBytes - attachmentBytes) _invalid('Canvas exceeds 140 MiB');
-
-    for (final remotePath in attachmentBytesByPath.keys.toList()..sort()) {
-      final existing = existingAttachmentEntries[remotePath];
-      if (existing != null) {
-        nextAttachmentShas[remotePath] = existing.sha;
-      } else {
-        final sha = await _createBlob(destination, token.value, attachmentBytesByPath[remotePath]!);
-        changes.add(_treeBlob(remotePath, sha));
-        nextAttachmentShas[remotePath] = sha;
-      }
-    }
-
-    final documentEntry = current.entries[path];
-    var documentSha = '';
-    if (documentEntry != null) {
-      if (!documentEntry.isRegularBlob) _conflict('Canvas path is occupied by an unsupported Git object', path);
-      final oldBytes = await _fetchBlob(destination, token.value, documentEntry, maximumBytes: _maximumGitHubBlobBytes);
-      if (_sameBytes(documentBytes, oldBytes)) {
-        documentSha = documentEntry.sha;
-      } else {
-        documentSha = await _createBlob(destination, token.value, documentBytes);
-        changes.add(_treeBlob(path, documentSha, mode: documentEntry.mode));
-      }
-    } else {
-      documentSha = await _createBlob(destination, token.value, documentBytes);
-      changes.add(_treeBlob(path, documentSha));
-    }
-
-    if (tracking != null && tracking.path != path) {
-      changes.add({'path': tracking.path, 'mode': current.entries[tracking.path]!.mode, 'type': 'blob', 'sha': null});
-    }
-    final nextTracking = GitHubCanvasTracking(
-      path: path,
-      documentSha: documentSha,
-      attachmentShas: nextAttachmentShas,
-      attachmentNames: nextAttachmentNames,
-    );
-    final branchUrl = _branchUrl(destination);
-    if (changes.isEmpty) {
-      return GitHubCommitResult(noChanges: true, commitSha: null, url: branchUrl, tracking: nextTracking);
+    for (final path in tree.files.keys.toList()..sort()) {
+      final sha = await _createBlob(destination, token.value, tree.files[path]!);
+      changes.add(_treeBlob(path, sha));
     }
 
     final treeResponse = await _githubRequest(
@@ -445,8 +245,8 @@ final class GitHubApi {
       token: token.value,
       body: {'base_tree': current.treeSha, 'tree': changes},
     );
-    final tree = _decodeObject(treeResponse.bodyBytes, 'Invalid GitHub tree response');
-    final treeSha = _requiredSha(tree['sha'], 'Invalid GitHub tree response');
+    final createdTree = _decodeObject(treeResponse.bodyBytes, 'Invalid GitHub tree response');
+    final treeSha = _requiredSha(createdTree['sha'], 'Invalid GitHub tree response');
     final commitResponse = await _githubRequest(
       'POST',
       _repoUri(destination, ['git', 'commits']),
@@ -462,7 +262,6 @@ final class GitHubApi {
     final htmlUrl = commit['html_url'];
     final commitUrl = htmlUrl is String ? htmlUrl : _commitUrl(destination, commitSha);
 
-    await beforeRefUpdate(commitSha, nextTracking);
     late final http.Response refResponse;
     try {
       refResponse = await _githubRequest(
@@ -476,20 +275,20 @@ final class GitHubApi {
       if (error.kind == GitHubErrorKind.network ||
           error.kind == GitHubErrorKind.server ||
           error.kind == GitHubErrorKind.invalidData) {
-        throw GitHubUnconfirmedCommit(commitSha: commitSha, url: branchUrl, tracking: nextTracking);
+        throw GitHubUnconfirmedCommit(sha: commitSha, url: commitUrl);
       }
       rethrow;
     }
     if (refResponse.statusCode < 200 || refResponse.statusCode >= 300) {
       if (refResponse.statusCode >= 500) {
-        throw GitHubUnconfirmedCommit(commitSha: commitSha, url: branchUrl, tracking: nextTracking);
+        throw GitHubUnconfirmedCommit(sha: commitSha, url: commitUrl);
       }
       if (refResponse.statusCode == 409 || refResponse.statusCode == 422) {
-        _conflict('The branch changed or rejected this commit. Reopen the remote canvas before trying again.', path);
+        _conflict('The branch changed or rejected this commit. Choose the repository again before trying again.');
       }
       _throwResponse(refResponse);
     }
-    return GitHubCommitResult(noChanges: false, commitSha: commitSha, url: commitUrl, tracking: nextTracking);
+    return GitHubCommitResult(commitSha: commitSha, url: commitUrl);
   }
 
   Future<GitHubSnapshot> _snapshot(GitHubDestination destination, String token) async {
@@ -546,22 +345,23 @@ final class GitHubApi {
     String token,
     GitHubTreeEntry entry, {
     required int maximumBytes,
+    int? maximumResponseBytes,
   }) async {
     if (!entry.isRegularBlob) _invalid('Unsupported Git object: ${entry.path}');
     final declaredSize = entry.size;
     if (declaredSize == null) _invalid('GitHub did not declare a size for ${entry.path}');
     if (declaredSize > maximumBytes) _invalid('File exceeds its size limit: ${entry.path}');
-    final maximumResponseBytes = _maximumBase64JsonBytes(maximumBytes);
+    final responseLimit = maximumResponseBytes ?? _maximumBase64JsonBytes(maximumBytes);
     final response = await _githubRequest(
       'GET',
       _repoUri(destination, ['git', 'blobs', entry.sha]),
       token: token,
-      maximumResponseBytes: maximumResponseBytes,
+      maximumResponseBytes: responseLimit,
     );
     final blob = _decodeObject(
       response.bodyBytes,
       'Invalid GitHub blob response',
-      maximumBytes: maximumResponseBytes,
+      maximumBytes: responseLimit,
     );
     final blobSize = blob['size'];
     final content = blob['content'];
@@ -623,7 +423,10 @@ final class GitHubApi {
     return GitHubAccount(id: id, login: login);
   }
 
-  Future<void> _verifyDestinationAccount(GitHubDestination destination, ({String value, String? scope}) token) async {
+  Future<void> _verifyTransferDestination(
+    GitHubDestination destination,
+    ({String value, String? scope}) token,
+  ) async {
     _validateDestination(destination);
     final account = await _accountWithToken(token);
     if (account.id != destination.accountId) {
@@ -637,13 +440,159 @@ final class GitHubApi {
       _apiUri(['repos', destination.owner, destination.repository]),
       token: token.value,
     );
-    final repositoryId = _decodeObject(response.bodyBytes, 'Invalid GitHub repository response')['id'];
-    if (repositoryId is! int || repositoryId <= 0) _invalid('Invalid GitHub repository response');
-    if (repositoryId != destination.repositoryId) {
+    final repository = _decodeObject(response.bodyBytes, 'Invalid GitHub repository response');
+    final id = repository['id'];
+    final defaultBranch = repository['default_branch'];
+    if (id is! int || id <= 0 || defaultBranch is! String || !_validBranch(defaultBranch)) {
+      _invalid('Invalid GitHub repository response');
+    }
+    if (id != destination.repositoryId) {
       throw const GitHubApiException(
         'Repository identity changed. Choose the repository again before transferring.',
         kind: GitHubErrorKind.invalidData,
       );
+    }
+    if (defaultBranch != destination.branch) {
+      throw const GitHubApiException(
+        'The repository default branch changed. Choose the repository again before transferring.',
+        kind: GitHubErrorKind.invalidData,
+      );
+    }
+  }
+
+  List<TransferEntry> _transferEntries(GitHubSnapshot snapshot) {
+    final result = <TransferEntry>[];
+    var declaredTotal = 0;
+    for (final entry in snapshot.entries.values) {
+      if (!_isSafeRepoPath(entry.path)) _invalid('Invalid GitHub tree path');
+      try {
+        validateTransferPath(entry.path);
+      } on FormatException {
+        _invalid('Invalid GitHub tree path');
+      }
+      if (entry.isDirectory) {
+        if (entry.size != null && entry.size != 0) _invalid('Invalid GitHub tree directory metadata');
+        result.add(TransferEntry(path: entry.path, kind: TransferEntryKind.directory, size: entry.size));
+        continue;
+      }
+      if (!entry.isRegularBlob) _invalid('Unsupported Git object: ${entry.path}');
+
+      final size = entry.size;
+      final isGitMetadata = entry.path.split('/').contains('.git');
+      if (size == null && !isGitMetadata) _invalid('GitHub did not declare a size for ${entry.path}');
+      if (size != null) {
+        if (size > _maximumGitHubBlobBytes) _invalid("File exceeds GitHub's 100 MiB blob limit: ${entry.path}");
+        if (_isRepositoryAttachmentPath(entry.path) && size > attachmentMaximumBytes) {
+          _invalid('Attachment exceeds 10 MiB: ${entry.path}');
+        }
+        if (size > canvasTransferMaximumBytes - declaredTotal) _invalid('Repository exceeds 140 MiB');
+        declaredTotal += size;
+      }
+      result.add(TransferEntry(path: entry.path, kind: TransferEntryKind.regularFile, size: size));
+    }
+
+    try {
+      validateTransferEntries(result);
+    } on FormatException {
+      _invalid('Invalid GitHub repository tree');
+    }
+    return List.unmodifiable(result);
+  }
+
+  Future<Uint8List> _readTransferBlob(
+    GitHubDestination destination,
+    String token,
+    Map<String, GitHubTreeEntry> entries,
+    String path,
+  ) async {
+    final entry = entries[path];
+    final isImage = _isTransferAttachmentPath(path);
+    if (entry == null || !entry.isRegularBlob || (!isImage && !_isTransferDocumentPath(path))) {
+      _invalid('Unsupported GitHub transfer read');
+    }
+    final bytes = await _fetchBlob(
+      destination,
+      token,
+      entry,
+      maximumBytes: isImage ? attachmentMaximumBytes : _maximumGitHubBlobBytes,
+      maximumResponseBytes: _maximumBase64JsonBytes(
+        entry.size ?? (isImage ? attachmentMaximumBytes : _maximumGitHubBlobBytes),
+      ),
+    );
+    return Uint8List.fromList(bytes).asUnmodifiableView();
+  }
+
+  void _validateTransferTree(TransferTree tree) {
+    try {
+      validateTransferEntries([
+        for (final path in tree.files.keys) TransferEntry(path: path, kind: TransferEntryKind.regularFile),
+        for (final path in tree.directories) TransferEntry(path: path, kind: TransferEntryKind.directory),
+      ]);
+    } on FormatException {
+      _invalid('Invalid transfer tree');
+    }
+
+    if (tree.directories.any(
+      (path) => path.split('/').any((segment) => segment == 'attachments' || segment == '.git'),
+    )) {
+      _invalid('Reserved transfer directory');
+    }
+
+    var total = 0;
+    for (final entry in tree.files.entries) {
+      final path = entry.key;
+      final isDocument = _isTransferDocumentPath(path);
+      final isImage = _isTransferAttachmentPath(path);
+      if ((!isDocument && !isImage) || path.split('/').contains('.git')) {
+        _invalid('Unsupported transfer output path: $path');
+      }
+      if (isImage && entry.value.length > attachmentMaximumBytes) {
+        _invalid('Attachment exceeds 10 MiB: $path');
+      }
+      if (entry.value.length > _maximumGitHubBlobBytes) {
+        _invalid("File exceeds GitHub's 100 MiB blob limit: $path");
+      }
+      if (entry.value.length > canvasTransferMaximumBytes - total) _invalid('Transfer exceeds 140 MiB');
+      total += entry.value.length;
+    }
+  }
+
+  void _validateTransferOutput(GitHubSnapshot snapshot, TransferTree tree) {
+    final requiredDirectories = <String>{};
+    for (final path in tree.files.keys) {
+      var parent = _parentPath(path);
+      while (parent.isNotEmpty) {
+        requiredDirectories.add(parent);
+        parent = _parentPath(parent);
+      }
+      if (_isTransferDocumentPath(path)) {
+        final attachments = _joinPath(_parentPath(path), 'attachments');
+        requiredDirectories.add(attachments);
+        parent = _parentPath(attachments);
+        while (parent.isNotEmpty) {
+          requiredDirectories.add(parent);
+          parent = _parentPath(parent);
+        }
+      }
+    }
+
+    for (final path in requiredDirectories.toList()..sort()) {
+      final existing = snapshot.entries[path];
+      if (existing != null && !existing.isDirectory) {
+        _conflict('A repository file blocks a required directory', path);
+      }
+    }
+
+    for (final path in tree.files.keys.toList()..sort()) {
+      final existing = snapshot.entries[path];
+      if (existing != null && !existing.isRegularBlob) {
+        _conflict('A repository object occupies this output path', path);
+      }
+      for (final remote in snapshot.entries.values) {
+        if (_isAncestorPath(path, remote.path)) {
+          _conflict('The output path blocks existing repository content', remote.path);
+        }
+      }
     }
   }
 
@@ -778,9 +727,6 @@ final class GitHubApi {
   Uri _refUpdateUri(GitHubDestination destination) =>
       _repoUri(destination, ['git', 'refs', 'heads', ...destination.branch.split('/')]);
 
-  String _branchUrl(GitHubDestination destination) =>
-      'https://github.com/${Uri.encodeComponent(destination.owner)}/${Uri.encodeComponent(destination.repository)}/tree/${destination.branch.split('/').map(Uri.encodeComponent).join('/')}';
-
   String _commitUrl(GitHubDestination destination, String sha) =>
       'https://github.com/${Uri.encodeComponent(destination.owner)}/${Uri.encodeComponent(destination.repository)}/commit/$sha';
 
@@ -790,100 +736,6 @@ final class GitHubApi {
     'type': 'blob',
     'sha': sha,
   };
-
-  void _checkTracking(GitHubSnapshot snapshot, GitHubCanvasTracking? tracking) {
-    if (tracking == null) return;
-    _validateCanvasPath(tracking.path);
-    final document = snapshot.entries[tracking.path];
-    if (document == null || !document.isRegularBlob || document.sha != tracking.documentSha) {
-      _conflict('The linked canvas changed remotely. Reopen it before committing.', tracking.path);
-    }
-    for (final entry in tracking.attachmentShas.entries) {
-      if (!_isSafeRepoPath(entry.key)) _invalid('Invalid tracked attachment path');
-      final remote = snapshot.entries[entry.key];
-      if (remote == null || !remote.isRegularBlob || remote.sha != entry.value) {
-        _conflict('A linked attachment changed remotely. Reopen the canvas before committing.', entry.key);
-      }
-    }
-    for (final entry in tracking.attachmentNames.entries) {
-      if (!attachmentPathPattern.hasMatch(entry.key) || !attachmentPathPattern.hasMatch(entry.value)) {
-        _invalid('Invalid tracked attachment mapping');
-      }
-    }
-  }
-
-  void _validateTracking(GitHubCanvasTracking tracking) {
-    _validateCanvasPath(tracking.path);
-    if (!_isSha(tracking.documentSha)) _invalid('Invalid tracked document SHA');
-    final mappedPaths = <String>{};
-    for (final entry in tracking.attachmentNames.entries) {
-      if (!attachmentPathPattern.hasMatch(entry.key) || !attachmentPathPattern.hasMatch(entry.value)) {
-        _invalid('Invalid tracked attachment mapping');
-      }
-      mappedPaths.add(_joinPath(_parentPath(tracking.path), entry.value));
-    }
-    for (final entry in tracking.attachmentShas.entries) {
-      if (!_isSafeRepoPath(entry.key) || !_isSha(entry.value)) _invalid('Invalid tracked attachment SHA');
-    }
-    if (mappedPaths.length != tracking.attachmentShas.length ||
-        !mappedPaths.containsAll(tracking.attachmentShas.keys)) {
-      _invalid('Tracked attachment mappings do not match their blobs');
-    }
-  }
-
-  bool _matchesTracking(GitHubSnapshot snapshot, GitHubCanvasTracking tracking) {
-    final document = snapshot.entries[tracking.path];
-    if (document == null || !document.isRegularBlob || document.sha != tracking.documentSha) return false;
-    return tracking.attachmentShas.entries.every((entry) {
-      final remote = snapshot.entries[entry.key];
-      return remote != null && remote.isRegularBlob && remote.sha == entry.value;
-    });
-  }
-
-  void _checkDestinationCollisions(GitHubSnapshot snapshot, String path, GitHubCanvasTracking? tracking) {
-    final isUpdatingInPlace = tracking != null && tracking.path == path;
-    if (!isUpdatingInPlace && snapshot.entries.containsKey(path)) {
-      _conflict('The canvas destination is already occupied', path);
-    }
-    for (final entry in snapshot.entries.values) {
-      if (entry.path == path && isUpdatingInPlace) continue;
-      if (_isAncestorPath(entry.path, path) && entry.type != 'tree') {
-        _conflict('A repository file blocks the canvas destination', entry.path);
-      }
-      if (_isAncestorPath(path, entry.path)) {
-        _conflict('The canvas destination blocks existing repository content', entry.path);
-      }
-    }
-    final attachmentsDir = _joinPath(_parentPath(path), 'attachments');
-    final attachmentDirEntry = snapshot.entries[attachmentsDir];
-    if (attachmentDirEntry != null && attachmentDirEntry.type != 'tree' && attachmentDirEntry.path != path) {
-      _conflict('A repository file occupies the reserved attachments directory', attachmentsDir);
-    }
-  }
-
-  void _checkFilePathCollisions(GitHubSnapshot snapshot, String path, {required bool allowExistingFile}) {
-    for (final entry in snapshot.entries.values) {
-      if (entry.path == path) {
-        if (!allowExistingFile || entry.type != 'blob') _conflict('A repository object occupies this file path', path);
-      } else if ((_isAncestorPath(entry.path, path) && entry.type != 'tree') || _isAncestorPath(path, entry.path)) {
-        _conflict('A repository file or directory blocks this path', entry.path);
-      }
-    }
-  }
-
-  void _validateProject(CanvasProject project) {
-    final referenced = canvasAttachmentPaths(project.document);
-    if (referenced.length != project.attachments.length || !referenced.containsAll(project.attachments.keys)) {
-      _invalid('Canvas attachments do not match the document');
-    }
-    var total = 0;
-    for (final entry in project.attachments.entries) {
-      if (!attachmentPathPattern.hasMatch(entry.key)) _invalid('Invalid local attachment path');
-      if (entry.value.length > attachmentMaximumBytes) _invalid('Canvas attachment exceeds 10 MiB: ${entry.key}');
-      total += entry.value.length;
-    }
-    if (total > canvasProjectMaximumBytes) _invalid('Canvas exceeds 140 MiB');
-  }
 
   void _requireRepoScope(String? tokenScope, String? githubScope) {
     for (final scope in [tokenScope, githubScope]) {
@@ -949,14 +801,6 @@ final class GitHubApi {
     );
   }
 
-  bool _sameBytes(List<int> left, List<int> right) {
-    if (left.length != right.length) return false;
-    for (var i = 0; i < left.length; i++) {
-      if (left[i] != right[i]) return false;
-    }
-    return true;
-  }
-
   int _maximumBase64JsonBytes(int maximumBytes) {
     final encodedBytes = ((maximumBytes + 2) ~/ 3) * 4;
     final wrappedLines = encodedBytes ~/ 60;
@@ -985,28 +829,28 @@ final class GitHubApi {
     return output.takeBytes();
   }
 
-  String _freshAttachmentName(String oldPath, Set<String> reserved) {
-    final extension = oldPath.substring(oldPath.lastIndexOf('.') + 1);
-    String path;
-    do {
-      path = 'attachments/${const Uuid().v4()}.$extension';
-    } while (reserved.contains(path));
-    return path;
-  }
-
-  String _unusedAttachmentName(String oldPath, String parent, GitHubSnapshot snapshot, Set<String> reserved) {
-    String candidate;
-    do {
-      candidate = _freshAttachmentName(oldPath, reserved);
-    } while (snapshot.entries.containsKey(_joinPath(parent, candidate)) || reserved.contains(candidate));
-    return candidate;
-  }
-
   String _parentPath(String path) => path.contains('/') ? path.substring(0, path.lastIndexOf('/')) : '';
 
   String _joinPath(String parent, String relative) => parent.isEmpty ? relative : '$parent/$relative';
 
   bool _isAncestorPath(String ancestor, String child) => child.startsWith('$ancestor/');
+
+  bool _isRepositoryAttachmentPath(String path) {
+    final segments = path.split('/');
+    return segments.length >= 2 && attachmentPathPattern.hasMatch(segments.skip(segments.length - 2).join('/'));
+  }
+
+  bool _isTransferAttachmentPath(String path) {
+    final segments = path.split('/');
+    return _isRepositoryAttachmentPath(path) &&
+        !segments.take(segments.length - 2).any((segment) => segment == 'attachments' || segment == '.git');
+  }
+
+  bool _isTransferDocumentPath(String path) {
+    final segments = path.split('/');
+    return path.endsWith('.canvas.json') &&
+        !segments.take(segments.length - 1).any((segment) => segment == 'attachments' || segment == '.git');
+  }
 
   bool _isSafeRepoPath(String path) =>
       path.isNotEmpty &&
@@ -1021,13 +865,6 @@ final class GitHubApi {
                 segment != '..' &&
                 !segment.contains(RegExp(r'[\x00-\x1f\x7f-\x9f]')),
           );
-
-  void _validateCanvasPath(String path) {
-    if (!_isSafeRepoPath(path) || !path.endsWith('.canvas')) _invalid('Canvas path is invalid');
-    if (path.split('/').take(path.split('/').length - 1).any((segment) => segment == 'attachments')) {
-      _invalid('Canvas paths cannot be inside the reserved attachments directory');
-    }
-  }
 
   bool _validRepositoryName(String name) => RegExp(r'^[A-Za-z0-9_.-]+$').hasMatch(name) && name != '.' && name != '..';
 
@@ -1082,4 +919,17 @@ final class GitHubApi {
 
 final class _ResponseTooLarge implements Exception {
   const _ResponseTooLarge();
+}
+
+final class _GitHubTransferSource implements TransferSource {
+  _GitHubTransferSource(List<TransferEntry> entries, this._read) : _entries = List.unmodifiable(entries);
+
+  final List<TransferEntry> _entries;
+  final Future<Uint8List> Function(String path) _read;
+
+  @override
+  Future<List<TransferEntry>> entries() async => _entries;
+
+  @override
+  Future<Uint8List> read(String path) => _read(path);
 }

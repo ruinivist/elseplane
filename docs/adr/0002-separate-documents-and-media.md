@@ -1,8 +1,14 @@
 # Store canvas documents separately from media
 
-Status: accepted
+Status: accepted; transfer and replacement-import portions superseded by ADR 0005
 
 Date: 2026-11-05
+
+The transfer-format and replacement-import decisions below were superseded by
+accepted [ADR 0005](0005-folder-based-canvas-transfers.md) on 2026-11-11. This
+ADR remains authoritative for separating document JSON from media bytes,
+canvas-relative references, rejecting base64 canvas documents, and its
+trust-boundary validation rationale.
 
 ## Context
 
@@ -16,8 +22,9 @@ Canvas values are JSON. Media stays in separate, byte-identical files at
 canvas-relative `attachments/<uuid>.<extension>` paths. These are the portable
 document and single-canvas archive paths. The accepted [attachment storage
 decision](0006-path-aware-attachment-store.md) distinguishes them from full
-root-relative storage keys; existing callers still use root-level keys until
-they explicitly adopt canvas-directory context.
+root-relative storage keys. At this ADR's original baseline callers used
+root-level keys; parent-aware adoption was later accepted by ADR 0005 and is
+implemented. The portable document reference remains canvas-relative.
 
 A single-canvas download is `canvas.elseplane.zip` with the `application/zip`
 media type. The ZIP is a transport container, not a conceptual canvas document
@@ -51,8 +58,14 @@ for each storage provider would make transfers depend on the provider.
 
 ## Consequences
 
-Canvas transfers require ZIP validation and attachment staging, while the
-whole-library archive remains unchanged. Existing base64 JSON canvas exports
-and imports are not supported. This decision does not guarantee streaming or
-lower memory use. A future provider can use the same logical paths without
-changing the transfer format.
+The original canvas-transfer format, attachment-staging workflow, and unchanged
+whole-library archive consequence are superseded by ADR 0005 and its accepted
+specification. The enduring consequences are that base64 JSON canvas transfers
+are unsupported, document and media bytes remain separate, and a transfer
+container does not promise streaming or lower memory use.
+
+## Superseded by
+
+[ADR 0005](0005-folder-based-canvas-transfers.md) supersedes only this ADR's
+transfer-layout and replacement-import portions. It does not supersede the
+document/media separation or validation rationale above.

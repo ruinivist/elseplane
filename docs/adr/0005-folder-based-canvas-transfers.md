@@ -1,8 +1,8 @@
 # Use folder-based canvas transfers
 
-Status: proposed
+Status: accepted
 
-Date: 2026-11-10
+Date: 2026-11-11
 
 ## Context
 
@@ -10,18 +10,19 @@ Canvas ZIP export, library ZIP backup, and GitHub canvas transfer currently use
 different path layouts and import rules. Canvas projects store one
 `document.json`; library archives wrap documents under `library/`; GitHub stores
 one `.canvas` file and keeps per-canvas content baselines and pending-write
-state. The current implementation and the limits of the accepted storage
-foundation are recorded in the [current evidence table](../arch/folder-based-canvas-transfers-design.md#current-evidence).
+state. The pre-implementation behavior and the limits of the accepted storage
+foundation are recorded in the [historical evidence table](../arch/folder-based-canvas-transfers-design.md#pre-implementation-evidence).
 
-The accepted [document and media ADR 0002](0002-separate-documents-and-media.md),
+Before this decision, the accepted [document and media ADR 0002](0002-separate-documents-and-media.md),
 [persistence contract](../arch/persistence.md), and
-[interaction model](../specs/interaction-model.md) define different current
-formats, replacement behavior, and single-canvas GitHub workflows. This ADR is
-only a proposal. It does not silently change those accepted contracts.
+[interaction model](../specs/interaction-model.md) defined different transfer
+formats, replacement behavior, and single-canvas GitHub workflows. This ADR
+accepts the replacement transfer behavior and partially supersedes ADR 0002 as
+described below; document/media separation remains in force.
 
 ## Decision
 
-Propose one provider-independent, root-relative folder tree for current-canvas
+Use one provider-independent, root-relative folder tree for current-canvas
 exports, whole-library backups, ZIP imports, and manual GitHub checkpoints.
 Local input is a standalone `.canvas.json` file or ZIP; local tree exports use
 ZIP. The tree stores direct versioned `CanvasDocument` JSON as
@@ -100,9 +101,12 @@ string for each editor context and passes it to media, text-resource, clipboard,
 and upload workflows; the shared codec resolves references from the captured
 canvas path. Each asynchronous read or write captures its full key before an
 await and keeps that exact key through completion and cleanup. Full keys are
-cache identities. ADR 0006 accepted nested byte-store keys only. Current callers
-still use root-level keys until implementation; this proposal does not claim
-caller adoption is already implemented.
+cache identities. ADR 0006 accepted nested byte-store keys only; this ADR
+accepts their parent-aware use by callers. That caller adoption is implemented.
+The pre-implementation state at baseline `1c4839a` is documented in the
+[design's historical evidence](../arch/folder-based-canvas-transfers-design.md#pre-implementation-evidence).
+Final demo conversion, obsolete-path removal, automated checks, and required
+reviews remain in the [active plan](../plans/folder-based-canvas-transfers.md).
 
 ## Hierarchy changes and clipboard
 
@@ -161,7 +165,7 @@ history reset for an unchanged editor.
 
 ## Existing local data prerequisite
 
-The proposed MVP uses only the new nested layout. It has no migration, fallback,
+The MVP uses only the new nested layout. It has no migration, fallback,
 dual-layout branch, persisted mode, detection code, or reset behavior. Existing
 root-canvas keys such as `attachments/<uuid>.<ext>` remain valid at the same
 root path; the new model must not reinterpret them by adding a folder prefix or
@@ -175,14 +179,14 @@ does not authorize automatic deletion by the app.
 - Keep separate per-provider formats: rejected because the same library content
   has different representations and validation rules across canvas, library,
   and GitHub transfers.
-- Keep GitHub baseline and pending-write state: rejected for the proposed
+- Keep GitHub baseline and pending-write state: rejected for the accepted
   overwrite checkpoint model; remote content comparison and recovery UI are
   outside its scope.
 - Stage every import image at a fresh path and roll back on failure: rejected
   because changing the supplied identity breaks shared full-path references,
   while restoring overwritten published bytes would require a staging tree,
   version pointers, or a rollback system. Those mechanisms are outside this
-  proposal. Best-effort local writes instead report confirmed writes and identify
+  decision. Best-effort local writes instead report confirmed writes and identify
   the failed image key, which may have effects; bounded byte counts do not
   guarantee valid image content.
 - Decode corrupt image bytes: rejected because transfers preserve bytes; image
@@ -195,31 +199,28 @@ does not authorize automatic deletion by the app.
 
 ## Consequences
 
-On acceptance, this ADR supersedes the transfer-layout and replacement-import
-portions of ADR 0002, including the stated unchanged whole-library ZIP layout.
-It does not supersede the separation of document JSON from image bytes, the
-rejection of base64 canvas documents, or trust-boundary validation and size
-limits.
+This ADR supersedes the transfer-layout and replacement-import portions of ADR
+0002, including the former unchanged whole-library ZIP layout. It does not
+supersede the separation of document JSON from image bytes, the rejection of
+base64 canvas documents, or trust-boundary validation and size limits.
 
-Acceptance also requires explicit alignment of the accepted persistence and
-interaction contracts, which currently require destructive library restore and
-single-canvas GitHub transfers. Until then, those documents remain authoritative.
 There is no compatibility promise for the prior transfer layout: import accepts
-the proposed tree format only. References without supplied image bytes are
+the root-relative tree format only. References without supplied image bytes are
 preserved; an existing destination file at the same full path remains available,
 and an absent one renders missing. Import and GitHub commit writes preserve
 supplied bytes without image-content validation. Import may overwrite a shared
 image; the stricter non-overwriting byte-copy rule applies only to moves and
 clipboard paste. Partial local writes are not rolled back. Empty folders are
 preserved in ZIP archives and cannot be represented in GitHub trees. The
-single-commit GitHub branch update remains unchanged and does not gain local
+single-commit GitHub branch update remains in force and does not gain local
 best-effort cleanup or retry. Folder names `attachments` and `.git` are reserved
 case-sensitively as path segments; their case variants remain ordinary names.
-Serialized canvas path collisions fail with the offending path.
+Serialized canvas path collisions fail with the offending path. The accepted
+interaction and persistence contracts now describe these rules; final
+integration and verification are tracked in the active plan.
 
 ## Supersedes or superseded by
 
-If accepted, supersedes the transfer-format and replacement-import portions of
-[ADR 0002](0002-separate-documents-and-media.md). It does not currently
-supersede any accepted document; no authority changes until explicit
-acceptance.
+Supersedes the transfer-format and replacement-import portions of
+[ADR 0002](0002-separate-documents-and-media.md). Document/media separation,
+relative references, and the associated validation rationale remain accepted.

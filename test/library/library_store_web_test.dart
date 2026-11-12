@@ -12,7 +12,8 @@ import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/github_metadata.dart';
 import 'package:elseplane/library/library_store.dart';
-import 'package:elseplane/library/transfer/canvas_library_archive.dart';
+import 'package:elseplane/library/transfer/canvas_transfer.dart';
+import 'package:elseplane/library/transfer/canvas_transfer_zip.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
@@ -112,19 +113,7 @@ void main() {
     expect(restoredLibrary.current.document!.toJson(), library.current.document!.toJson());
   });
 
-  test('persists confirmed and pending GitHub tracking but excludes both from ZIP backup', () async {
-    final tracking = GitHubCanvasTracking(
-      path: 'Notes.canvas',
-      documentSha: 'document-sha',
-      attachmentShas: {'Notes/attachments/image.png': 'blob-sha'},
-      attachmentNames: {'attachments/00000000-0000-4000-8000-000000000000.png': 'attachments/image.png'},
-    );
-    final pending = GitHubCanvasTracking(
-      path: 'Notes-next.canvas',
-      documentSha: 'pending-document-sha',
-      attachmentShas: const {},
-      attachmentNames: const {},
-    );
+  test('persists the GitHub destination without per-canvas tracking', () async {
     final library = CanvasLibrary(
       currentId: 'canvas',
       githubDestination: const GitHubDestination(
@@ -134,96 +123,48 @@ void main() {
         repository: 'repo',
         branch: 'main',
       ),
-      files: [
-        CanvasFile(
-          id: 'canvas',
-          name: 'Notes',
-          document: CanvasLibrary.emptyDocument,
-          githubTracking: tracking,
-          githubPendingTracking: pending,
-        ),
-      ],
+      files: [CanvasFile(id: 'canvas', name: 'Notes', document: CanvasLibrary.emptyDocument)],
     );
 
-    expect(tracking.attachmentShas.clear, throwsUnsupportedError);
-    expect(tracking.attachmentNames.clear, throwsUnsupportedError);
     await PreferencesLibraryStore().save(library);
 
     final restored = (await PreferencesLibraryStore().load())!;
     expect(restored.githubDestination?.toJson(), library.githubDestination!.toJson());
-    expect(restored.current.githubTracking?.toJson(), tracking.toJson());
-    expect(restored.current.githubPendingTracking?.toJson(), pending.toJson());
-    expect(restored.current.githubWriteUnconfirmed, isTrue);
+    expect(restored.current.document?.toJson(), library.current.document?.toJson());
+    expect(restored.current.toJson().keys, isNot(contains('githubTracking')));
+    expect(restored.current.toJson().keys, isNot(contains('githubPendingTracking')));
 
-    final portable = await decodeCanvasLibraryArchive(await encodeCanvasLibraryArchive(library, _EmptyAttachments()));
-    expect(portable.library.githubDestination, isNull);
-    expect(portable.library.current.githubTracking, isNull);
-    expect(portable.library.current.githubPendingTracking, isNull);
-    expect(portable.library.current.githubWriteUnconfirmed, isFalse);
+    final portable = await encodeTransfer(library, _EmptyAttachments(), TransferScope.wholeLibrary);
+    final decoded = await decodeTransfer(ZipTransferSource(encodeTransferZip(portable)));
+    expect(decoded.canvases.keys, {'Notes.canvas.json'});
+    expect(decoded.canvases['Notes.canvas.json']?.toJson(), library.current.document?.toJson());
   });
 
-  test('rejects malformed persisted GitHub metadata', () {
+  test('ignores malformed obsolete per-canvas tracking fields without losing library data', () {
     final initial = CanvasLibrary.initial();
-    final library = initial.toJson();
+    final library = initial.toJson()
+      ..['githubDestination'] = const GitHubDestination(
+        accountId: 1,
+        repositoryId: 2,
+        owner: 'owner',
+        repository: 'repo',
+        branch: 'main',
+      ).toJson();
     final file = initial.current.toJson()
-      ..['githubTracking'] = {
-        'path': 'Canvas.canvas',
-        'documentSha': 'sha',
-        'attachmentShas': <String, Object?>{'attachments/image.png': 3},
-        'attachmentNames': <String, String>{},
-      };
+      ..['githubTracking'] = <String, Object?>{'bad': 3}
+      ..['githubPendingTracking'] = 'obsolete malformed data';
     library['files'] = [file];
 
-    expect(() => CanvasLibrary.fromJson(library), throwsFormatException);
-
-    final pendingLibrary = initial.toJson();
-    final pendingFile = initial.current.toJson()
-      ..['githubPendingTracking'] = {
-        'path': 'Canvas.canvas',
-        'documentSha': 'sha',
-        'attachmentShas': <String, Object?>{},
-        'attachmentNames': 3,
-      };
-    pendingLibrary['files'] = [pendingFile];
-    expect(() => CanvasLibrary.fromJson(pendingLibrary), throwsFormatException);
-  });
-
-  test('rejects folder GitHub tracking in either state', () {
-    final tracking = GitHubCanvasTracking(
-      path: 'Notes.canvas',
-      documentSha: 'sha',
-      attachmentShas: const {},
-      attachmentNames: const {},
-    );
-    for (final key in ['githubTracking', 'githubPendingTracking']) {
-      final library = CanvasLibrary.initial().toJson();
-      library['files'] = [
-        {
-          'id': 'folder',
-          'name': 'Folder',
-          'parentId': null,
-          'document': null,
-          key: tracking.toJson(),
-        },
-        (library['files']! as List).single,
-      ];
-      expect(() => CanvasLibrary.fromJson(library), throwsFormatException);
-    }
+    final restored = CanvasLibrary.fromJson(library);
+    expect(restored.files, hasLength(1));
+    expect(restored.current.document?.toJson(), initial.current.document?.toJson());
+    expect(restored.githubDestination?.owner, 'owner');
   });
 
   test('loads library snapshots written before GitHub metadata existed', () {
     final library = CanvasLibrary.initial().toJson()..remove('githubDestination');
-    for (final file in library['files']! as List<dynamic>) {
-      (file as Map<String, dynamic>)
-        ..remove('githubTracking')
-        ..remove('githubPendingTracking')
-        ..remove('githubWriteUnconfirmed');
-    }
-
     final restored = CanvasLibrary.fromJson(library);
     expect(restored.githubDestination, isNull);
-    expect(restored.current.githubTracking, isNull);
-    expect(restored.current.githubWriteUnconfirmed, isFalse);
   });
 }
 

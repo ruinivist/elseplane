@@ -1104,7 +1104,7 @@ void main() {
     final controller = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
     final urlPanelSize = controller.getInfo(model.data.id).childSize;
     final bytes = onePixelPngBytes;
-    await tester.runAsync(() => model.setDeviceImage(bytes, 'PNG'));
+    await tester.runAsync(() => model.setDeviceImage(bytes, 'PNG', canvasDirectory: model.canvasDirectory));
     await tester.pumpAndSettle();
 
     expect(model.data.url, matches(attachmentPathPattern));

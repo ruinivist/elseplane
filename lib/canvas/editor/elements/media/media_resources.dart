@@ -25,26 +25,32 @@ class MediaResources extends ElementResources<MediaElementData> {
     EditorSession session,
     MediaElementData data,
     this.attachmentStore, {
+    String canvasDirectory = '',
     http.Client? previewClient,
-  }) : _injectedPreviewClient = previewClient,
+  }) : canvasDirectory = canvasDirectory,
+       _injectedPreviewClient = previewClient,
        super(session, data) {
+    validateAttachmentDirectory(canvasDirectory);
     controller = TextEditingController(text: data.url);
     focusNode.addListener(_commitOnFocusLost);
     _loadImage();
   }
 
   final AttachmentStore attachmentStore;
+  String canvasDirectory;
   final http.Client? _injectedPreviewClient;
   http.Client? _ownedPreviewClient;
   late final TextEditingController controller;
   final focusNode = FocusNode();
   final cardFocusNode = FocusNode(debugLabel: 'Media link card');
   ImageProvider<Object>? _image;
+  ImageProvider<Object>? _imageProvider;
   ImageStream? _imageStream;
   ImageStreamListener? _imageListener;
   double? _aspectRatio;
   bool _applyingDeviceImage = false;
   Object? _imageIdentity;
+  String? _imageAttachmentKey;
   Object _previewIdentity = Object();
   bool _previewStarted = false;
   bool _previewFailed = false;
@@ -113,6 +119,8 @@ class MediaResources extends ElementResources<MediaElementData> {
   void applyDeviceImage(Uint8List bytes, double ratio, String path) {
     _detachImage();
     _image = MemoryImage(bytes);
+    _imageProvider = _image;
+    _imageAttachmentKey = resolveAttachmentPath(canvasDirectory, path);
     _aspectRatio = ratio;
     _applyingDeviceImage = true;
     try {
@@ -120,6 +128,18 @@ class MediaResources extends ElementResources<MediaElementData> {
     } finally {
       _applyingDeviceImage = false;
     }
+  }
+
+  void setCanvasDirectory(String directory) {
+    validateAttachmentDirectory(directory);
+    if (canvasDirectory == directory) return;
+    canvasDirectory = directory;
+    if (isCanvasAttachmentReference(data.url)) _loadImage(evictCurrent: true);
+  }
+
+  void invalidateAttachmentPaths(Set<String> paths) {
+    final key = _imageAttachmentKey;
+    if (key != null && paths.contains(key)) _loadImage(evictCurrent: true);
   }
 
   // ---------- Private helpers ----------
@@ -147,14 +167,16 @@ class MediaResources extends ElementResources<MediaElementData> {
     if (!focusNode.hasFocus) commitUrl();
   }
 
-  void _loadImage() {
-    _detachImage();
+  void _loadImage({bool evictCurrent = false}) {
+    _detachImage(evict: evictCurrent);
     final source = data.url;
     if (!isImageMediaSource(source)) return;
     final identity = Object();
     _imageIdentity = identity;
-    if (attachmentPathPattern.hasMatch(source)) {
-      unawaited(_loadAttachment(source, identity));
+    if (isCanvasAttachmentReference(source)) {
+      final fullPath = resolveAttachmentPath(canvasDirectory, source);
+      _imageAttachmentKey = fullPath;
+      unawaited(_loadAttachment(fullPath, identity));
       return;
     }
     final uri = resolveMediaUri(source);
@@ -191,6 +213,7 @@ class MediaResources extends ElementResources<MediaElementData> {
       },
     );
     _image = image;
+    _imageProvider = image;
     _imageStream = stream;
     _imageListener = listener;
     stream.addListener(listener);
@@ -245,15 +268,19 @@ class MediaResources extends ElementResources<MediaElementData> {
     _thumbnailImage = null;
   }
 
-  void _detachImage() {
+  void _detachImage({bool evict = false}) {
+    final provider = _imageProvider;
     final stream = _imageStream;
     final listener = _imageListener;
     if (stream != null && listener != null) stream.removeListener(listener);
     _imageStream = null;
     _imageListener = null;
     _imageIdentity = null;
+    _imageAttachmentKey = null;
     _image = null;
+    _imageProvider = null;
     _aspectRatio = null;
+    if (evict && provider != null) unawaited(provider.evict().then<void>((_) {}));
   }
 
   // ---------- Lifecycle ----------

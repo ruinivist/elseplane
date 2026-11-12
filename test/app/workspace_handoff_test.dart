@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:elseplane/canvas/document/attachment_references.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
@@ -12,7 +13,6 @@ import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_markdown_editor.dart';
 import 'package:elseplane/library/canvas_library.dart';
-import 'package:elseplane/library/transfer/canvas_project.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
 import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:flutter/foundation.dart';
@@ -43,11 +43,11 @@ void main() {
                 ? tester
                       .widget<MediaElementView>(find.byType(MediaElementView))
                       .resources
-                      .setDeviceImage(onePixelPngBytes, 'png')
+                      .setDeviceImage(onePixelPngBytes, 'png', canvasDirectory: '')
                 : tester
                       .widget<TextElementView>(find.byType(TextElementView))
                       .resources
-                      .insertPastedImage(onePixelPngBytes, 'png', attachments);
+                      .insertPastedImage(onePixelPngBytes, 'png', attachments, canvasDirectory: '');
             await attachments.started.future;
           });
           await tester.tap(find.byType(CanvasTitle));
@@ -67,7 +67,7 @@ void main() {
           });
           await tester.pumpAndSettle();
           expect(attachments.files, isEmpty);
-          expect(canvasAttachmentPaths(store.library.file('a').document!), isEmpty);
+          expect(canvasAttachmentPaths(store.library.file('a').document!.elements), isEmpty);
           expect(store.library.file('b').document!.elements, isEmpty);
           expect(tester.takeException(), isNull);
           await tester.pumpWidget(const SizedBox());
@@ -85,7 +85,7 @@ void main() {
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
     late Future<void> upload;
     await tester.runAsync(() async {
-      upload = model.setDeviceImage(onePixelPngBytes, 'png');
+      upload = model.setDeviceImage(onePixelPngBytes, 'png', canvasDirectory: '');
       await attachments.started.future;
     });
     model.focusNode.unfocus();
@@ -107,7 +107,7 @@ void main() {
     final attachments = TestAttachmentStore();
     await pumpCanvas(tester, store, attachmentStore: attachments);
     final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
-    await tester.runAsync(() => model.insertPastedImage(onePixelPngBytes, 'png', attachments));
+    await tester.runAsync(() => model.insertPastedImage(onePixelPngBytes, 'png', attachments, canvasDirectory: ''));
     store.fail = true;
     await tester.tap(find.byType(CanvasTitle));
     await tester.pumpAndSettle();
@@ -118,7 +118,7 @@ void main() {
     await tester.tap(find.byType(CanvasTitle));
     await tester.pumpAndSettle();
     expect(find.byType(CanvasFilePicker), findsOneWidget);
-    expect(canvasAttachmentPaths(store.library.file('a').document!), attachments.files.keys.toSet());
+    expect(canvasAttachmentPaths(store.library.file('a').document!.elements), attachments.files.keys.toSet());
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -274,7 +274,9 @@ void main() {
         expect(reads, 1);
 
         read.complete((
-          text: serialized ? encodeCanvasClipboard(_document().elements) : 'https://example.com/image.png',
+          text: serialized
+              ? encodeCanvasClipboard(_document().elements, sourceDirectory: '')
+              : 'https://example.com/image.png',
           image: null,
         ));
         await tester.pumpAndSettle();

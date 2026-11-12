@@ -73,7 +73,7 @@ class TestAttachmentStore implements AttachmentStore {
 
 class TestProjectFiles implements CanvasProjectFiles {
   @override
-  Future<Uint8List?> open() async => null;
+  Future<({String name, Uint8List bytes})?> open() async => null;
 
   @override
   Future<bool> save(Uint8List bytes, {required String suggestedName, required String mimeType}) async => false;
@@ -238,10 +238,11 @@ Future<void> replaceTestEditor(WidgetTester tester, CanvasDocument document) asy
         attachmentStore: page.attachmentStore,
         libraryPath: page.libraryPath,
         onOpenLibrary: page.onOpenLibrary,
-        onImportCanvas: page.onImportCanvas,
+        onImport: page.onImport,
         onExportCanvas: page.onExportCanvas,
-        onBackupLibrary: page.onBackupLibrary,
-        onRestoreLibrary: page.onRestoreLibrary,
+        onExportLibrary: page.onExportLibrary,
+        canvasDirectory: page.canvasDirectory,
+        onAttachmentInvalidatorChanged: page.onAttachmentInvalidatorChanged,
         readClipboard: page.readClipboard,
         writeClipboardText: page.writeClipboardText,
       ),

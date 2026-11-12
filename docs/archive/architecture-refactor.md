@@ -51,7 +51,11 @@ Document values, enums, and private codec helpers now share one immutable docume
 - Establish `LibraryController` as the library owner and single persistence-queue owner. Make `LibraryStore` an injectable snapshot read/write contract, without a mutable public library.
 - Capture file identity, revision, and immutable content for every save. Keep failures visible and preserve dirty state until its corresponding revision is durable.
 - Move create, rename, move, delete, import, export, backup, and restore orchestration out of canvas/file-picker widgets. Widgets own inline drafts, navigation, focus, and confirmations.
-- Use the [staged import protocol](../arch/persistence.md#staged-import-protocol). Preserve path, byte-size, archive-entry, image, and attachment-reference validation. Attachment preparation must not overwrite bytes reachable from the existing library.
+- Use the staged import protocol recorded at the time (later superseded by
+  [folder-based transfer ADR 0005](../adr/0005-folder-based-canvas-transfers.md)).
+  Preserve path, byte-size, archive-entry, image, and attachment-reference
+  validation. Attachment preparation must not overwrite bytes reachable from
+  the existing library.
 - Let Workspace connect outgoing editor snapshots to the library. Cancel unfinished pastes and uploads, then flush completed edits before switching; failed flushes preserve the open editor and completed data for retry. Navigation never waits for canceled work.
 
 **Exit:** file widgets never write storage directly. Failed saves or transfers preserve current content and existing attachment bytes. Late saves cannot target a subsequently selected file.

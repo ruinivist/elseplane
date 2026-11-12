@@ -4,33 +4,52 @@
 import 'dart:async';
 
 import 'package:elseplane/attachments/attachment_store.dart';
+import 'package:elseplane/canvas/document/attachment_references.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/debug/demo_canvas.dart';
 import 'package:elseplane/library/github_metadata.dart';
 import 'package:elseplane/library/library_store.dart';
-import 'package:elseplane/library/transfer/canvas_library_archive.dart';
-import 'package:elseplane/library/transfer/canvas_project.dart';
 import 'package:elseplane/library/transfer/canvas_project_files.dart';
+import 'package:elseplane/library/transfer/canvas_transfer.dart';
+import 'package:elseplane/library/transfer/canvas_transfer_zip.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+
+const _transferCanvasSuffix = '.canvas.json';
 
 // ---------- Controller ----------
 
 class LibraryController extends ChangeNotifier {
-  LibraryController({required this._store, required this._attachments, required this._files});
+  LibraryController({
+    required LibraryStore store,
+    required AttachmentStore attachments,
+    required CanvasProjectFiles files,
+    this.onAttachmentPathsChanged,
+  }) : // Public names cannot use private initializing formals.
+       // Public named parameters must stay separate from private fields.
+       // ignore: prefer_initializing_formals
+       _store = store,
+       // Public names cannot use private initializing formals.
+       // ignore: prefer_initializing_formals
+       _attachments = attachments,
+       // Public names cannot use private initializing formals.
+       // ignore: prefer_initializing_formals
+       _files = files;
 
   // ---------- State ----------
 
   final LibraryStore _store;
   final AttachmentStore _attachments;
   final CanvasProjectFiles _files;
+  final void Function(Set<String> paths)? onAttachmentPathsChanged;
   late CanvasLibrary _library;
   final _pending = <String, ({int revision, CanvasDocument document})>{};
   final _durableRevisions = <String, int>{};
   Future<void> _queue = Future<void>.value();
   Timer? _saveTimer;
   var _revision = 0;
+  var _changeRevision = 0;
   var _disposed = false;
   Object? _saveError;
   Object _documentToken = Object();
@@ -39,6 +58,7 @@ class LibraryController extends ChangeNotifier {
   bool get isDirty => _pending.isNotEmpty;
   Object? get saveError => _saveError;
   Object get documentToken => _documentToken;
+  int get changeRevision => _changeRevision;
 
   CanvasLibrary get snapshot {
     var result = library;
@@ -52,6 +72,7 @@ class LibraryController extends ChangeNotifier {
 
   Future<void> load() async {
     _library = await _store.load() ?? CanvasLibrary.initial();
+    _changeRevision++;
     _notify();
   }
 
@@ -59,6 +80,7 @@ class LibraryController extends ChangeNotifier {
     if (_disposed) return;
     if (library.file(fileId).isFolder) throw ArgumentError('Cannot save a folder as a canvas');
     _pending[fileId] = (revision: ++_revision, document: document);
+    _changeRevision++;
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 300), () {
       unawaited(
@@ -96,7 +118,7 @@ class LibraryController extends ChangeNotifier {
 
   Future<String?> create(CanvasFile draft, {String? openId}) => _change(() async {
     if (library.files.any((file) => file.id == draft.id)) throw ArgumentError('File already exists');
-    _validateName(draft.name, draft.parentId);
+    _validateName(draft.name, draft.parentId, isFolder: draft.isFolder);
     var next = CanvasLibrary(
       files: [
         ...library.files,
@@ -113,17 +135,17 @@ class LibraryController extends ChangeNotifier {
 
   Future<void> rename(String id, String name, {String? openId}) => _change(() async {
     final file = library.file(id);
-    _validateName(name, file.parentId, exceptId: id);
+    _validateName(name, file.parentId, exceptId: id, isFolder: file.isFolder);
     var next = library.replace(file.copyWith(name: name.trim()));
     if (openId != null) next = next.select(openId);
-    await _persist(next);
+    await _persistHierarchy(next);
   });
 
   Future<void> select(String id) => _change(() => _persist(library.select(id)));
 
   Future<void> move(String id, {required String? parentId, String? beforeId}) => _change(() async {
     final next = library.move(id, parentId: parentId, beforeId: beforeId);
-    if (!identical(next, library)) await _persist(next);
+    if (!identical(next, library)) await _persistHierarchy(next);
   });
 
   Future<String?> delete(String id) => _change(() async {
@@ -144,242 +166,341 @@ class LibraryController extends ChangeNotifier {
     return changed ? currentId : null;
   });
 
-  void _validateName(String name, String? parentId, {String? exceptId}) {
+  void _validateName(String name, String? parentId, {required bool isFolder, String? exceptId}) {
     if (parentId != null && !library.file(parentId).isFolder) throw const FormatException('Choose a folder');
-    final error = library.nameError(name, parentId, exceptId: exceptId);
+    final error = library.nameError(name, parentId, exceptId: exceptId, isFolder: isFolder);
     if (error != null) throw FormatException(error);
   }
 
   Future<void> setGitHubDestination(GitHubDestination destination) => _change(() async {
-    final previous = library.githubDestination;
-    final sameIdentity =
-        previous != null &&
-        previous.accountId == destination.accountId &&
-        previous.repositoryId == destination.repositoryId &&
-        previous.branch == destination.branch;
-    final files = sameIdentity
-        ? library.files
-        : [
-            for (final file in library.files) file.copyWith(githubTracking: null, githubPendingTracking: null),
-          ];
-    await _persist(CanvasLibrary(files: files, currentId: library.currentId, githubDestination: destination));
+    await _persist(CanvasLibrary(files: library.files, currentId: library.currentId, githubDestination: destination));
   });
-
-  Future<void> setGitHubTracking(
-    String fileId,
-    GitHubCanvasTracking? tracking, {
-    GitHubCanvasTracking? pendingTracking,
-  }) => _change(() async {
-    final file = library.file(fileId);
-    if (file.isFolder) throw ArgumentError('Cannot track a folder as a canvas');
-    await _persist(
-      library.replace(
-        file.copyWith(githubTracking: tracking, githubPendingTracking: pendingTracking),
-      ),
-    );
-  });
-
-  Future<String> addGitHubCanvas({
-    required List<String> folders,
-    required String name,
-    required CanvasProject project,
-    required GitHubCanvasTracking tracking,
-    String? clearPendingFileId,
-  }) => _change(() async {
-    [...folders, name].forEach(_validateRemoteSegment);
-
-    final files = library.files.toList();
-    String? parentId;
-    for (final folderName in folders) {
-      final siblings = files.where((file) => file.parentId == parentId && file.name == folderName).toList();
-      if (siblings.length > 1) throw FormatException('Ambiguous folder path: $folderName');
-      if (siblings.isNotEmpty) {
-        final match = siblings.single;
-        if (!match.isFolder) throw FormatException('A canvas blocks the folder $folderName');
-        parentId = match.id;
-      } else {
-        final folder = CanvasFile(id: const Uuid().v4(), name: folderName, parentId: parentId);
-        final error = _nameError(files, folderName, parentId);
-        if (error != null) throw FormatException(error);
-        files.add(folder);
-        parentId = folder.id;
-      }
-    }
-    final nameError = _nameError(files, name, parentId);
-    if (nameError != null) throw FormatException(nameError);
-    if (tracking.attachmentNames.keys.any((path) => !project.attachments.containsKey(path))) {
-      throw const FormatException('GitHub attachment mapping does not match the canvas');
-    }
-    final referenced = canvasAttachmentPaths(project.document);
-    if (referenced.length != project.attachments.length || !referenced.containsAll(project.attachments.keys)) {
-      throw const FormatException('Canvas attachment references do not match the project');
-    }
-
-    final clearFile = clearPendingFileId == null ? null : library.file(clearPendingFileId);
-    if (clearFile?.isFolder ?? false) throw ArgumentError('Cannot clear a folder write guard');
-    final id = const Uuid().v4();
-    await _stage(project.attachments, (replacements) {
-      final rebasedTracking = GitHubCanvasTracking(
-        path: tracking.path,
-        documentSha: tracking.documentSha,
-        attachmentShas: tracking.attachmentShas,
-        attachmentNames: {
-          for (final entry in tracking.attachmentNames.entries) replacements[entry.key]!: entry.value,
-        },
-      );
-      final stagedFile = CanvasFile(
-        id: id,
-        name: name,
-        parentId: parentId,
-        document: rebaseCanvasDocumentAttachments(project.document, replacements),
-        githubTracking: rebasedTracking,
-      );
-      return CanvasLibrary(
-        files: [
-          for (final file in files)
-            if (clearFile != null && file.id == clearFile.id) file.copyWith(githubPendingTracking: null) else file,
-          stagedFile,
-        ],
-        currentId: id,
-        githubDestination: library.githubDestination,
-      );
-    });
-    return id;
-  });
-
-  String? _nameError(List<CanvasFile> files, String name, String? parentId) {
-    if (name.trim().isEmpty) return 'Enter a name';
-    if (files.any(
-      (file) => file.parentId == parentId && file.name == name.trim(),
-    )) {
-      return 'This name is already in use';
-    }
-    return null;
-  }
-
-  void _validateRemoteSegment(String segment) {
-    if (segment.isEmpty ||
-        segment == '.' ||
-        segment == '..' ||
-        segment.contains('/') ||
-        segment.contains(r'\') ||
-        RegExp(r'[\x00-\x1f\x7f-\x9f]').hasMatch(segment)) {
-      throw FormatException('Invalid GitHub path segment: $segment');
-    }
-  }
 
   // ---------- Transfers ----------
 
-  Future<CanvasProject?> readProject() async {
-    final bytes = await _files.open();
-    return bytes == null ? null : await decodeCanvasProject(bytes);
+  Future<TransferSource?> readTransferSource() async {
+    final selected = await _files.open();
+    return selected == null ? null : transferSourceFromFile(name: selected.name, bytes: selected.bytes);
   }
 
-  Future<CanvasLibraryArchive?> readArchive() async {
-    final bytes = await _files.open();
-    return bytes == null ? null : await decodeCanvasLibraryArchive(bytes);
+  Future<TransferMerge> previewTransferImport(TransferImport candidate) async {
+    await flush();
+    final current = library;
+    final preview = _mergeTransferCandidate(current, candidate);
+    preview.library.validatePaths();
+    return TransferMerge(
+      candidate: candidate,
+      expectedChangeRevision: changeRevision,
+      overwritePaths: preview.overwritePaths,
+    );
   }
+
+  Future<TransferImportResult> importTransfer(
+    TransferMerge merge, {
+    required Set<String> confirmedOverwritePaths,
+  }) {
+    final confirmedPaths = Set<String>.of(confirmedOverwritePaths);
+    TransferImportResult result({
+      required List<String> written,
+      required bool saved,
+      TransferFailure? failure,
+    }) => TransferImportResult(
+      skippedCanvases: merge.candidate.skippedCanvases,
+      writtenImagePaths: written,
+      metadataSaved: saved,
+      failure: failure,
+    );
+    return _change(() async {
+      if (changeRevision != merge.expectedChangeRevision) {
+        return result(
+          written: const [],
+          saved: false,
+          failure: const TransferFailure(
+            reason: 'Library changed since preview',
+            stage: TransferFailureStage.preparation,
+          ),
+        );
+      }
+
+      late final _TransferCandidateMerge prepared;
+      late final Map<String, Uint8List> eligibleImages;
+      try {
+        prepared = _mergeTransferCandidate(library, merge.candidate);
+        prepared.library.validatePaths();
+        eligibleImages = _eligibleTransferImages(merge.candidate);
+      } on FormatException {
+        return result(
+          written: const [],
+          saved: false,
+          failure: const TransferFailure(
+            reason: 'Invalid transfer hierarchy',
+            stage: TransferFailureStage.preparation,
+          ),
+        );
+      }
+
+      if (!_samePaths(merge.overwritePaths, prepared.overwritePaths) ||
+          !_samePaths(confirmedPaths, prepared.overwritePaths)) {
+        return result(
+          written: const [],
+          saved: false,
+          failure: const TransferFailure(
+            reason: 'Overwrite confirmation does not match preview',
+            stage: TransferFailureStage.preparation,
+          ),
+        );
+      }
+
+      final written = <String>[];
+      final affected = <String>{};
+      try {
+        for (final path in eligibleImages.keys.toList()..sort()) {
+          affected.add(path);
+          try {
+            await _attachments.write(path, eligibleImages[path]!);
+          } on Object {
+            return result(
+              written: written,
+              saved: false,
+              failure: TransferFailure(
+                reason: 'Image write failed',
+                path: path,
+                stage: TransferFailureStage.imageWrite,
+              ),
+            );
+          }
+          written.add(path);
+        }
+
+        if (changeRevision != merge.expectedChangeRevision) {
+          return result(
+            written: written,
+            saved: false,
+            failure: const TransferFailure(
+              reason: 'Library changed during import',
+              stage: TransferFailureStage.publication,
+            ),
+          );
+        }
+
+        if (!prepared.changed) return result(written: written, saved: false);
+
+        final replacedIds = prepared.overwritePaths
+            .map((path) => prepared.existingCanvasIds[path])
+            .whereType<String>()
+            .toList();
+        final activeOverwritten = prepared.overwritePaths.contains(library.serializedPath(library.currentId));
+        try {
+          await _persist(prepared.library, replaceDocument: activeOverwritten);
+        } on Object {
+          return result(
+            written: written,
+            saved: false,
+            failure: const TransferFailure(
+              reason: 'Library save failed',
+              stage: TransferFailureStage.publication,
+            ),
+          );
+        }
+        _discardPending(replacedIds);
+        return result(written: written, saved: true);
+      } finally {
+        if (affected.isNotEmpty) onAttachmentPathsChanged?.call(Set.unmodifiable(affected));
+      }
+    });
+  }
+
+  _TransferCandidateMerge _mergeTransferCandidate(CanvasLibrary current, TransferImport candidate) {
+    current.validatePaths();
+    final folderIds = <String, String>{};
+    final existingCanvasIds = <String, String>{};
+    for (final file in current.files) {
+      if (file.isFolder) {
+        folderIds[current.path(file.id).map((part) => part.name).join('/')] = file.id;
+      } else {
+        existingCanvasIds[current.serializedPath(file.id)] = file.id;
+      }
+    }
+
+    final directoryPaths = <String>{};
+    void addDirectoryAndParents(String path) {
+      final segments = path.split('/');
+      for (var length = 1; length <= segments.length; length++) {
+        directoryPaths.add(segments.take(length).join('/'));
+      }
+    }
+
+    candidate.directories.forEach(addDirectoryAndParents);
+    for (final path in candidate.canvases.keys) {
+      if (!path.endsWith(_transferCanvasSuffix)) throw FormatException('Invalid canvas path: $path');
+      final segments = path.split('/');
+      if (segments.length > 1) addDirectoryAndParents(segments.take(segments.length - 1).join('/'));
+    }
+
+    final files = current.files.toList();
+    final usedIds = files.map((file) => file.id).toSet();
+    var changed = false;
+    final orderedDirectories = directoryPaths.toList()
+      ..sort((a, b) {
+        final depth = a.split('/').length.compareTo(b.split('/').length);
+        return depth != 0 ? depth : a.compareTo(b);
+      });
+    for (final path in orderedDirectories) {
+      if (folderIds.containsKey(path)) continue;
+      final segments = path.split('/');
+      final parentPath = segments.length == 1 ? '' : segments.take(segments.length - 1).join('/');
+      final parentId = parentPath.isEmpty ? null : folderIds[parentPath];
+      if (parentPath.isNotEmpty && parentId == null) throw FormatException('Invalid folder path: $path');
+      final id = _newLocalId(usedIds);
+      usedIds.add(id);
+      files.add(CanvasFile(id: id, name: segments.last, parentId: parentId));
+      folderIds[path] = id;
+      changed = true;
+    }
+
+    final overwritePaths = <String>{};
+    for (final path in candidate.canvases.keys.toList()..sort()) {
+      final segments = path.split('/');
+      final filename = segments.last;
+      final name = filename.substring(0, filename.length - _transferCanvasSuffix.length);
+      if (name.isEmpty || name.trim().isEmpty) throw FormatException('Invalid canvas path: $path');
+      final parentPath = segments.length == 1 ? '' : segments.take(segments.length - 1).join('/');
+      final parentId = parentPath.isEmpty ? null : folderIds[parentPath];
+      if (parentPath.isNotEmpty && parentId == null) throw FormatException('Invalid canvas path: $path');
+      final existingId = existingCanvasIds[path];
+      if (existingId != null) {
+        final index = files.indexWhere((file) => file.id == existingId);
+        files[index] = files[index].copyWith(document: candidate.canvases[path]);
+        overwritePaths.add(path);
+      } else {
+        final id = _newLocalId(usedIds);
+        usedIds.add(id);
+        files.add(CanvasFile(id: id, name: name, parentId: parentId, document: candidate.canvases[path]));
+      }
+      changed = true;
+    }
+
+    final merged = CanvasLibrary(
+      files: files,
+      currentId: current.currentId,
+      githubDestination: current.githubDestination,
+    );
+    return _TransferCandidateMerge(
+      library: merged,
+      overwritePaths: Set.unmodifiable(overwritePaths),
+      existingCanvasIds: Map.unmodifiable(existingCanvasIds),
+      changed: changed,
+    );
+  }
+
+  Map<String, Uint8List> _eligibleTransferImages(TransferImport candidate) {
+    for (final entry in candidate.attachments.entries) {
+      validateAttachmentPath(entry.key);
+      validateAttachmentSize(entry.value.length, 'Attachment exceeds 10 MiB: ${entry.key}');
+    }
+
+    final referenced = <String>{};
+    for (final entry in candidate.canvases.entries) {
+      final segments = entry.key.split('/');
+      final parent = segments.length == 1 ? '' : segments.take(segments.length - 1).join('/');
+      for (final reference in canvasAttachmentPaths(entry.value.elements)) {
+        referenced.add(resolveAttachmentPath(parent, reference));
+      }
+    }
+    return {
+      for (final entry in candidate.attachments.entries)
+        if (referenced.contains(entry.key)) entry.key: entry.value,
+    };
+  }
+
+  Future<void> _persistHierarchy(CanvasLibrary next) async {
+    final attempted = <String>{};
+    try {
+      await copyAttachmentPaths(
+        _attachments,
+        _hierarchyAttachmentCopies(library, next),
+        beforeWrite: attempted.add,
+      );
+      await _persist(next);
+    } finally {
+      if (attempted.isNotEmpty) onAttachmentPathsChanged?.call(Set.unmodifiable(attempted));
+    }
+  }
+
+  Map<String, String> _hierarchyAttachmentCopies(CanvasLibrary before, CanvasLibrary after) {
+    final copies = <String, String>{};
+    for (final oldCanvas in before.files.where((file) => !file.isFolder)) {
+      final newCanvas = after.files.where((file) => file.id == oldCanvas.id).firstOrNull;
+      if (newCanvas == null || newCanvas.isFolder) continue;
+      final oldParent = before.parentDirectory(oldCanvas.id);
+      final newParent = after.parentDirectory(newCanvas.id);
+      if (oldParent == newParent) continue;
+      for (final reference in canvasAttachmentPaths(oldCanvas.document!.elements)) {
+        final source = resolveAttachmentPath(oldParent, reference);
+        final destination = resolveAttachmentPath(newParent, reference);
+        if (source != destination) copies[source] = destination;
+      }
+    }
+    return copies;
+  }
+
+  String _newLocalId(Set<String> usedIds) {
+    String id;
+    do {
+      id = const Uuid().v4();
+    } while (usedIds.contains(id));
+    return id;
+  }
+
+  bool _samePaths(Set<String> first, Set<String> second) => first.length == second.length && first.containsAll(second);
 
   Future<bool> exportCanvas(String fileId) async {
-    final document = snapshot.file(fileId).document!;
-    final bytes = await encodeCanvasProject(document, _attachments);
+    final captured = snapshot.select(fileId);
+    final tree = await encodeTransfer(captured, _attachments, TransferScope.currentCanvas);
+    final bytes = encodeTransferZip(tree);
     return await _files.save(bytes, suggestedName: 'canvas.elseplane.zip', mimeType: 'application/zip');
   }
 
-  Future<bool> backup() async {
+  Future<bool> exportLibrary() async {
     final captured = snapshot;
-    final bytes = await encodeCanvasLibraryArchive(captured, _attachments);
+    final tree = await encodeTransfer(captured, _attachments, TransferScope.wholeLibrary);
+    final bytes = encodeTransferZip(tree);
     return await _files.save(bytes, suggestedName: 'library.elseplane.zip', mimeType: 'application/zip');
   }
 
-  Future<void> replaceCanvas(String fileId, CanvasProject project) => _change(() async {
-    await _stage(project.attachments, (replacements) {
-      final document = rebaseCanvasDocumentAttachments(project.document, replacements);
-      return library.replace(
-        library
-            .file(fileId)
-            .copyWith(
-              document: document,
-              githubTracking: null,
-              githubPendingTracking: null,
-            ),
-      );
-    });
-    _discardPending([fileId]);
-  });
-
-  Future<void> restore(CanvasLibraryArchive archive) => _change(() async {
-    await _stage(
-      archive.attachments,
-      (replacements) => CanvasLibrary(
-        files: [
-          for (final file in archive.library.files)
-            file.copyWith(
-              document: file.isFolder ? null : rebaseCanvasDocumentAttachments(file.document!, replacements),
-              githubTracking: null,
-              githubPendingTracking: null,
-            ),
-        ],
-        currentId: archive.library.currentId,
-      ),
-    );
-    _discardPending(_pending.keys.toList());
-  });
-
   Future<String> createDemo() => _change(() async {
     if (!kDebugMode) throw UnsupportedError('Demo is only available in debug builds');
-    final project = await loadDemoCanvas();
+    final demo = await loadDemoCanvas();
     var name = 'Demo';
     for (var suffix = 2; library.nameError(name, null) != null; suffix++) {
       name = 'Demo $suffix';
     }
-    final id = const Uuid().v4();
-    await _stage(
-      project.attachments,
-      (replacements) => CanvasLibrary(
-        files: [
-          ...library.files,
-          CanvasFile(id: id, name: name, document: rebaseCanvasDocumentAttachments(project.document, replacements)),
-        ],
-        currentId: id,
-        githubDestination: library.githubDestination,
-      ),
-    );
-    return id;
-  });
-
-  /// Prepares fresh bytes before publishing their references in one metadata write.
-  /// Used by canvas import, library restore, and debug demo creation.
-  Future<void> _stage(Map<String, Uint8List> attachments, CanvasLibrary Function(Map<String, String>) build) async {
-    final replacements = <String, String>{};
-    final reserved = attachments.keys.toSet();
-    for (final path in attachments.keys.toList()..sort()) {
-      String fresh;
-      do {
-        fresh = 'attachments/${const Uuid().v4()}.${path.split('.').last}';
-      } while (reserved.contains(fresh) || await _attachments.readIfExists(fresh) != null);
-      reserved.add(fresh);
-      replacements[path] = fresh;
-    }
-    final next = build(replacements);
-    final attempted = <String>[];
+    final usedIds = library.files.map((file) => file.id).toSet();
+    final id = _newLocalId(usedIds);
+    final document = demo.canvases['Demo.canvas.json']!;
+    final images = _eligibleTransferImages(demo);
+    final attempted = <String>{};
     try {
-      for (final entry in replacements.entries) {
-        attempted.add(entry.value);
-        await _attachments.write(entry.value, attachments[entry.key]!);
+      for (final path in images.keys.toList()..sort()) {
+        attempted.add(path);
+        await _attachments.write(path, images[path]!);
       }
-      await _persist(next, replaceDocument: true);
-    } on Object {
-      for (final path in attempted) {
-        try {
-          await _attachments.delete(path);
-        } on Object catch (error) {
-          debugPrint('Could not remove staged attachment $path: $error');
-        }
-      }
-      rethrow;
+      await _persist(
+        CanvasLibrary(
+          files: [
+            ...library.files,
+            CanvasFile(id: id, name: name, document: document),
+          ],
+          currentId: id,
+          githubDestination: library.githubDestination,
+        ),
+        replaceDocument: true,
+      );
+      return id;
+    } finally {
+      if (attempted.isNotEmpty) onAttachmentPathsChanged?.call(Set.unmodifiable(attempted));
     }
-  }
+  });
 
   // ---------- Queue and lifetime ----------
 
@@ -413,6 +534,7 @@ class LibraryController extends ChangeNotifier {
     await _store.save(next);
     if (replaceDocument || next.currentId != library.currentId) _documentToken = Object();
     _library = next;
+    _changeRevision++;
     _saveError = null;
   }
 
@@ -427,4 +549,18 @@ class LibraryController extends ChangeNotifier {
     unawaited(flush().catchError((Object error) => debugPrint('Could not save canvas on disposal: $error')));
     super.dispose();
   }
+}
+
+final class _TransferCandidateMerge {
+  const _TransferCandidateMerge({
+    required this.library,
+    required this.overwritePaths,
+    required this.existingCanvasIds,
+    required this.changed,
+  });
+
+  final CanvasLibrary library;
+  final Set<String> overwritePaths;
+  final Map<String, String> existingCanvasIds;
+  final bool changed;
 }

@@ -27,6 +27,74 @@ abstract interface class AttachmentStore {
   Future<Uint8List?> readIfExists(String path);
 }
 
+/// Copies available bytes between complete keys without replacing different data.
+/// Used by hierarchy and clipboard operations that retain their source paths.
+Future<List<String>> copyAttachmentPaths(
+  AttachmentStore store,
+  Map<String, String> sourceToDestination, {
+  void Function(String path)? beforeWrite,
+}) async {
+  final pairs = sourceToDestination.entries.toList()
+    ..sort((a, b) {
+      final source = a.key.compareTo(b.key);
+      return source != 0 ? source : a.value.compareTo(b.value);
+    });
+  for (final pair in pairs) {
+    validateAttachmentPath(pair.key);
+    validateAttachmentPath(pair.value);
+  }
+
+  final sourceBytes = <String, Uint8List>{};
+  for (final pair in pairs) {
+    if (sourceBytes.containsKey(pair.key)) continue;
+    final bytes = await store.readIfExists(pair.key);
+    if (bytes != null) {
+      validateAttachmentSize(bytes.length, 'Attachment exceeds 10 MiB: ${pair.key}');
+      sourceBytes[pair.key] = bytes;
+    }
+  }
+
+  final expectedByDestination = <String, Uint8List>{};
+  for (final pair in pairs) {
+    final bytes = sourceBytes[pair.key];
+    if (bytes == null) continue;
+    final expected = expectedByDestination.putIfAbsent(pair.value, () => bytes);
+    if (!_sameBytes(expected, bytes)) {
+      throw FormatException('Attachment destination conflict: ${pair.value}');
+    }
+  }
+
+  final destinationBytes = <String, Uint8List?>{};
+  for (final path in expectedByDestination.keys.toList()..sort()) {
+    final bytes = await store.readIfExists(path);
+    if (bytes != null) validateAttachmentSize(bytes.length, 'Attachment exceeds 10 MiB: $path');
+    destinationBytes[path] = bytes;
+  }
+  for (final entry in expectedByDestination.entries) {
+    final existing = destinationBytes[entry.key];
+    if (existing != null && !_sameBytes(existing, entry.value)) {
+      throw FormatException('Attachment destination conflict: ${entry.key}');
+    }
+  }
+
+  final written = <String>[];
+  for (final path in expectedByDestination.keys.toList()..sort()) {
+    if (destinationBytes[path] != null) continue;
+    beforeWrite?.call(path);
+    await store.write(path, expectedByDestination[path]!);
+    written.add(path);
+  }
+  return List.unmodifiable(written);
+}
+
+bool _sameBytes(Uint8List first, Uint8List second) {
+  if (first.length != second.length) return false;
+  for (var index = 0; index < first.length; index++) {
+    if (first[index] != second[index]) return false;
+  }
+  return true;
+}
+
 // ---------- Path validation ----------
 
 final attachmentPathPattern = RegExp(
@@ -57,6 +125,11 @@ String resolveAttachmentPath(String canvasDirectory, String reference) {
   final path = [...directory, reference].join('/');
   validateAttachmentPath(path);
   return path;
+}
+
+/// Validates a literal root-relative directory, with the root represented by ''.
+void validateAttachmentDirectory(String canvasDirectory) {
+  _validateDirectoryPath(canvasDirectory, allowEmpty: true);
 }
 
 final _attachmentFilePattern = RegExp(

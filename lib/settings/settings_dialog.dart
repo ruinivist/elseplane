@@ -25,10 +25,9 @@ class SettingsDialog extends StatefulWidget {
     this.onThemeModeChanged,
     this.canvasBackgroundKind = CanvasBackgroundKind.dotGrid,
     this.onCanvasBackgroundChanged,
-    this.onImportCanvas,
+    this.onImport,
     this.onExportCanvas,
-    this.onBackupLibrary,
-    this.onRestoreLibrary,
+    this.onExportLibrary,
     super.key,
   });
 
@@ -41,10 +40,9 @@ class SettingsDialog extends StatefulWidget {
   final Future<void> Function(ThemeMode)? onThemeModeChanged;
   final CanvasBackgroundKind canvasBackgroundKind;
   final ValueChanged<CanvasBackgroundKind>? onCanvasBackgroundChanged;
-  final Future<bool> Function()? onImportCanvas;
+  final Future<bool> Function()? onImport;
   final Future<void> Function()? onExportCanvas;
-  final Future<void> Function()? onBackupLibrary;
-  final Future<bool> Function()? onRestoreLibrary;
+  final Future<void> Function()? onExportLibrary;
 
   @override
   State<SettingsDialog> createState() => _SettingsDialogState();
@@ -460,31 +458,22 @@ class _SettingsDialogState extends State<SettingsDialog> {
           children: [
             TextButton(
               key: const ValueKey('canvas-import-button'),
-              onPressed: _transferActive || widget.onImportCanvas == null
-                  ? null
-                  : () => _closeAfterTransfer(widget.onImportCanvas),
-              child: const Text('Import canvas'),
+              onPressed: _transferActive || widget.onImport == null ? null : () => _closeAfterTransfer(widget.onImport),
+              child: const Text('Import'),
             ),
             TextButton(
               key: const ValueKey('canvas-export-button'),
               onPressed: _transferActive || widget.onExportCanvas == null
                   ? null
                   : () => _runTransfer(widget.onExportCanvas),
-              child: const Text('Export canvas'),
+              child: const Text('Export current canvas'),
             ),
             TextButton(
-              key: const ValueKey('library-backup-button'),
-              onPressed: _transferActive || widget.onBackupLibrary == null
+              key: const ValueKey('library-export-button'),
+              onPressed: _transferActive || widget.onExportLibrary == null
                   ? null
-                  : () => _runTransfer(widget.onBackupLibrary),
-              child: const Text('Back up library'),
-            ),
-            TextButton(
-              key: const ValueKey('library-restore-button'),
-              onPressed: _transferActive || widget.onRestoreLibrary == null
-                  ? null
-                  : () => _closeAfterTransfer(widget.onRestoreLibrary),
-              child: const Text('Restore library'),
+                  : () => _runTransfer(widget.onExportLibrary),
+              child: const Text('Export library'),
             ),
           ],
         ),

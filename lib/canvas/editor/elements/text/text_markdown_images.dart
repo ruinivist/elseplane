@@ -11,25 +11,31 @@ import 'package:markdown/markdown.dart' as md;
 
 /// Lazily loads referenced images and keeps their streams alive across culling.
 class TextMarkdownImages extends ChangeNotifier {
-  TextMarkdownImages(String source, this.attachmentStore) {
+  TextMarkdownImages(String source, this.attachmentStore, {String canvasDirectory = ''})
+    : canvasDirectory = canvasDirectory {
+    validateAttachmentDirectory(canvasDirectory);
     synchronize(source);
   }
 
   final AttachmentStore attachmentStore;
+  String canvasDirectory;
   Set<String> _sources = {};
   final _images = <String, _RetainedImage>{};
+  final _localImages = <String>{};
   bool _retired = false;
 
   /// Returns a retained provider, null while loading, or a failed snapshot.
   ({ImageProvider<Object>? provider, bool failed}) resolve(Uri uri) {
     final source = uri.toString();
     if (_retired || !_sources.contains(source)) return (provider: null, failed: true);
-    final image = _images.putIfAbsent(source, () {
+    final identity = _identityForSource(source);
+    if (isCanvasAttachmentReference(source)) _localImages.add(identity);
+    final image = _images.putIfAbsent(identity, () {
       final image = _RetainedImage(notifyListeners);
-      if (attachmentPathPattern.hasMatch(source)) {
-        unawaited(_loadAttachment(source, image));
+      if (isCanvasAttachmentReference(source)) {
+        unawaited(_loadAttachment(identity, image));
       } else {
-        image.attach(NetworkImage(source));
+        image.attach(NetworkImage(identity));
       }
       return image;
     });
@@ -47,10 +53,38 @@ class TextMarkdownImages extends ChangeNotifier {
       encodeHtml: false,
     );
     _sources = _imageSources(document.parse(source)).toSet();
-    for (final source in _images.keys.where((source) => !_sources.contains(source)).toList()) {
-      _images.remove(source)!.retire();
+    final identities = _sources.map(_identityForSource).toSet();
+    for (final identity in _images.keys.where((identity) => !identities.contains(identity)).toList()) {
+      _images.remove(identity)!.retire();
+      _localImages.remove(identity);
     }
   }
+
+  void setCanvasDirectory(String directory) {
+    validateAttachmentDirectory(directory);
+    if (canvasDirectory == directory) return;
+    canvasDirectory = directory;
+    for (final identity in _localImages) {
+      _images.remove(identity)?.retire(evict: true);
+    }
+    _localImages.clear();
+    if (_sources.any(isCanvasAttachmentReference)) notifyListeners();
+  }
+
+  void invalidateAttachmentPaths(Set<String> paths) {
+    var changed = false;
+    for (final source in _sources.where(isCanvasAttachmentReference)) {
+      final key = resolveAttachmentPath(canvasDirectory, source);
+      if (!paths.contains(key)) continue;
+      _images.remove(key)?.retire(evict: true);
+      _localImages.remove(key);
+      changed = true;
+    }
+    if (changed) notifyListeners();
+  }
+
+  String _identityForSource(String source) =>
+      isCanvasAttachmentReference(source) ? resolveAttachmentPath(canvasDirectory, source) : source;
 
   Future<void> _loadAttachment(String source, _RetainedImage image) async {
     try {
@@ -71,6 +105,7 @@ class TextMarkdownImages extends ChangeNotifier {
       image.retire();
     }
     _images.clear();
+    _localImages.clear();
     _sources.clear();
   }
 
@@ -111,14 +146,16 @@ class _RetainedImage {
     _listener = listener;
   }
 
-  void retire() {
+  void retire({bool evict = false}) {
     retired = true;
     final stream = _stream;
     final listener = _listener;
     if (stream != null && listener != null) stream.removeListener(listener);
     _stream = null;
     _listener = null;
+    final current = provider;
     provider = null;
+    if (evict && current != null) unawaited(current.evict().then<void>((_) {}));
   }
 }
 

@@ -34,10 +34,11 @@ class CanvasPage extends StatefulWidget {
     required this.attachmentStore,
     required this.libraryPath,
     required this.onOpenLibrary,
-    required this.onImportCanvas,
+    required this.onImport,
     required this.onExportCanvas,
-    required this.onBackupLibrary,
-    required this.onRestoreLibrary,
+    required this.onExportLibrary,
+    this.canvasDirectory = '',
+    this.onAttachmentInvalidatorChanged,
     this.blocked = false,
     this.readClipboard,
     this.writeClipboardText,
@@ -52,10 +53,11 @@ class CanvasPage extends StatefulWidget {
   final AttachmentStore attachmentStore;
   final List<String> libraryPath;
   final Future<void> Function() onOpenLibrary;
-  final Future<bool> Function() onImportCanvas;
+  final Future<bool> Function() onImport;
   final Future<void> Function() onExportCanvas;
-  final Future<void> Function() onBackupLibrary;
-  final Future<bool> Function() onRestoreLibrary;
+  final Future<void> Function() onExportLibrary;
+  final String canvasDirectory;
+  final void Function(void Function(Set<String>)?)? onAttachmentInvalidatorChanged;
   final bool blocked;
   final Future<CanvasClipboardSnapshot> Function()? readClipboard;
   final Future<void> Function(String text)? writeClipboardText;
@@ -156,10 +158,9 @@ class _CanvasPageState extends State<CanvasPage> {
           onSurfaceStyleChanged: widget.onSurfaceStyleChanged,
           canvasBackgroundKind: _canvasBackgroundKind,
           onCanvasBackgroundChanged: _setCanvasBackground,
-          onImportCanvas: widget.onImportCanvas,
+          onImport: widget.onImport,
           onExportCanvas: widget.onExportCanvas,
-          onBackupLibrary: widget.onBackupLibrary,
-          onRestoreLibrary: widget.onRestoreLibrary,
+          onExportLibrary: widget.onExportLibrary,
         ),
       );
     } finally {
@@ -175,6 +176,8 @@ class _CanvasPageState extends State<CanvasPage> {
       body: CanvasView(
         session: session,
         attachmentStore: widget.attachmentStore,
+        canvasDirectory: widget.canvasDirectory,
+        onAttachmentInvalidatorChanged: widget.onAttachmentInvalidatorChanged,
         blocked: widget.blocked || _filePickerOpen || _settingsOpen,
         libraryOpen: _filePickerOpen,
         readClipboard: widget.readClipboard,

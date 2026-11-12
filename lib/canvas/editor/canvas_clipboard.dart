@@ -8,6 +8,7 @@ import 'dart:ui';
 
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/image_import.dart';
+import 'package:elseplane/canvas/document/attachment_references.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/media_source.dart';
@@ -22,7 +23,7 @@ final _formatMarker = RegExp(
   r'"format"\s*:\s*"elseplane-canvas-clipboard"',
 );
 
-const canvasClipboardVersion = 3;
+const canvasClipboardVersion = 4;
 
 const _imageFormats = <FileFormat, String>{
   Formats.png: 'png',
@@ -58,13 +59,20 @@ Future<CanvasClipboardSnapshot> readCanvasClipboard(
 
 // ---------- Element serialization ----------
 
-String encodeCanvasClipboard(Iterable<CanvasElementData> elements) => jsonEncode(<String, Object>{
-  'format': _format,
-  'version': canvasClipboardVersion,
-  'elements': elements.map((element) => element.toJson()).toList(),
-});
+String encodeCanvasClipboard(
+  Iterable<CanvasElementData> elements, {
+  required String sourceDirectory,
+}) {
+  validateAttachmentDirectory(sourceDirectory);
+  return jsonEncode(<String, Object>{
+    'format': _format,
+    'version': canvasClipboardVersion,
+    'sourceDirectory': sourceDirectory,
+    'elements': elements.map((element) => element.toJson()).toList(),
+  });
+}
 
-List<CanvasElementData>? decodeCanvasClipboard(String text) {
+({List<CanvasElementData> elements, String sourceDirectory})? decodeCanvasClipboard(String text) {
   Object? decoded;
   try {
     decoded = jsonDecode(text);
@@ -76,17 +84,20 @@ List<CanvasElementData>? decodeCanvasClipboard(String text) {
   }
   if (decoded is! Map || decoded['format'] != _format) return null;
   if (decoded.keys.any(
-        (key) => !{'format', 'version', 'elements'}.contains(key),
+        (key) => !{'format', 'version', 'sourceDirectory', 'elements'}.contains(key),
       ) ||
       decoded['version'] != canvasClipboardVersion ||
+      decoded['sourceDirectory'] is! String ||
       decoded['elements'] is! List) {
     throw const FormatException('Malformed elseplane clipboard payload');
   }
+  final sourceDirectory = decoded['sourceDirectory'] as String;
+  validateAttachmentDirectory(sourceDirectory);
   final elements = (decoded['elements'] as List).map(CanvasElementData.fromJson).toList();
   if (elements.isEmpty) {
     throw const FormatException('Clipboard elements must not be empty');
   }
-  return elements;
+  return (elements: elements, sourceDirectory: sourceDirectory);
 }
 
 // ---------- Private helpers ----------
@@ -135,9 +146,13 @@ class CanvasClipboard {
     required this.mediaWidth,
     required this.clearEditing,
     required this.onError,
+    String canvasDirectory = '',
+    this.invalidateAttachments,
     this.readClipboard,
     this.writeClipboardText,
-  });
+  }) : _canvasDirectory = canvasDirectory {
+    validateAttachmentDirectory(canvasDirectory);
+  }
   final EditorSession session;
   final AttachmentStore attachments;
   final bool Function() enabled;
@@ -149,8 +164,16 @@ class CanvasClipboard {
   final Size Function() viewportSize;
   final Rect Function(CanvasElementData) boundsOf;
   final double mediaWidth;
+  String _canvasDirectory;
+  String get canvasDirectory => _canvasDirectory;
+  set canvasDirectory(String value) {
+    validateAttachmentDirectory(value);
+    _canvasDirectory = value;
+  }
+
   final void Function() clearEditing;
   final void Function(String) onError;
+  final void Function(Set<String>)? invalidateAttachments;
   final Future<CanvasClipboardSnapshot> Function()? readClipboard;
   final Future<void> Function(String)? writeClipboardText;
   String? _lastPastedPayload;
@@ -170,10 +193,9 @@ class CanvasClipboard {
     final ids = (targets ?? session.selectedIds).toSet();
     final selected = session.document.elements.where((value) => ids.contains(value.id)).toList();
     if (selected.isEmpty) return;
+    final sourceDirectory = canvasDirectory;
     final targetLifetimes = cut ? {for (final value in selected) value.id: session.elementLifetime(value.id)} : null;
-    final payload = encodeCanvasClipboard(
-      selected,
-    );
+    final payload = encodeCanvasClipboard(selected, sourceDirectory: sourceDirectory);
     try {
       final write = writeClipboardText;
       if (write != null) {
@@ -207,6 +229,7 @@ class CanvasClipboard {
 
   Future<void> paste(Future<ClipboardReader>? readerFuture, {Offset? position}) async {
     if (!enabled()) return;
+    final destinationDirectory = canvasDirectory;
     final pointer = this.pointerPosition();
     final scale = this.scale();
     final pointerPosition = pointer == null ? null : screenToCanvas(pointer);
@@ -218,16 +241,20 @@ class CanvasClipboard {
           : await readCanvasClipboard(await (readerFuture ?? SystemClipboard.instance!.read()));
       if (!session.isLive) return;
       final text = clipboard.text;
-      final elements = text == null ? null : decodeCanvasClipboard(text);
-      if (elements == null) {
+      final decoded = text == null ? null : decodeCanvasClipboard(text);
+      if (decoded == null) {
         if (clipboard.image case final image?) {
-          await _pasteImage(image, mediaPosition);
+          await _pasteImage(image, mediaPosition, destinationDirectory);
         } else if (text case final source? when isCanvasLinkPasteCandidate(source)) {
           _pasteMediaUrl(source, mediaPosition);
         }
         return;
       }
       final payload = text!;
+      final elements = decoded.elements;
+
+      await _copyAttachments(decoded, destinationDirectory);
+      if (!session.isLive) return;
 
       final placeAtPointer = position != null || (pointer != null && (payload, pointer) != _pointerReference);
       final pasted = [for (final element in elements) element.copyWith(id: const Uuid().v4())];
@@ -251,10 +278,38 @@ class CanvasClipboard {
     }
   }
 
-  Future<void> _pasteImage(ClipboardImage image, Offset position) async {
+  Future<void> _copyAttachments(
+    ({List<CanvasElementData> elements, String sourceDirectory}) clipboard,
+    String destinationDirectory,
+  ) async {
+    if (clipboard.sourceDirectory == destinationDirectory) return;
+    final pairs = <String, String>{
+      for (final reference in canvasAttachmentPaths(clipboard.elements))
+        resolveAttachmentPath(clipboard.sourceDirectory, reference): resolveAttachmentPath(
+          destinationDirectory,
+          reference,
+        ),
+    };
+    final attempted = <String>{};
+    late List<String> written;
+    try {
+      written = await copyAttachmentPaths(
+        attachments,
+        pairs,
+        beforeWrite: attempted.add,
+      );
+    } on Object {
+      if (attempted.isNotEmpty) invalidateAttachments?.call(Set.unmodifiable(attempted));
+      rethrow;
+    }
+    if (written.isNotEmpty) invalidateAttachments?.call(written.toSet());
+  }
+
+  Future<void> _pasteImage(ClipboardImage image, Offset position, String destinationDirectory) async {
     final extension = image.extension.toLowerCase() == 'jpeg' ? 'jpg' : image.extension.toLowerCase();
-    final path = 'attachments/${const Uuid().v4()}.$extension';
-    if (!attachmentPathPattern.hasMatch(path)) throw const FormatException('Unsupported image type');
+    final reference = 'attachments/${const Uuid().v4()}.$extension';
+    if (!attachmentPathPattern.hasMatch(reference)) throw const FormatException('Unsupported image type');
+    final path = resolveAttachmentPath(destinationDirectory, reference);
     var published = false;
     try {
       final size = await readCanvasImageSize(image.bytes);
@@ -262,7 +317,7 @@ class CanvasClipboard {
       await attachments.write(path, image.bytes);
       if (!session.isLive) return;
       _placePastedMedia(
-        _newMediaData(path),
+        _newMediaData(reference),
         position,
         imageSize: Size(mediaWidth, mediaWidth * size.height / size.width),
       );

@@ -21,11 +21,13 @@ after its writer closes; failures propagate after a best-effort abort. See the
 accepted [attachment path specification](../specs/attachment-paths.md) for path
 validation and operation details.
 
-This storage foundation does not adopt nested keys in current callers. They
-continue using root-level keys, including for canvases in nested explorer
-folders. Canvas-relative references remain unchanged. Import and restore keep
-the existing fresh-path staging and publication protocol, with cleanup limited
-to new unpublished attachments.
+Canvas-relative references remain unchanged. Owners derive a full storage key
+from the canvas parent and relative reference, capture it before asynchronous
+work, and use that key consistently for reads, writes, cleanup, and resource
+identity. Root-level keys remain valid for root canvases. The accepted
+[transfer specification](../specs/folder-based-canvas-transfers.md) defines
+caller behavior and import publication; remaining integration and verification
+are tracked in the [active plan](../plans/folder-based-canvas-transfers.md).
 
 ## Saving
 
@@ -39,83 +41,50 @@ to new unpublished attachments.
   flushes preserve the open editor for retry. Pending work has no persistence
   guarantee.
 
-## Canvas archives
+## Folder-based transfers
 
-The accepted [document and media decision](../adr/0002-separate-documents-and-media.md)
-defines single-canvas transfers. The ZIP contains pretty-printed,
-versioned `CanvasDocument` JSON directly in `document.json` and each referenced
-local image once under its relative `attachments/<uuid>.<extension>` path;
-media bytes remain unchanged and external URLs stay external. Remote media
-persists only its source URL and geometry; there is no saved display kind.
-Provider metadata and thumbnail previews are runtime-only and do not enter
-document JSON or ZIP files. The ZIP is a download container, not a document
-format. Do not support base64 JSON canvas transfers. The whole-library ZIP
-layout is unchanged. See the accepted
+The accepted [transfer specification](../specs/folder-based-canvas-transfers.md)
+and [ADR 0005](../adr/0005-folder-based-canvas-transfers.md) define local and
+GitHub transfer formats, validation, and failure behavior. Portable trees contain
+direct versioned `CanvasDocument` JSON and referenced image bytes at
+canvas-parent-relative paths; document references stay relative and media bytes
+remain separate. ZIP is a container, not a document format. Base64 JSON canvas
+transfers remain unsupported. Remote media persists only its source URL and
+geometry; provider metadata and thumbnails remain runtime-only. See the accepted
 [media link cards decision](../adr/0003-media-link-cards-without-embeds.md).
 
-Before expanding entries, allow only the expected document and image paths,
-reject duplicates, unsafe paths, and symlinks, and check declared sizes. After
-expansion, verify actual sizes and checksums, then validate document values,
-image bytes, and attachment references. Limit the compressed archive and total
-uncompressed content to 140 MiB each, and each image to 10 MiB. Import confirms
-replacement, stages attachments at fresh unused paths, and remaps references;
-cancellation or failure preserves existing content and attachments.
+`LibraryController` owns additive import publication through the existing queue.
+After complete validation and one collision confirmation outside the queue, it
+writes referenced available images to exact full keys, stops on the first image
+write failure, and saves merged metadata once only after all image writes
+succeed. Failure can leave image bytes changed while the previously published
+library remains unchanged; no rollback or multi-file atomicity is promised.
+Local extras and current selection remain. Import and export sizes, ZIP
+integrity, path validation, skips, and UI behavior are specified in the accepted
+transfer specification.
 
-## Staged import protocol
-
-Validate the complete candidate, confirm replacement, flush current edits,
-suspend conflicting writes, prepare every imported attachment at a fresh unused
-path, persist metadata, then publish state. Canvas import, library restore, and
-debug Demo creation share this staging path. Failure preserves existing live
-content; cleanup attempts only new unpublished attachment paths. Successful
-replacement invalidates queued revisions from the outgoing document. Existing
-attachments remain available to saved documents and retained history.
-
-## GitHub metadata
-
-The browser library snapshot may include a shared GitHub destination (account
-and repository identities plus owner, repository, and branch) and per-canvas
-last-confirmed tracking (remote path, document and attachment blob SHAs, and
-attachment-name mapping) plus optional pending tracking for an intended write.
-These are non-secret local metadata; access tokens remain in memory. Older
-snapshots without these optional fields load without a destination or tracking.
-Changing the account, repository, or branch clears both tracking values without
-changing documents. Logging out retains the destination and tracking for a
-later reconnection.
-
-Canvas document and ZIP transfers contain no GitHub destination, tracking, or
-write guard. Restoring a portable library backup therefore does not restore a
-GitHub connection or commit baseline.
-
-Before a commit updates the remote branch reference, the GitHub feature
-orchestrator persists the last-confirmed tracking unchanged and the proposed
-tracking as pending. A confirmed result advances the confirmed baseline and
-clears pending tracking; a definitive pre-update failure clears pending
-tracking. If the reference update may have succeeded, or GitHub succeeds but
-the final local tracking save fails, pending tracking remains durable and
-blocks another write. The user must explicitly check remote status: a fresh
-repository snapshot either confirms the pending document and attachment SHAs,
-or verifies the prior baseline and an unused proposed path (including an absent
-first-publication path) before allowing a manual retry. Other remote states keep
-the guard and can be imported as another canvas. Never automatically retry an
-uncertain remote write. GitHub imports validate the canvas and referenced
-attachments, stage fresh local attachment paths, and ask the library to persist
-the imported canvas, folders, and tracking in one write; a related pending guard
-is cleared only by that successful write. Failure leaves published library
-state unchanged.
+The library snapshot stores the selected GitHub destination and no per-canvas
+remote baseline, attachment-name map, or pending-write guard. Access tokens stay
+in memory. Repository import reads the latest default-branch tree and uses the
+same additive local merge; a current-canvas checkpoint independently captures a
+fresh head and publishes one commit while preserving unrelated paths. An
+uncertain remote update is reported without automatic retry. Portable transfers
+contain no GitHub destination or credentials.
 
 Media source strings are raw user content, not a transfer validation boundary.
 Clipboard, project, and library decoding preserve them without URL
 normalization or source rejection. At runtime, the editor resolves a trimmed
 copy for loading or opening, defaulting bare addresses and protocol-relative
 addresses to HTTPS; unsupported or unusable sources remain unresolved and are
-never requested or opened. Canvas-relative attachment-reference discovery,
-image validation, archive validation, and staged publication remain unchanged.
+never requested or opened. Canvas-relative attachment-reference discovery and
+upload image validation remain unchanged; transfer archive validation and
+publication follow the accepted transfer specification.
 Storage-key validation follows the accepted
 [attachment path specification](../specs/attachment-paths.md).
 
-Preserve path, byte-size, archive-entry, image, and attachment-reference
-validation. Attachment preparation must not overwrite bytes reachable from the
-existing library. Validate external structure and attachment data at the
-boundary. Import/restore details and user-facing behavior are specified in the
-[interaction model](../specs/interaction-model.md).
+Preserve path, byte-size, archive-entry, image-upload, and
+attachment-reference validation. Import may overwrite referenced bytes at an
+exact shared key as specified by ADR 0005; move and clipboard-copy operations
+use their separate non-overwriting policy. Validate external structure and
+attachment data at the boundary. User-facing transfer behavior is specified in
+the [interaction model](../specs/interaction-model.md).

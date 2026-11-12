@@ -85,7 +85,7 @@ void main() {
   }
 
   testWidgets(
-    'export disables both actions until it completes',
+    'transfer actions stay disabled until an export completes',
     (tester) async {
       final exportCompleted = Completer<void>();
       var exportCalls = 0;
@@ -107,8 +107,10 @@ void main() {
         find.byKey(const ValueKey('canvas-export-button')),
         findsOneWidget,
       );
-      expect(find.text('Import canvas'), findsOneWidget);
-      expect(find.text('Export canvas'), findsOneWidget);
+      expect(find.byKey(const ValueKey('library-export-button')), findsOneWidget);
+      expect(find.text('Import'), findsOneWidget);
+      expect(find.text('Export current canvas'), findsOneWidget);
+      expect(find.text('Export library'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('canvas-export-button')));
       await tester.pump();
@@ -128,7 +130,7 @@ void main() {
     },
   );
 
-  testWidgets('import closes only when the callback succeeds', (tester) async {
+  testWidgets('import closes Settings only when the callback succeeds', (tester) async {
     var imported = true;
     var importCalls = 0;
 
@@ -184,8 +186,9 @@ Future<void> _openCanvasSettings(
             onPressed: () => showDialog<void>(
               context: context,
               builder: (_) => SettingsDialog(
-                onImportCanvas: onImport,
+                onImport: onImport,
                 onExportCanvas: onExport,
+                onExportLibrary: onExport,
                 onThemeModeChanged: onThemeModeChanged,
                 onSurfaceStyleChanged: onSurfaceStyleChanged,
               ),

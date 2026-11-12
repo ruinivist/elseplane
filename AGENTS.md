@@ -24,5 +24,9 @@
   For code changes, use `flutter analyze` and `flutter build web`; run the full
   Chrome suite once before committing feature or fix work. Styling/refactor
   changes can skip tests; documentation-only changes need link and diff checks.
+- Tests must assert desired positive and negative behavior (where relevant, as
+  the negative set can otherwise be infinite), never preserve known bugs as
+  expected outcomes. Otherwise, future agents may mistake the broken behavior
+  for intended behavior and preserve the bug. Deferred bugs belong in the backlog.
 - Use lowercase Conventional Commit subjects (`type: description`), 4–6 words
   total.

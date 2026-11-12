@@ -878,7 +878,9 @@ void main() {
       );
       if (tool == 'media') {
         final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
-        await tester.runAsync(() => model.setDeviceImage(onePixelPngBytes, 'png'));
+        await tester.runAsync(
+          () => model.setDeviceImage(onePixelPngBytes, 'png', canvasDirectory: model.canvasDirectory),
+        );
       }
       await tester.pumpAndSettle();
       final surface = find.byKey(ValueKey(tool == 'media' ? 'media-image' : 'code-block-preview-surface'));
@@ -1585,7 +1587,9 @@ void main() {
   testWidgets('image Arrange ends activation and reopening captures the inactive image', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_editorDocument('media')), attachmentStore: TestAttachmentStore());
     final model = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
-    await tester.runAsync(() => model.setDeviceImage(onePixelPngBytes, 'png'));
+    await tester.runAsync(
+      () => model.setDeviceImage(onePixelPngBytes, 'png', canvasDirectory: model.canvasDirectory),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();

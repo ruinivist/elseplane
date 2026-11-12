@@ -32,8 +32,11 @@ void main() {
     final document = _document.withElements(
       (elements) => elements[0] = elements[0].copyWith(autoArrange: false),
     );
-    final restored = decodeCanvasClipboard(encodeCanvasClipboard(document.elements))!;
-    expect(restored.map((element) => element.autoArrange), document.elements.map((element) => element.autoArrange));
+    final restored = decodeCanvasClipboard(encodeCanvasClipboard(document.elements, sourceDirectory: ''))!;
+    expect(
+      restored.elements.map((element) => element.autoArrange),
+      document.elements.map((element) => element.autoArrange),
+    );
   });
 
   test('clipboard preserves a media source without saved presentation state', () {
@@ -43,7 +46,8 @@ void main() {
       width: 480,
       url: 'https://example.com/article',
     );
-    final restored = decodeCanvasClipboard(encodeCanvasClipboard([media]))!.single as MediaElementData;
+    final restored =
+        decodeCanvasClipboard(encodeCanvasClipboard([media], sourceDirectory: ''))!.elements.single as MediaElementData;
     expect(restored.url, media.url);
     expect(restored.toJson(), isNot(contains('kind')));
     expect(restored, media);
@@ -52,11 +56,11 @@ void main() {
   test(
     'clipboard payload round-trips and rejects recognized malformed data',
     () {
-      final payload = encodeCanvasClipboard(_document.elements);
+      final payload = encodeCanvasClipboard(_document.elements, sourceDirectory: '');
       expect(
         decodeCanvasClipboard(
           payload,
-        )!.map((element) => element.toJson()),
+        )!.elements.map((element) => element.toJson()),
         _document.elements.map((element) => element.toJson()),
       );
       expect(decodeCanvasClipboard('ordinary clipboard text'), isNull);
@@ -79,13 +83,197 @@ void main() {
     var text = _document.elements.whereType<TextElementData>().first;
     for (final background in BlockBackgroundKind.values) {
       text = text.copyWith(style: text.style.copyWith(background: background));
-      final payload = encodeCanvasClipboard([text]);
-      final restored = decodeCanvasClipboard(payload)!.single as TextElementData;
+      final payload = encodeCanvasClipboard([text], sourceDirectory: '');
+      final restored = decodeCanvasClipboard(payload)!.elements.single as TextElementData;
       expect(restored.style.background, background);
       final previous = jsonDecode(payload) as Map<String, dynamic>;
       previous['version'] = canvasClipboardVersion - 1;
       expect(() => decodeCanvasClipboard(jsonEncode(previous)), throwsFormatException);
     }
+  });
+
+  test('clipboard v4 requires a validated source directory', () {
+    final payload = encodeCanvasClipboard(_menuDocument.elements, sourceDirectory: 'Projects/Map');
+    expect(decodeCanvasClipboard(payload)!.sourceDirectory, 'Projects/Map');
+    final missingContext = jsonDecode(payload) as Map<String, dynamic>..remove('sourceDirectory');
+    expect(() => decodeCanvasClipboard(jsonEncode(missingContext)), throwsFormatException);
+    final oldVersion = jsonDecode(payload) as Map<String, dynamic>..['version'] = 3;
+    expect(() => decodeCanvasClipboard(jsonEncode(oldVersion)), throwsFormatException);
+    for (final directory in ['/absolute', 'Projects/../Map', 'Projects//Map']) {
+      expect(() => encodeCanvasClipboard(_menuDocument.elements, sourceDirectory: directory), throwsFormatException);
+    }
+  });
+
+  test('copy captures its source directory before the clipboard write', () async {
+    final session = testSession(_menuDocument)..setSelection(['a']);
+    final write = Completer<void>();
+    String? payload;
+    final clipboard = CanvasClipboard(
+      session: session,
+      attachments: TestAttachmentStore(),
+      enabled: () => true,
+      menuOpen: () => false,
+      editing: () => false,
+      pointerPosition: () => null,
+      scale: () => 1,
+      screenToCanvas: (position) => position,
+      viewportSize: () => const Size(800, 600),
+      boundsOf: (_) => Rect.zero,
+      mediaWidth: 100,
+      canvasDirectory: 'Before/Move',
+      clearEditing: () {},
+      onError: fail,
+      writeClipboardText: (text) {
+        payload = text;
+        return write.future;
+      },
+    );
+
+    final copy = clipboard.copy(null);
+    clipboard.canvasDirectory = 'After/Move';
+    write.complete();
+    await copy;
+    expect(decodeCanvasClipboard(payload!)!.sourceDirectory, 'Before/Move');
+  });
+
+  test('cross-folder paste copies images to its destination before insert', () async {
+    const first = 'attachments/11111111-1111-4111-8111-111111111111.png';
+    const second = 'attachments/22222222-2222-4222-8222-222222222222.jpg';
+    final elements = [
+      TextElementData(
+        id: 'text',
+        position: Offset.zero,
+        width: 280,
+        height: null,
+        markdown: '![one]($first)\n![two]($second)',
+        style: const TextNodeStyle(fontFamily: 'Inter'),
+      ),
+      MediaElementData(id: 'media', position: Offset.zero, width: 280, url: first),
+    ];
+    final sourceBytes = <String, Uint8List>{
+      'Source/$first': onePixelPngBytes,
+      'Source/$second': onePixelPngBytes,
+    };
+    final attachments = TestAttachmentStore(sourceBytes);
+    final session = testSession(_emptyDocument);
+    final read = Completer<CanvasClipboardSnapshot>();
+    final invalidations = <Set<String>>[];
+    final clipboard = CanvasClipboard(
+      session: session,
+      attachments: attachments,
+      enabled: () => true,
+      menuOpen: () => false,
+      editing: () => false,
+      pointerPosition: () => null,
+      scale: () => 1,
+      screenToCanvas: (position) => position,
+      viewportSize: () => const Size(800, 600),
+      boundsOf: (_) => Rect.zero,
+      mediaWidth: 100,
+      canvasDirectory: 'Destination',
+      clearEditing: () {},
+      onError: fail,
+      invalidateAttachments: invalidations.add,
+      readClipboard: () => read.future,
+    );
+
+    final paste = clipboard.paste(null);
+    read.complete((
+      text: encodeCanvasClipboard(elements, sourceDirectory: 'Source'),
+      image: null,
+    ));
+    await paste;
+
+    expect(attachments.files['Destination/$first'], onePixelPngBytes);
+    expect(attachments.files['Destination/$second'], onePixelPngBytes);
+    expect(attachments.files['Source/$first'], onePixelPngBytes);
+    expect(invalidations, [
+      {'Destination/$first', 'Destination/$second'},
+    ]);
+    expect(session.document.elements, hasLength(2));
+    expect((session.document.elements.first as TextElementData).markdown, (elements.first as TextElementData).markdown);
+    expect((session.document.elements.last as MediaElementData).url, first);
+  });
+
+  test('failed cross-folder copy inserts nothing and invalidates attempted keys', () async {
+    const first = 'attachments/11111111-1111-4111-8111-111111111111.png';
+    const second = 'attachments/22222222-2222-4222-8222-222222222222.png';
+    final elements = [
+      MediaElementData(id: 'first', position: Offset.zero, width: 280, url: first),
+      MediaElementData(id: 'second', position: Offset.zero, width: 280, url: second),
+    ];
+    final attachments = _FailSecondCopyWrite({
+      'Source/$first': onePixelPngBytes,
+      'Source/$second': onePixelPngBytes,
+    });
+    final session = testSession(_emptyDocument);
+    final invalidations = <Set<String>>[];
+    final errors = <String>[];
+    final clipboard = CanvasClipboard(
+      session: session,
+      attachments: attachments,
+      enabled: () => true,
+      menuOpen: () => false,
+      editing: () => false,
+      pointerPosition: () => null,
+      scale: () => 1,
+      screenToCanvas: (position) => position,
+      viewportSize: () => const Size(800, 600),
+      boundsOf: (_) => Rect.zero,
+      mediaWidth: 100,
+      canvasDirectory: 'Destination',
+      clearEditing: () {},
+      onError: errors.add,
+      invalidateAttachments: invalidations.add,
+      readClipboard: () async => (
+        text: encodeCanvasClipboard(elements, sourceDirectory: 'Source'),
+        image: null,
+      ),
+    );
+
+    await clipboard.paste(null);
+    expect(session.document.elements, isEmpty);
+    expect(errors, ['Could not paste canvas elements']);
+    expect(invalidations, [
+      {'Destination/$first', 'Destination/$second'},
+    ]);
+    expect(attachments.files['Source/$first'], onePixelPngBytes);
+    expect(attachments.files['Destination/$first'], onePixelPngBytes);
+    expect(attachments.files.containsKey('Destination/$second'), isFalse);
+  });
+
+  test('same-parent paste shares attachment paths without reads or writes', () async {
+    const path = 'attachments/11111111-1111-4111-8111-111111111111.png';
+    final element = MediaElementData(id: 'image', position: Offset.zero, width: 280, url: path);
+    final attachments = TestAttachmentStore();
+    final session = testSession(_emptyDocument);
+    var invalidated = false;
+    final clipboard = CanvasClipboard(
+      session: session,
+      attachments: attachments,
+      enabled: () => true,
+      menuOpen: () => false,
+      editing: () => false,
+      pointerPosition: () => null,
+      scale: () => 1,
+      screenToCanvas: (position) => position,
+      viewportSize: () => const Size(800, 600),
+      boundsOf: (_) => Rect.zero,
+      mediaWidth: 100,
+      canvasDirectory: 'Same',
+      clearEditing: () {},
+      onError: fail,
+      invalidateAttachments: (_) => invalidated = true,
+      readClipboard: () async => (
+        text: encodeCanvasClipboard([element], sourceDirectory: 'Same'),
+        image: null,
+      ),
+    );
+
+    await clipboard.paste(null);
+    expect(session.document.elements, hasLength(1));
+    expect(attachments.files, isEmpty);
+    expect(invalidated, isFalse);
   });
 
   test('clipboard preserves shape geometry and label', () {
@@ -102,8 +290,8 @@ void main() {
 
     final restored =
         decodeCanvasClipboard(
-              encodeCanvasClipboard([shape]),
-            )!.single
+              encodeCanvasClipboard([shape], sourceDirectory: ''),
+            )!.elements.single
             as ShapeElementData;
     expect(restored.toJson(), shape.toJson());
   });
@@ -113,9 +301,9 @@ void main() {
     final payload = encodeCanvasClipboard([
       for (var index = 0; index < sources.length; index++)
         MediaElementData(id: 'media-$index', position: Offset.zero, width: 480, url: sources[index]),
-    ]);
+    ], sourceDirectory: '');
     expect(
-      decodeCanvasClipboard(payload)!.whereType<MediaElementData>().map((element) => element.url),
+      decodeCanvasClipboard(payload)!.elements.whereType<MediaElementData>().map((element) => element.url),
       sources,
     );
   });
@@ -146,7 +334,7 @@ void main() {
           );
 
           await clipboard.copy(null, cut: cut, targets: explicitTargets ? ['b', 'a'] : null);
-          expect(decodeCanvasClipboard(payload!)!.map((value) => value.id), ['a', 'b']);
+          expect(decodeCanvasClipboard(payload!)!.elements.map((value) => value.id), ['a', 'b']);
           expect(session.document.elements, cut ? isEmpty : _menuDocument.elements);
           await clipboard.paste(null);
           final pasted = session.document.elements.skip(cut ? 0 : 2).toList();
@@ -310,6 +498,7 @@ void main() {
       _document.elements.map(
         (element) => element.copyWith(id: 'external-${element.id}'),
       ),
+      sourceDirectory: '',
     );
     await _shortcut(tester, LogicalKeyboardKey.keyV);
     await pumpPastSave(tester);
@@ -344,7 +533,7 @@ void main() {
         await tester.pump();
         expect(find.text('Arrange'), findsNothing);
         if (action != 'Delete') {
-          expect(decodeCanvasClipboard(payload!)!.map((element) => element.id), group ? ['a', 'b'] : ['a']);
+          expect(decodeCanvasClipboard(payload!)!.elements.map((element) => element.id), group ? ['a', 'b'] : ['a']);
           write.complete();
           await tester.pump();
         }
@@ -432,7 +621,7 @@ void main() {
         await mouse.moveTo(const Offset(750, 550));
         canvas.updateScalebyDelta(0.25);
         await tester.pump();
-        read.complete((text: encodeCanvasClipboard(_menuDocument.elements), image: null));
+        read.complete((text: encodeCanvasClipboard(_menuDocument.elements, sourceDirectory: ''), image: null));
         await tester.pumpAndSettle();
         expect(_selectedBounds(tester).center, target);
         final pasted = _models(tester).where((model) => model.selected).toList();
@@ -508,7 +697,10 @@ void main() {
           TestLibraryStore(_menuDocument),
           platform: platform,
           writeClipboardText: (text) async => payload = text,
-          readClipboard: () async => (text: encodeCanvasClipboard(_menuDocument.elements), image: null),
+          readClipboard: () async => (
+            text: encodeCanvasClipboard(_menuDocument.elements, sourceDirectory: ''),
+            image: null,
+          ),
         );
         await _openMenu(tester, const Offset(310, 310));
         for (final model in _models(tester)) {
@@ -522,7 +714,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Arrange'), findsNothing);
         if (key == LogicalKeyboardKey.keyC || key == LogicalKeyboardKey.keyX) {
-          expect(decodeCanvasClipboard(payload!)!.single.id, 'a');
+          expect(decodeCanvasClipboard(payload!)!.elements.single.id, 'a');
         }
         if (key == LogicalKeyboardKey.keyX || key == LogicalKeyboardKey.delete) {
           expect(_models(tester).single.data.id, 'b');
@@ -590,7 +782,7 @@ void main() {
     session
       ..setSelection(['b'])
       ..chooseTool(CanvasTool.text);
-    read.complete((text: encodeCanvasClipboard([_menuDocument.elements.first]), image: null));
+    read.complete((text: encodeCanvasClipboard([_menuDocument.elements.first], sourceDirectory: ''), image: null));
     await paste;
 
     expect(session.document.elements, hasLength(3));
@@ -631,7 +823,7 @@ void main() {
       await tester.pumpAndSettle();
       await replaceTestEditor(tester, _menuDocument);
       await tester.pumpAndSettle();
-      read.complete((text: encodeCanvasClipboard(_menuDocument.elements), image: null));
+      read.complete((text: encodeCanvasClipboard(_menuDocument.elements, sourceDirectory: ''), image: null));
       write.complete();
       await tester.pumpAndSettle();
       expect(tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller.childOrder, ['a', 'b']);
@@ -914,5 +1106,17 @@ class _PausedImageWrite extends TestAttachmentStore {
     } finally {
       finished.complete();
     }
+  }
+}
+
+class _FailSecondCopyWrite extends TestAttachmentStore {
+  _FailSecondCopyWrite(super.initial);
+
+  int writes = 0;
+
+  @override
+  Future<void> write(String path, Uint8List bytes) async {
+    if (++writes == 2) throw StateError('copy failed');
+    await super.write(path, bytes);
   }
 }

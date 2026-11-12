@@ -1,29 +1,37 @@
 # Folder-based canvas transfer design
 
-Status: proposed. This target design accompanies the proposed
+Status: accepted design; parent-aware caller adoption is implemented; final
+integration and verification remain open.
+Pre-implementation baseline: `1c4839a` (2026-11-11).
+
+This design accompanies the accepted
 [folder-based canvas transfer specification](../specs/folder-based-canvas-transfers.md) and
-[ADR 0005](../adr/0005-folder-based-canvas-transfers.md).
-The accepted [ownership](ownership.md), [persistence](persistence.md),
-[UI](ui.md), and [interaction model](../specs/interaction-model.md) remain
-authoritative until the proposal is accepted and those contracts are aligned.
+[ADR 0005](../adr/0005-folder-based-canvas-transfers.md). The accepted
+[ownership](ownership.md), [persistence](persistence.md), [UI](ui.md), and
+[interaction model](../specs/interaction-model.md) are aligned with this target.
+Source-caller behavior below is historical evidence from the recorded baseline;
+the active [plan](../plans/folder-based-canvas-transfers.md) tracks remaining
+integration and verification.
 
-## Current evidence
+## Pre-implementation evidence
 
-| Area | Current source behavior | Evidence |
+| Area | Source behavior at baseline `1c4839a` | Evidence |
 | --- | --- | --- |
-| Canvas project | `document.json` plus root `attachments/...` in a single-canvas ZIP; export and import call `validateCanvasAttachment`, and import requires every referenced attachment. | [`canvas_project.dart`](../../lib/library/transfer/canvas_project.dart), [`canvas_project_files.dart`](../../lib/library/transfer/canvas_project_files.dart) |
-| Library archive | Wrapper JSON at `library/<encoded name>.json`, root-level attachments, and whole-library replacement on restore. | [`canvas_library_archive.dart`](../../lib/library/transfer/canvas_library_archive.dart) |
-| GitHub canvas | A separate `.canvas` document codec, stricter complete-attachment validation, and one-canvas import/commit workflow. | [`canvas_remote_transfer.dart`](../../lib/library/transfer/canvas_remote_transfer.dart), [`github_api.dart`](../../lib/github/github_api.dart), [`github_workspace_panel.dart`](../../lib/github/github_workspace_panel.dart) |
+| Canvas project | `document.json` plus root `attachments/...` in a single-canvas ZIP; export and import call `validateCanvasAttachment`, and import requires every referenced attachment. | Historical path: `lib/library/transfer/canvas_project.dart`; [`canvas_project_files.dart`](../../lib/library/transfer/canvas_project_files.dart) |
+| Library archive | Wrapper JSON at `library/<encoded name>.json`, root-level attachments, and whole-library replacement on restore. | Historical path: `lib/library/transfer/canvas_library_archive.dart` |
+| GitHub canvas | A separate `.canvas` document codec, stricter complete-attachment validation, and one-canvas import/commit workflow. | Historical path: `lib/library/transfer/canvas_remote_transfer.dart`; [`github_api.dart`](../../lib/github/github_api.dart), [`github_workspace_panel.dart`](../../lib/github/github_workspace_panel.dart) |
 | GitHub tracking | Per-canvas confirmed baseline, attachment-name mapping, and pending-write guard live in library metadata. | [`github_metadata.dart`](../../lib/library/github_metadata.dart), [`canvas_library.dart`](../../lib/library/canvas_library.dart) |
-| Attachment storage | ADR 0006 implements full root-relative keys, `resolveAttachmentPath`, and path validation. This accepts byte-store addressing only: existing rendering, editing, transfer, and `_stage` callers still use root-level keys, including nested explorer canvases. | [`attachment_store.dart`](../../lib/attachments/attachment_store.dart), [`ADR 0006`](../adr/0006-path-aware-attachment-store.md), [accepted attachment path specification](../specs/attachment-paths.md) |
+| Attachment storage | ADR 0006 implements full root-relative keys, `resolveAttachmentPath`, and path validation. At this baseline, rendering, editing, transfer, and `_stage` callers still use root-level keys, including nested explorer canvases. | [`attachment_store.dart`](../../lib/attachments/attachment_store.dart), [ADR 0006](../adr/0006-path-aware-attachment-store.md), [accepted attachment path specification](../specs/attachment-paths.md) |
 | Library staging and save | `LibraryController._stage` reserves fresh root-level UUID keys, writes them, persists metadata, and attempts to delete its attempted keys on failure. `LibraryStore.save` promises the prior whole-library snapshot remains on save failure. | [`library_controller.dart`](../../lib/library/library_controller.dart), [`library_store.dart`](../../lib/library/library_store.dart) |
 | Library hierarchy changes | `rename` and `move` run through the controller queue and persist hierarchy metadata; neither copies image bytes. `CanvasLibrary.move` rejects cycles and exact sibling-name conflicts. | [`library_controller.dart`](../../lib/library/library_controller.dart), [`canvas_library.dart`](../../lib/library/canvas_library.dart) |
-| Internal clipboard | `CanvasClipboard` version 3 encodes `format`, `version`, and `elements`; its decoder rejects unknown keys. The current payload has no source-directory context, and editor image paste writes a root-level key. | [`canvas_clipboard.dart`](../../lib/canvas/editor/canvas_clipboard.dart) |
+| Internal clipboard | `CanvasClipboard` version 3 encodes `format`, `version`, and `elements`; its decoder rejects unknown keys. The baseline payload has no source-directory context, and editor image paste writes a root-level key. | [`canvas_clipboard.dart`](../../lib/canvas/editor/canvas_clipboard.dart) |
 
-These rows describe current source behavior, not the target design. The proposed
-transfer and caller behavior is not implemented by ADR 0006 or current callers.
-Until ADR 0005 and its related contracts are accepted and aligned, current
-root-key callers and fresh-path staging behavior remain authoritative.
+These rows snapshot source behavior at pre-implementation baseline `1c4839a`,
+not the accepted target or current implementation. Parent-aware caller adoption
+and shared transfer integration are implemented. Current transfer sources
+include the [shared codec](../../lib/library/transfer/canvas_transfer.dart),
+[ZIP adapter](../../lib/library/transfer/canvas_transfer_zip.dart), and
+[attachment discovery](../../lib/canvas/document/attachment_references.dart).
 
 ## Ownership and dependencies
 
@@ -47,7 +55,7 @@ revisions, local attachment writes, and the one metadata persistence queue. It
 uses the shared codec contracts for import and export. There is no second mutable
 library, provider registry, or framework.
 
-For proposed hierarchy changes, `LibraryController` also owns copy planning,
+For hierarchy changes, `LibraryController` also owns copy planning,
 the existing queue, and metadata publication. `CanvasClipboard` owns its local
 payload context and element insertion; it does not import the library. Share
 only byte-copy policy in a small helper in
@@ -250,7 +258,7 @@ OPFS. Missing bytes preserve the reference and never delete destination bytes:
 an existing file at that full path remains resolvable, while an absent one is
 missing. Same-parent references share one byte identity, cross-folder references
 do not, and an import may replace shared bytes even if the source is corrupt.
-No filename map or automatic image forking is part of the proposed transfer.
+No filename map or automatic image forking is part of the accepted transfer.
 
 ## Tree adapters and path rules
 
@@ -662,15 +670,15 @@ The existing GitHub repository chooser and saved destination serve both import
 and commit, with import reading the latest default branch and the whole
 repository. Folder segments `attachments` and `.git` are reserved
 case-sensitively, and serialized file/folder collisions fail with the offending
-path. These are proposed product rules, not accepted app behavior until the
-relevant contracts are aligned.
+path. These accepted product rules are defined in the transfer specification and
+aligned interaction and persistence contracts.
 
 ## Caller adoption and remaining integration gates
 
-ADR 0006 accepts nested byte-store keys, not nested-key use by callers. Current
-callers still use root-level keys, including for canvases in nested explorer
-folders. The target design adopts parent-aware keys, but these caller changes
-are proposed, not implemented.
+Parent-aware key adoption is implemented. ADR 0006 remains the byte-store
+foundation only; ADR 0005 accepts explicit parent context and its use by callers.
+The [active plan](../plans/folder-based-canvas-transfers.md) retains final
+integration, automated checks, and required reviews.
 
 `LibraryController` and library values derive each canvas parent from its file
 hierarchy. `Workspace` owns the active editor's parent context and passes the
@@ -694,11 +702,10 @@ browser data, including existing canvases and images. No preservation or
 conversion task is required for that local testing. This does not authorize
 automatic deletion by the app; migration remains outside this MVP.
 
-The selected move and clipboard policies are described above; current callers
-remain unchanged until implementation. Preserve the existing transfer
-interlock, preview `changeRevision`, autosave, pending-edit, and asynchronous
-lifetime rules. Do not add a new wait-for-pending-work policy or redesign the
-transfer barrier.
+The selected move and clipboard policies above are implemented. Preserve the
+existing transfer interlock, preview `changeRevision`, autosave, pending-edit,
+and asynchronous lifetime rules. Do not add a new wait-for-pending-work policy
+or redesign the transfer barrier.
 
 ## Reuse, replace, and remove
 

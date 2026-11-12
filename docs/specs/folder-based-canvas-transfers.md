@@ -1,10 +1,9 @@
 # Folder-based canvas transfers
 
-Status: proposed. This specification is for design review; it does not replace
-the accepted interaction or persistence contracts until accepted.
+Status: accepted.
 
-Related proposals: [architecture design](../arch/folder-based-canvas-transfers-design.md) and
-[ADR 0005](../adr/0005-folder-based-canvas-transfers.md).
+Related accepted decision and design: [ADR 0005](../adr/0005-folder-based-canvas-transfers.md)
+and [architecture design](../arch/folder-based-canvas-transfers-design.md).
 
 ## Scope
 
@@ -25,6 +24,9 @@ and add recognized content to the local library.
   hierarchy and valid document content; a standalone `.canvas.json` imports at
   the root. Local imports retain literal attachment filenames and relative
   references; external media URLs remain unchanged.
+- Local ZIP exports retain the download names `canvas.elseplane.zip` and
+  `library.elseplane.zip` for current-canvas and whole-library scope,
+  respectively, and use the `application/zip` media type.
 - Before import writes, validate all paths, entry kinds, exact duplicate paths,
   prefix collisions, local hierarchy conflicts, and finite byte budgets. Paths
   differing only by case remain distinct. ZIP input must pass bounded inflation,
@@ -117,7 +119,7 @@ Library names and transfer paths compare literally and case-sensitively:
 `School/Map.canvas.json` and `school/Map.canvas.json` are distinct paths, while
 an exact duplicate path is invalid. ZIP preserves the entry spellings, but
 extracting it onto a case-insensitive filesystem may fail or collapse
-case-distinct paths; this proposal defines no alternate export naming mechanism.
+case-distinct paths; this specification defines no alternate export naming mechanism.
 
 The tree preserves empty directories in ZIP transfers. Git trees do not
 represent empty directories, so GitHub transfers omit them and do not add marker
@@ -134,9 +136,10 @@ behavior. There is no fresh-name allocation, rebasing, or filename map. Missing
 source bytes do not delete or replace destination bytes. External media URLs
 remain untouched.
 
-This proposal adopts nested keys in its target behavior, but ADR 0006 accepted
-only the byte-store foundation and current callers still use root-level keys.
-Caller adoption is proposed here, not already implemented. The [design's caller
+This accepted specification adopts nested keys in transfer and editor callers.
+ADR 0006 remains the byte-store foundation. At pre-implementation baseline
+`1c4839a`, callers still used root-level keys; parent-aware caller adoption is
+now implemented. The [design's caller
 adoption and remaining integration gates](../arch/folder-based-canvas-transfers-design.md#caller-adoption-and-remaining-integration-gates)
 records the selected ownership and behavior. The MVP uses only the new nested
 layout: there is no old-layout fallback, dual-layout branch, migration, persisted
@@ -148,7 +151,9 @@ and images. This does not authorize automatic deletion by the app.
 
 ### Export
 
-Local exports are ZIP archives of the transfer tree.
+Local exports are ZIP archives of the transfer tree. Current-canvas export
+downloads as `canvas.elseplane.zip`; whole-library export downloads as
+`library.elseplane.zip`. Both use the `application/zip` media type.
 
 - Current-canvas export includes that canvas, its ancestor directories, and
   available image bytes referenced by the document. It does not include sibling

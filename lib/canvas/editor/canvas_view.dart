@@ -62,6 +62,8 @@ class CanvasView extends StatefulWidget {
     required this.attachmentStore,
     required this.chromeBuilder,
     required this.onOpenLibrary,
+    this.canvasDirectory = '',
+    this.onAttachmentInvalidatorChanged,
     this.blocked = false,
     this.libraryOpen = false,
     this.readClipboard,
@@ -72,6 +74,8 @@ class CanvasView extends StatefulWidget {
   final AttachmentStore attachmentStore;
   final Widget Function(BuildContext, CanvasInput) chromeBuilder;
   final Future<void> Function(CanvasInput) onOpenLibrary;
+  final String canvasDirectory;
+  final void Function(void Function(Set<String>)?)? onAttachmentInvalidatorChanged;
   final bool blocked;
   final bool libraryOpen;
   final Future<CanvasClipboardSnapshot> Function()? readClipboard;
@@ -109,6 +113,8 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   bool _arrangeMenuOpen = false;
   final _geometryListeners = <String, VoidCallback>{};
   final _resources = <String, ElementResources>{};
+  late final void Function(Set<String>) _attachmentInvalidator = _invalidateAttachments;
+  void Function(void Function(Set<String>)?)? _registeredInvalidatorCallback;
   final _declaredSizes = <String, Size>{};
   CanvasElementData? get _activeElement => _elements.where((a) => a.id == _session.activeId).firstOrNull;
   final ValueNotifier<CanvasElementData?> _editingChromeModel = ValueNotifier(null);
@@ -206,6 +212,8 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         _setActiveElement(null);
       },
       onError: _showClipboardError,
+      canvasDirectory: widget.canvasDirectory,
+      invalidateAttachments: _invalidateAttachments,
       readClipboard: widget.readClipboard,
       writeClipboardText: widget.writeClipboardText,
     );
@@ -277,6 +285,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       ?..registerCopyEventListener(_handleWebCopy)
       ..registerCutEventListener(_handleWebCut)
       ..registerPasteEventListener(_handleWebPaste);
+    _updateInvalidatorRegistration();
   }
 
   CanvasElementData? _element(String? id) => _elements.where((a) => a.id == id).firstOrNull;
@@ -298,9 +307,55 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     } else if (!oldWidget.blocked && widget.blocked) {
       _input.interrupt();
     }
+    if (identical(oldWidget.session, widget.session) && oldWidget.canvasDirectory != widget.canvasDirectory) {
+      _updateCanvasDirectory(widget.canvasDirectory);
+    }
+    if (identical(oldWidget.session, widget.session) &&
+        oldWidget.onAttachmentInvalidatorChanged != widget.onAttachmentInvalidatorChanged) {
+      _updateInvalidatorRegistration();
+    }
+  }
+
+  void _updateCanvasDirectory(String directory) {
+    validateAttachmentDirectory(directory);
+    _clipboard.canvasDirectory = directory;
+    for (final resource in _resources.values) {
+      switch (resource) {
+        case final TextEditorResources text:
+          text.setCanvasDirectory(directory);
+        case final MediaResources media:
+          media.setCanvasDirectory(directory);
+        default:
+          break;
+      }
+    }
+  }
+
+  void _updateInvalidatorRegistration() {
+    final callback = widget.onAttachmentInvalidatorChanged;
+    if (identical(callback, _registeredInvalidatorCallback)) return;
+    _registeredInvalidatorCallback?.call(null);
+    _registeredInvalidatorCallback = callback;
+    callback?.call(_attachmentInvalidator);
+  }
+
+  void _invalidateAttachments(Set<String> paths) {
+    if (!mounted || paths.isEmpty) return;
+    for (final resource in _resources.values) {
+      switch (resource) {
+        case final TextEditorResources text:
+          text.images.invalidateAttachmentPaths(paths);
+        case final MediaResources media:
+          media.invalidateAttachmentPaths(paths);
+        default:
+          break;
+      }
+    }
   }
 
   void _detachSession(EditorSession session) {
+    _registeredInvalidatorCallback?.call(null);
+    _registeredInvalidatorCallback = null;
     session.removeListener(_sessionChanged);
     FocusManager.instance.removeListener(_shortcuts.focusChanged);
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
@@ -795,9 +850,19 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   }
 
   ElementResources? _createResources(CanvasElementData value) => switch (value) {
-    final TextElementData a => TextEditorResources(_session, a, _attachmentStore),
+    final TextElementData a => TextEditorResources(
+      _session,
+      a,
+      _attachmentStore,
+      canvasDirectory: widget.canvasDirectory,
+    ),
     final CodeElementData a => CodeEditorResources(_session, a),
-    final MediaElementData a => MediaResources(_session, a, _attachmentStore),
+    final MediaElementData a => MediaResources(
+      _session,
+      a,
+      _attachmentStore,
+      canvasDirectory: widget.canvasDirectory,
+    ),
     final PenElementData a => PenResources(_session, a),
     final ShapeElementData a => ShapeEditorResources(_session, a),
     _ => null,

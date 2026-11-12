@@ -55,8 +55,9 @@ class _TextMarkdownEditorState extends State<TextMarkdownEditor> {
   }
 
   Future<void> _paste(Future<ClipboardReader> readerFuture) async {
+    final canvasDirectory = widget.model.canvasDirectory;
     try {
-      await widget.model.paste(readerFuture, widget.attachmentStore);
+      await widget.model.paste(readerFuture, widget.attachmentStore, canvasDirectory: canvasDirectory);
     } on Object {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -109,14 +110,23 @@ class _TextMarkdownEditorState extends State<TextMarkdownEditor> {
 // ---------- Clipboard edits ----------
 
 extension TextClipboardEdits on TextEditorResources {
-  Future<void> paste(Future<ClipboardReader> readerFuture, AttachmentStore store) async {
+  Future<void> paste(
+    Future<ClipboardReader> readerFuture,
+    AttachmentStore store, {
+    required String canvasDirectory,
+  }) async {
     try {
       final reader = await readerFuture;
       if (!attached) return;
       final clipboard = await readCanvasClipboard(reader);
       if (!attached) return;
       if (clipboard.image case final image?) {
-        await insertPastedImage(image.bytes, image.extension, store);
+        await insertPastedImage(
+          image.bytes,
+          image.extension,
+          store,
+          canvasDirectory: canvasDirectory,
+        );
       } else if (clipboard.text case final text?) {
         insertPastedText(text);
       }
@@ -129,11 +139,13 @@ extension TextClipboardEdits on TextEditorResources {
   Future<void> insertPastedImage(
     Uint8List bytes,
     String extension,
-    AttachmentStore store,
-  ) async {
+    AttachmentStore store, {
+    required String canvasDirectory,
+  }) async {
     try {
-      final path = 'attachments/${const Uuid().v4()}.$extension';
-      await validateCanvasAttachment(path, bytes);
+      final reference = 'attachments/${const Uuid().v4()}.$extension';
+      final path = resolveAttachmentPath(canvasDirectory, reference);
+      await validateCanvasAttachment(reference, bytes);
       if (!attached) return;
       var written = false;
       try {
@@ -149,7 +161,7 @@ extension TextClipboardEdits on TextEditorResources {
         }
       }
       if (!attached) return;
-      insertPastedText('![pasted image]($path)');
+      insertPastedText('![pasted image]($reference)');
     } on Object {
       if (!attached) return;
       rethrow;

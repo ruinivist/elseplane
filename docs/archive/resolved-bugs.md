@@ -7,7 +7,10 @@ describe their resolution at that time.
 
 Status: fixed. `rebaseCanvasDocumentAttachments` uses parser-provided image destination ranges, deduplicates shared reference definitions, and rebuilds Markdown from the original source in source order. Matching paths in prose, code, and surrounding Markdown formatting remain unchanged.
 
-The [project tests](../../test/library/transfer/canvas_project_test.dart) cover literal paths beside real images, shared references, Unicode and CRLF offsets, mixed destination ordering, repeated images, and non-cascading replacements.
+Historical project tests (`test/library/transfer/canvas_project_test.dart`)
+covered literal paths beside real images, shared references, Unicode and CRLF
+offsets, mixed destination ordering, repeated images, and non-cascading
+replacements.
 
 ## 2. Dragging another object leaves delayed Cut alive
 
@@ -37,7 +40,7 @@ Status: fixed. Shared attachment validation decodes the first image frame throug
 
 Location: [attachment validation](../../lib/attachments/image_import.dart), `validateCanvasAttachment`; [text image paste](../../lib/canvas/editor/elements/text/text_markdown_editor.dart), `TextClipboardEdits.insertPastedImage`.
 
-The [attachment tests](../../test/attachments/attachment_test.dart) cover rejection before any write or text/selection change, and cancellation during validation with valid and corrupt bytes. The [project regression](../../test/library/transfer/canvas_project_test.dart) includes a genuine Markdown image reference so image decoding is exercised. The [archive tests](../../test/library/transfer/canvas_library_archive_test.dart) reject corrupt referenced images during backup and restore.
+The [attachment tests](../../test/attachments/attachment_test.dart) cover rejection before any write or text/selection change, and cancellation during validation with valid and corrupt bytes. The historical project regression (`test/library/transfer/canvas_project_test.dart`) included a genuine Markdown image reference so image decoding was exercised. The former archive tests (`test/library/transfer/canvas_library_archive_test.dart`) rejected corrupt referenced images during backup and restore.
 
 ## 5. Markdown attachment images reload after culling
 

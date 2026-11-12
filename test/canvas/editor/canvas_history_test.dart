@@ -110,8 +110,13 @@ void main() {
           late Future<void> pending;
           await tester.runAsync(() async {
             pending = media
-                ? image!.setDeviceImage(onePixelPngBytes, 'png')
-                : text!.insertPastedImage(onePixelPngBytes, 'png', attachments);
+                ? image!.setDeviceImage(onePixelPngBytes, 'png', canvasDirectory: image.canvasDirectory)
+                : text!.insertPastedImage(
+                    onePixelPngBytes,
+                    'png',
+                    attachments,
+                    canvasDirectory: text.canvasDirectory,
+                  );
             await attachments.started.future;
           });
           await tester.pumpWidget(const SizedBox());
@@ -134,7 +139,12 @@ void main() {
       final text = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
       late Future<void> pending;
       await tester.runAsync(() async {
-        pending = text.insertPastedImage(onePixelPngBytes, 'png', attachments);
+        pending = text.insertPastedImage(
+          onePixelPngBytes,
+          'png',
+          attachments,
+          canvasDirectory: text.canvasDirectory,
+        );
         await attachments.started.future;
       });
       if (removal) {
