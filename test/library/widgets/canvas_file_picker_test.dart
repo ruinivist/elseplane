@@ -132,17 +132,35 @@ void main() {
     await _open(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
+    final diagnosticOutput = <String>[];
+    final originalDebugPrint = debugPrint;
+    debugPrint = (message, {wrapWidth}) {
+      if (message != null) diagnosticOutput.add(message);
+    };
+    addTearDown(() {
+      debugPrint = originalDebugPrint;
+    });
     store.fail = true;
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(store.library.currentId, originalId);
     expect(find.byType(CanvasFilePicker), findsOneWidget);
     expect(find.text('Could not save changes. Please try again.'), findsOneWidget);
+    final diagnostics = diagnosticOutput.join('\n');
+    expect(diagnostics, contains('Canvas file picker save failed:'));
+    expect(diagnostics, contains('Storage full'));
+    final stackTrace = diagnosticOutput.singleWhere(
+      (message) => message.startsWith('Canvas file picker save stack:\n'),
+    );
+    expect(stackTrace, contains('canvas_file_picker_test.dart'));
+    final diagnosticCount = diagnosticOutput.length;
     store.fail = false;
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(store.library.currentId, 'next');
     expect(find.byType(CanvasFilePicker), findsNothing);
+    expect(diagnosticOutput, hasLength(diagnosticCount));
+    debugPrint = originalDebugPrint;
   });
 
   testWidgets('failed outgoing flush keeps the editor open and retries its latest content', (tester) async {

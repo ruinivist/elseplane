@@ -111,6 +111,22 @@ void main() {
     await store.delete(rootPath);
   });
 
+  test('round-trips immutable bytes through OPFS', () async {
+    final path =
+        'immutable-${DateTime.now().microsecondsSinceEpoch}/attachments/123e4567-e89b-42d3-a456-426614174000.png';
+    final expected = Uint8List.fromList([1, 2, 3, 4]);
+    final bytes = Uint8List.fromList(expected).asUnmodifiableView();
+    final store = PlatformAttachmentStore();
+    addTearDown(() => store.delete(path));
+
+    await store.write(path, bytes);
+
+    expect(await store.read(path), expected);
+    expect(bytes, expected);
+    expect(() => bytes[0] = 9, throwsUnsupportedError);
+    expect(bytes, expected);
+  });
+
   test('reads and deletes do not create missing parent directories', () async {
     final directory = 'uncreated-${DateTime.now().microsecondsSinceEpoch}';
     final path = '$directory/Deep/attachments/123e4567-e89b-42d3-a456-426614174000.png';

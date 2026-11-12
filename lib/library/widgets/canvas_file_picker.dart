@@ -200,7 +200,9 @@ class _CanvasFilePickerState extends State<CanvasFilePicker> {
         _error = null;
       });
       return true;
-    } on Object {
+    } on Object catch (error, stackTrace) {
+      debugPrint('Canvas file picker save failed: $error');
+      debugPrint('Canvas file picker save stack:\n$stackTrace');
       if (mounted) setState(() => _error = 'Could not save changes. Please try again.');
       return false;
     } finally {

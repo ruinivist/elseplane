@@ -25,7 +25,7 @@ class PlatformAttachmentStore implements AttachmentStore {
     final file = await _file(path, create: true);
     final writable = await file.createWritable().toDart;
     try {
-      await writable.write(bytes.toJS).toDart;
+      await writable.write(Uint8List.fromList(bytes).toJS).toDart;
       await writable.close().toDart;
     } on Object catch (_) {
       try {
