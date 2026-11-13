@@ -41,6 +41,7 @@ DerivedData/
 key.properties
 *.jks
 *.keystore
+/local-mediator/
 
 # OS and temporary files
 .DS_Store
