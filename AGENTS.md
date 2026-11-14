@@ -18,6 +18,9 @@
   it.
 - Use dependencies available across Flutter platforms. At this stage, build
   and verify web only.
+- When using `elseplane-debug`, delegate browser testing to a worker rather than
+  doing the test pass as lead. Give one worker exclusive browser control at a
+  time; the lead owns scope, coordination, cleanup, and final assessment.
 - Test behavior and failure boundaries, not theme-token values. Run focused
   browser tests with
   `CHROME_EXECUTABLE=/usr/bin/chromium flutter test --platform chrome <test-file>`.
