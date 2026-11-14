@@ -137,73 +137,70 @@ class GitHubPanel extends StatelessWidget {
 
 Future<String?> showGitHubRepositoryDialog(BuildContext context, {required String initial}) async {
   final formKey = GlobalKey<FormState>();
-  final field = TextEditingController(text: initial);
-  try {
-    return await showDialog<String>(
-      context: context,
-      builder: (context) => SurfaceDialog(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 280, maxWidth: 480),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text('Choose a GitHub repository', style: Theme.of(context).textTheme.titleLarge),
-                        const SizedBox(height: 12),
-                        const Text('Enter owner/repository. Elseplane uses its default branch.'),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          key: const ValueKey('github-repository-field'),
-                          controller: field,
-                          autofocus: true,
-                          decoration: const InputDecoration(labelText: 'owner/repository'),
-                          validator: (value) {
-                            final parts = (value ?? '').trim().split('/');
-                            final valid =
-                                parts.length == 2 &&
-                                parts.every((part) => RegExp(r'^[A-Za-z0-9_.-]+$').hasMatch(part)) &&
-                                parts.every((part) => part != '.' && part != '..');
-                            return valid ? null : 'Enter owner/repository';
-                          },
-                          onFieldSubmitted: (_) {
-                            if (formKey.currentState!.validate()) Navigator.pop(context, field.text.trim());
-                          },
-                        ),
-                      ],
-                    ),
+  String? submittedValue;
+  void submit(BuildContext context) {
+    final form = formKey.currentState!;
+    if (!form.validate()) return;
+    form.save();
+    Navigator.pop(context, submittedValue);
+  }
+
+  return await showDialog<String>(
+    context: context,
+    builder: (context) => SurfaceDialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 280, maxWidth: 480),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Choose a GitHub repository', style: Theme.of(context).textTheme.titleLarge),
+                      const SizedBox(height: 12),
+                      const Text('Enter owner/repository. Elseplane uses its default branch.'),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        key: const ValueKey('github-repository-field'),
+                        initialValue: initial,
+                        autofocus: true,
+                        decoration: const InputDecoration(labelText: 'owner/repository'),
+                        validator: (value) {
+                          final parts = (value ?? '').trim().split('/');
+                          final valid =
+                              parts.length == 2 &&
+                              parts.every((part) => RegExp(r'^[A-Za-z0-9_.-]+$').hasMatch(part)) &&
+                              parts.every((part) => part != '.' && part != '..');
+                          return valid ? null : 'Enter owner/repository';
+                        },
+                        onSaved: (value) => submittedValue = value?.trim() ?? '',
+                        onFieldSubmitted: (_) => submit(context),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                child: OverflowBar(
-                  alignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                    TextButton(
-                      onPressed: () {
-                        if (formKey.currentState!.validate()) Navigator.pop(context, field.text.trim());
-                      },
-                      child: const Text('Continue'),
-                    ),
-                  ],
-                ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+              child: OverflowBar(
+                alignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                  TextButton(onPressed: () => submit(context), child: const Text('Continue')),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
-  } finally {
-    field.dispose();
-  }
+    ),
+  );
 }
 
 Future<bool> confirmGitHubDestination(
@@ -234,70 +231,69 @@ Future<String?> showGitHubCommitDialog(
   required String newPath,
   required bool Function(String) isValidMessage,
 }) async {
-  final field = TextEditingController(text: 'docs: save canvas');
   final formKey = GlobalKey<FormState>();
-  try {
-    return await showDialog<String>(
-      context: context,
-      builder: (context) => SurfaceDialog(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 280, maxWidth: 560),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text('Commit current canvas', style: Theme.of(context).textTheme.titleLarge),
-                        const SizedBox(height: 16),
-                        Text('$repository · $branch'),
-                        Text('To: $newPath'),
-                        const SizedBox(height: 16),
-                        const Text('Completed canvas edits are saved before this commit.'),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          key: const ValueKey('github-commit-message'),
-                          controller: field,
-                          autofocus: true,
-                          maxLength: 72,
-                          decoration: const InputDecoration(labelText: 'Commit message'),
-                          validator: (value) => isValidMessage(value ?? '')
-                              ? null
-                              : 'Use a lowercase Conventional Commit subject (72 characters max).',
-                        ),
-                      ],
-                    ),
+  String? submittedValue;
+  void submit(BuildContext context) {
+    final form = formKey.currentState!;
+    if (!form.validate()) return;
+    form.save();
+    Navigator.pop(context, submittedValue);
+  }
+
+  return await showDialog<String>(
+    context: context,
+    builder: (context) => SurfaceDialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 280, maxWidth: 560),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Commit current canvas', style: Theme.of(context).textTheme.titleLarge),
+                      const SizedBox(height: 16),
+                      Text('$repository · $branch'),
+                      Text('To: $newPath'),
+                      const SizedBox(height: 16),
+                      const Text('Completed canvas edits are saved before this commit.'),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        key: const ValueKey('github-commit-message'),
+                        initialValue: 'docs: save canvas',
+                        autofocus: true,
+                        maxLength: 72,
+                        decoration: const InputDecoration(labelText: 'Commit message'),
+                        validator: (value) => isValidMessage(value ?? '')
+                            ? null
+                            : 'Use a lowercase Conventional Commit subject (72 characters max).',
+                        onSaved: (value) => submittedValue = value ?? '',
+                      ),
+                    ],
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                child: OverflowBar(
-                  alignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                    TextButton(
-                      onPressed: () {
-                        if (formKey.currentState!.validate()) Navigator.pop(context, field.text);
-                      },
-                      child: const Text('Commit'),
-                    ),
-                  ],
-                ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+              child: OverflowBar(
+                alignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                  TextButton(onPressed: () => submit(context), child: const Text('Commit')),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
-  } finally {
-    field.dispose();
-  }
+    ),
+  );
 }
 
 Future<bool> confirmGitHubLogout(BuildContext context) async =>
