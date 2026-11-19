@@ -19,7 +19,7 @@ integration and verification.
 | --- | --- | --- |
 | Canvas project | `document.json` plus root `attachments/...` in a single-canvas ZIP; export and import call `validateCanvasAttachment`, and import requires every referenced attachment. | Historical path: `lib/library/transfer/canvas_project.dart`; [`canvas_project_files.dart`](../../lib/library/transfer/canvas_project_files.dart) |
 | Library archive | Wrapper JSON at `library/<encoded name>.json`, root-level attachments, and whole-library replacement on restore. | Historical path: `lib/library/transfer/canvas_library_archive.dart` |
-| GitHub canvas | A separate `.canvas` document codec, stricter complete-attachment validation, and one-canvas import/commit workflow. | Historical path: `lib/library/transfer/canvas_remote_transfer.dart`; [`github_api.dart`](../../lib/github/github_api.dart), [`github_workspace_panel.dart`](../../lib/github/github_workspace_panel.dart) |
+| GitHub canvas | A separate `.canvas` document codec, stricter complete-attachment validation, and one-canvas import/commit workflow. | Historical path: `lib/library/transfer/canvas_remote_transfer.dart`; [`github_api.dart`](../../lib/github/github_api.dart), `github_workspace_panel.dart` at the recorded revision |
 | GitHub tracking | Per-canvas confirmed baseline, attachment-name mapping, and pending-write guard live in library metadata. | [`github_metadata.dart`](../../lib/library/github_metadata.dart), [`canvas_library.dart`](../../lib/library/canvas_library.dart) |
 | Attachment storage | ADR 0006 implements full root-relative keys, `resolveAttachmentPath`, and path validation. At this baseline, rendering, editing, transfer, and `_stage` callers still use root-level keys, including nested explorer canvases. | [`attachment_store.dart`](../../lib/attachments/attachment_store.dart), [ADR 0006](../adr/0006-path-aware-attachment-store.md), [accepted attachment path specification](../specs/attachment-paths.md) |
 | Library staging and save | `LibraryController._stage` reserves fresh root-level UUID keys, writes them, persists metadata, and attempts to delete its attempted keys on failure. `LibraryStore.save` promises the prior whole-library snapshot remains on save failure. | [`library_controller.dart`](../../lib/library/library_controller.dart), [`library_store.dart`](../../lib/library/library_store.dart) |
@@ -549,7 +549,7 @@ controls the granted repositories, and the picker only chooses the current
 destination. Installation IDs and access tokens are in-memory operation state,
 not library metadata. Import uses the latest default branch and whole
 repository; there is no separate import URL or independently selected
-destination. Replace content-baseline tracking with one discovery operation and
+destination. Use one discovery operation and
 two transfer operations:
 
 ```dart
@@ -636,7 +636,7 @@ specified README-and-refresh message and are never initialized.
 Each `commitTransfer` independently verifies the saved account and repository
 and freshly checks membership in the supplied installation, then captures a
 fresh default-branch head and bounded recursive tree at that checkpoint's
-operation time. It does not reuse an import transfer or track a baseline. Before
+operation time. After confirmation, the [Sync workflow](../specs/github-sync-ux.md) records the captured version locally. Before
 uploading blobs, use the fresh tree metadata to reject an
 output blob path occupied by a tree, symlink, submodule, or other unsupported
 Git object, and reject any required directory ancestor occupied by a
@@ -783,7 +783,7 @@ or redesign the transfer barrier.
 | Replace | Separate canvas-project, library-archive, and GitHub document codecs | Use one transfer codec and a thin ZIP adapter around `TransferTree`. |
 | Replace | `addGitHubCanvas` and destructive settings restore/import flows | Use one provider-neutral additive import with exact-path, best-effort local image writes and one metadata save after all image writes succeed. |
 | Replace | Bundled demo ZIP layout and its tests/fixtures | Move them to the transfer tree and shared codec; do not retain an old decoder only for the demo asset. |
-| Remove | `GitHubCanvasTracking`, per-canvas baseline and pending guards, content comparison, remote attachment remapping, and recovery/status flows | Keep no remote baseline or automatic recovery state. |
+| Replace | `GitHubCanvasTracking` and its recovery state | The [Sync workflow](../specs/github-sync-ux.md) records one local baseline per canvas. |
 
 Ignoring or dropping optional tracking records must not delete browser library
 documents or the saved repository destination. Existing transfer-file backward

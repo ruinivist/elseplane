@@ -32,7 +32,7 @@ lib/
       previews/                      # Canvas component previews
   library/
     canvas_library.dart               # File/folder values and hierarchy rules
-    github_metadata.dart              # Non-secret GitHub destination
+    github_metadata.dart              # Local GitHub destination and baselines
     library_controller.dart           # Library operations and save queue
     library_store.dart                # Storage contract and implementation
     transfer/                         # Shared tree codec and ZIP transport
@@ -61,9 +61,9 @@ empty scaffolding.
 | `document` | Value types and serialization support | No widgets, theme lookup, loading, storage, or browser APIs. |
 | `geometry` | Document values and graphics/math primitives | Computes geometry without application state or I/O. |
 | Editor logic | Document, geometry, narrow I/O contracts, Flutter input/notifier primitives | No widget construction or concrete storage implementations. |
-| Editor presentation | Editor logic, Flutter, theme, shared UI, grid | Requests edits; never writes document fields. Its generic bottom-left panel slot has no feature dependency. |
+| Editor presentation | Editor logic, Flutter, theme, shared UI, grid | Requests edits; never writes document fields. Title and Settings receive generic content and callbacks. |
 | `library` | Document, attachments, GitHub destination values, shared transfer contracts | No editor or GitHub networking imports; widgets additionally use Flutter, theme, and shared UI. |
-| `github` | GitHub/mediator HTTP and browser APIs, library metadata and transfer contracts, Flutter/theme/shared UI | Owns GitHub UI, session controller, transport orchestration, and browser boundary; Workspace supplies library/editor state and shared-import callbacks. |
+| `github` | GitHub/mediator HTTP and browser APIs, library and attachment contracts, Flutter/theme/shared UI | Owns GitHub UI, session controller, transport orchestration, and browser boundary; Workspace supplies library/editor state and shared-import callbacks. |
 | `attachments` | Byte/image primitives and platform storage | Browser imports stay in the browser implementation. |
 | `ui/common` | Flutter and theme | Never imports a feature. |
 | `theme` | Flutter, font and highlighting dependencies | Never imports features or app composition. |
@@ -104,19 +104,17 @@ do not rewrite existing content when appearance settings change. Library
 durability details are in [persistence](persistence.md).
 
 `app/app.dart` creates the browser GitHub client only when the HTTPS
-`GITHUB_MEDIATOR_URL` and public `GITHUB_APP_SLUG` build values are configured;
-tests can inject the API and browser callbacks. `Workspace` composes
-`GitHubWorkspacePanel` with the library and editor. It owns settings transfers,
-the shared transfer interlock, the provider-neutral import coordinator, and
-imported-editor replacement after durable success. The GitHub feature widget
-owns the session controller, account restoration, installation/repository
-discovery state, repository UI, transport orchestration, and browser navigation.
-Installation IDs are transient GitHub-feature operation context; the feature
-uses Workspace callbacks for common import and persists only the selected
-destination through the library controller. No access token, installation ID,
-remote content baseline, per-canvas tracking, or pending-write guard is
-persisted. `CanvasPage` exposes a generic bottom-left panel builder and passes it
-an editor interaction-finishing callback; editor code does not import GitHub.
+`GITHUB_MEDIATOR_URL` and public `GITHUB_APP_SLUG` build values are configured.
+Tests can inject the API and browser callbacks. Workspace owns one `GitHubSync`
+for its lifetime, including across Settings opens and canvas switches. The
+GitHub feature owns session restoration, repository discovery and validation,
+baseline comparison, and GitHub transport and browser navigation. Workspace
+supplies the transfer interlock and shared import coordinator, connects
+document and attachment changes to baseline comparison, and replaces the
+editor after a durable overwrite. The library queue publishes destinations,
+first-import dismissal, and baselines. Installation IDs and credentials
+remain in memory. CanvasPage and Settings accept generic title actions and
+Sync content without importing the GitHub feature.
 
 ## Design and file rules
 

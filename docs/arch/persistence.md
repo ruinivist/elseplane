@@ -63,18 +63,22 @@ Local extras and current selection remain. Import and export sizes, ZIP
 integrity, path validation, skips, and UI behavior are specified in the accepted
 transfer specification.
 
-The library snapshot stores only the selected GitHub destination, not the
-installation ID, discovery results, access tokens, per-canvas remote baseline,
-attachment-name map, or pending-write guard. Installation/repository discovery
-and the installation ID used for a transfer remain in memory; after reload the
-feature resolves the saved account/repository against current authorized
-discovery. Only explicit repository setup/change saves the destination. Import
-and Commit use it without changing persistence. Repository import reads the
-latest default-branch tree and uses the same additive local merge; a current-canvas
-checkpoint independently captures a fresh head and publishes one commit while
-preserving unrelated paths. An uncertain remote update is reported without
-automatic retry. Portable transfers contain no GitHub destination or
-credentials.
+The local library snapshot stores the selected GitHub destination and
+first-import prompt state. Each canvas can store one baseline with its account,
+repository, branch, canvas path, SHA-256 of the canonical document, and hashes
+of the referenced attachment bytes present in the transfer. A missing baseline
+represents an uncommitted canvas once a destination is selected. Portable
+transfers contain no GitHub metadata.
+
+GitHub compares the local path and document before reading attachments and
+discards an asynchronous comparison when its canvas, destination, or bytes
+change. GitHub import publishes baselines with the merged library after
+attachment writes succeed. Commit records its captured version through the
+library queue after the remote branch update is confirmed. A local save
+failure leaves the previous baseline and reports the remote success and local
+failure together. An uncertain remote update leaves the baseline intact.
+Installation discovery and credentials stay in memory. Every transfer
+revalidates its destination and the current default branch.
 
 Media source strings are raw user content, not a transfer validation boundary.
 Clipboard, project, and library decoding preserve them without URL

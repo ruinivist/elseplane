@@ -219,6 +219,13 @@ Serialized canvas path collisions fail with the offending path. The accepted
 interaction and persistence contracts now describe these rules; final
 integration and verification are tracked in the active plan.
 
+## Sync UX amendment
+
+The [GitHub sync UX](../specs/github-sync-ux.md) adds local per-canvas baselines
+for the title marker. Baselines describe confirmed transfers and stay out of
+portable trees. Transfer formats, import publication, and remote branch
+updates retain the rules in this decision.
+
 ## Supersedes or superseded by
 
 Supersedes the transfer-format and replacement-import portions of

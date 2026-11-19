@@ -51,6 +51,14 @@ final class GitHubConflict extends GitHubApiException {
   final String? path;
 }
 
+final class GitHubDefaultBranchChanged extends GitHubApiException {
+  const GitHubDefaultBranchChanged()
+    : super(
+        'The repository default branch changed. Refresh and reselect the repository.',
+        kind: GitHubErrorKind.invalidData,
+      );
+}
+
 final class GitHubUnconfirmedCommit extends GitHubApiException {
   const GitHubUnconfirmedCommit({
     required this.sha,
@@ -822,10 +830,7 @@ final class GitHubApi {
       );
     }
     if (repository.defaultBranch != destination.branch) {
-      throw const GitHubApiException(
-        'The repository default branch changed. Choose the repository again before transferring.',
-        kind: GitHubErrorKind.invalidData,
-      );
+      throw const GitHubDefaultBranchChanged();
     }
     _requirePullAccess(repository);
     if (forCommit && (!repository.canPush || repository.archived || repository.disabled)) {
@@ -854,10 +859,7 @@ final class GitHubApi {
       );
     }
     if (selected.defaultBranch != current.defaultBranch) {
-      throw const GitHubApiException(
-        'The repository default branch changed. Refresh and choose the repository again.',
-        kind: GitHubErrorKind.invalidData,
-      );
+      throw const GitHubDefaultBranchChanged();
     }
   }
 

@@ -1,6 +1,8 @@
 // Composes the canvas with page chrome and application dialogs.
 // Used by Workspace to present the open editor session.
 
+import 'dart:async';
+
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
@@ -45,7 +47,12 @@ class CanvasPage extends StatefulWidget {
     this.themeMode = ThemeMode.light,
     this.onSurfaceStyleChanged,
     this.onThemeModeChanged,
-    this.bottomLeftPanelBuilder,
+    this.syncSettings,
+    this.openSyncOnLaunch = false,
+    this.titleIndicator,
+    this.titleIndicatorLabel,
+    this.titleActionLabel,
+    this.onTitleAction,
     super.key,
   });
 
@@ -64,7 +71,12 @@ class CanvasPage extends StatefulWidget {
   final ThemeMode themeMode;
   final Future<void> Function(SurfaceStyle)? onSurfaceStyleChanged;
   final Future<void> Function(ThemeMode)? onThemeModeChanged;
-  final Widget Function(VoidCallback finishInteraction)? bottomLeftPanelBuilder;
+  final Widget? syncSettings;
+  final bool openSyncOnLaunch;
+  final String? titleIndicator;
+  final String? titleIndicatorLabel;
+  final String? titleActionLabel;
+  final void Function(BuildContext)? onTitleAction;
 
   @override
   State<CanvasPage> createState() => _CanvasPageState();
@@ -82,6 +94,23 @@ class _CanvasPageState extends State<CanvasPage> {
   bool _shapeFillColorPickerExpanded = false;
   bool _arrowColorPickerExpanded = false;
   bool _textColorPickerExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.openSyncOnLaunch) _openSyncAfterFrame();
+  }
+
+  @override
+  void didUpdateWidget(covariant CanvasPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.openSyncOnLaunch && !oldWidget.openSyncOnLaunch) _openSyncAfterFrame();
+  }
+
+  void _openSyncAfterFrame() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted) unawaited(_showSettingsDialog(openSync: true));
+  });
+
   CanvasElementData? get _activeElement => _session.activeId == null ? null : _session.element(_session.activeId!);
   TextElementData? get _activeTextBlock => switch (_activeElement) {
     final TextElementData data => data,
@@ -144,9 +173,9 @@ class _CanvasPageState extends State<CanvasPage> {
     }
   }
 
-  Future<void> _showSettingsDialog(CanvasInput input) async {
+  Future<void> _showSettingsDialog({CanvasInput? input, bool openSync = false}) async {
     if (!_documentLoaded || _filePickerOpen || _settingsOpen) return;
-    input.endInteraction();
+    input?.endInteraction();
     setState(() => _settingsOpen = true);
     try {
       await showDialog<void>(
@@ -161,6 +190,8 @@ class _CanvasPageState extends State<CanvasPage> {
           onImport: widget.onImport,
           onExportCanvas: widget.onExportCanvas,
           onExportLibrary: widget.onExportLibrary,
+          syncContent: widget.syncSettings,
+          openSync: openSync,
         ),
       );
     } finally {
@@ -189,11 +220,20 @@ class _CanvasPageState extends State<CanvasPage> {
   }
 
   Widget _buildChrome(BuildContext context, CanvasInput? input) {
-    final bottomLeftPanel = widget.bottomLeftPanelBuilder?.call(() => input?.endInteraction());
+    final action = widget.onTitleAction;
     return CanvasChrome(
       title: CanvasTitle(
         path: widget.libraryPath,
         onPressed: _documentLoaded && input != null ? () => _showFilePicker(input) : null,
+        indicator: widget.titleIndicator,
+        indicatorLabel: widget.titleIndicatorLabel,
+        actionLabel: widget.titleActionLabel,
+        onAction: action == null || !_documentLoaded || input == null
+            ? null
+            : () {
+                input.endInteraction();
+                action(this.context);
+              },
       ),
       toolbar: CanvasToolbar(
         buttonsBuilder: ({required compact}) => _buildToolbarButtons(input, compact: compact),
@@ -201,23 +241,10 @@ class _CanvasPageState extends State<CanvasPage> {
       settingsButton: SurfaceIconButton(
         key: const ValueKey('settings-button'),
         tooltip: 'Settings',
-        onPressed: !_documentLoaded || input == null ? null : () => _showSettingsDialog(input),
+        onPressed: !_documentLoaded || input == null ? null : () => _showSettingsDialog(input: input),
         icon: const Icon(LucideIcons.settings),
       ),
       toolOptions: !_documentLoaded || input == null ? null : _buildToolOptions(input),
-      bottomLeftPanel: bottomLeftPanel == null
-          ? null
-          : Focus(
-              canRequestFocus: false,
-              onFocusChange: (focused) {
-                if (focused) input?.endInteraction();
-              },
-              child: Listener(
-                behavior: HitTestBehavior.opaque,
-                onPointerDown: (_) => input?.endInteraction(),
-                child: bottomLeftPanel,
-              ),
-            ),
     );
   }
 

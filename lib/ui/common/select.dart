@@ -383,6 +383,7 @@ class SearchableSelect<T> extends StatefulWidget {
     required this.options,
     required this.searchHint,
     required this.onChanged,
+    this.placeholder = '',
     this.onMenuPointerDown,
     this.preferredValues = const [],
     this.showBorder = true,
@@ -393,6 +394,7 @@ class SearchableSelect<T> extends StatefulWidget {
   final List<SelectOption<T>> options;
   final List<T> preferredValues;
   final String searchHint;
+  final String placeholder;
   final ValueChanged<T>? onChanged;
   final ValueChanged<PointerDownEvent>? onMenuPointerDown;
   final bool showBorder;
@@ -432,9 +434,8 @@ class _SearchableSelectState<T> extends State<SearchableSelect<T>> {
   double get _preferredWidth => 280;
 
   double get _compactTriggerWidth {
-    final label = _selectedOption?.label ?? '';
     return TextPainter.computeWidth(
-          text: TextSpan(text: label, style: _textStyle),
+          text: TextSpan(text: _triggerLabel, style: _textStyle),
           textDirection: Directionality.of(context),
           textScaler: MediaQuery.textScalerOf(context),
           locale: Localizations.maybeLocaleOf(context),
@@ -550,13 +551,12 @@ class _SearchableSelectState<T> extends State<SearchableSelect<T>> {
     return comparison == 0 ? a.label.compareTo(b.label) : comparison;
   }
 
-  SelectOption<T>? get _selectedOption => _findOption(widget.options, widget.value);
+  String get _triggerLabel => _findOption(widget.options, widget.value)?.label ?? widget.placeholder;
 
   // ---------- Rendering ----------
 
   @override
   Widget build(BuildContext context) {
-    final selected = _selectedOption;
     final compact = !widget.showBorder;
     final menuWidth = (compact ? _preferredWidth : _triggerWidth) - 8;
     final visibleOptions = _visibleOptions;
@@ -653,7 +653,7 @@ class _SearchableSelectState<T> extends State<SearchableSelect<T>> {
         focusNode: _triggerFocusNode,
         controller: controller,
         enabled: _enabled,
-        label: selected?.label ?? '',
+        label: _triggerLabel,
         keyPrefix: 'searchable-select',
         theme: _theme,
         showBorder: widget.showBorder,

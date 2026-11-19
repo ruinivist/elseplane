@@ -223,68 +223,54 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 ### GitHub canvas transfers
 
-- In production, the bottom-left GitHub panel appears only when an HTTPS
-  `GITHUB_MEDIATOR_URL` and public `GITHUB_APP_SLUG` are configured. It connects
-  a GitHub account through the mediator's OAuth flow and discovers repositories
-  in accessible installations of the configured GitHub App. GitHub's
-  installation page controls the repository grant; the app's single searchable
-  setup picker chooses Elseplane's current destination. After confirmation, the
-  panel displays the saved `owner/repository`, visibility, and default branch.
-  "Change repository" reopens that picker. The selected repository serves both
-  Import and Commit. Operations are manual; there is no background
-  synchronization or automatic remote-write retry. Busy transfers block
-  conflicting workspace actions.
-- Connecting saves completed canvas edits before navigation and does not begin
-  OAuth if that save fails. The returned authorization URL must be HTTPS on
-  GitHub's expected authorization endpoint. On return, the completion marker
-  is consumed and the account is verified. Repository discovery covers all
-  accessible installations and their repositories; it does not use a broad
-  repository-scope gate. A saved destination is reused only for the same account
-  and after it is resolved against the current authorized list. Access tokens
-  and installation IDs stay in memory. Logout ends the local session after
-  mediator success but does not revoke GitHub access; it retains the selected
-  destination for reconnection, and a failed logout can be retried.
-- Repository setup is a draft until the user confirms it. Search filters the
-  authorized list and never treats typed text as a destination. Cancel leaves
-  the saved choice unchanged; confirmation validates and saves the explicit
-  selection. If exactly one repository is available and there is no saved
-  choice, it may be preselected in the setup dialog but no transfer starts
-  automatically. Never silently replace an inaccessible saved choice. Import
-  and Commit only display and use the saved destination: neither asks for a
-  repository again nor changes the saved choice.
-- "Manage repository access" opens the validated GitHub installation or
-  management page in a separate tab. Use the validated
-  `https://github.com/apps/<slug>/installations/new` URL to add an account and
-  the selected installation's validated `html_url` to
-  manage an existing grant. When several installations are available, let the
-  user choose; do not guess. Finish interactions and flush completed edits
-  before opening the link; after access changes, the user explicitly refreshes
-  the list. Open the link directly without popup detection or fallback handling.
-- Repositories without push permission remain available for Import. Disable
-  Commit when the user lacks push permission or the repository is archived or
-  disabled; GitHub remains authoritative for branch rules and current
-  permissions.
-- Each action independently verifies account and repository identity, current
-  membership in the selected installation, and the latest default-branch head.
-  The installation is operation context, not proof of access; transfers do not
-  enumerate unrelated installations. Import reads the whole repository and
-  passes it through the same additive merge and collision confirmation as local
-  input. It does not change the saved destination, delete local content for
-  remote deletions, or trigger a checkpoint. A truncated repository tree cannot
-  be imported. There is no branch selector. If the default branch changes,
-  block transfer until the user refreshes and explicitly confirms the updated
-  selection. An empty repository blocks Import and Commit with: "This repository
-  is empty. Add a README on GitHub, then refresh." Do not create files, branches,
-  or commits to initialize it.
-- Commit saves completed edits and captures the current canvas, then asks for an
-  explicit nonempty lowercase Conventional Commit subject of at most 72
-  characters. It publishes the document at its full local path with
-  `.canvas.json` and included referenced images in one commit. Existing regular
-  blobs at output paths may be overwritten; unrelated files and old paths stay
-  in the repository. Structural path conflicts stop before blob upload or branch
-  update. A move or rename does not delete its old remote path. External media
-  URLs remain external.
-- There is no remote content baseline, per-canvas tracking, pending-write guard,
-  attachment-name remapping, or Check remote status workflow. An uncertain branch
-  update is reported as possibly successful with its link and is not retried
-  automatically; an explicit later submission may create another commit.
+- In production, Settings shows [Sync](github-sync-ux.md) when an HTTPS
+  `GITHUB_MEDIATOR_URL` and public `GITHUB_APP_SLUG` are configured. Sync
+  handles OAuth, account, repository, and import actions. Transfers are manual
+  and block conflicting workspace actions while busy.
+- Connecting saves completed canvas edits before navigation. The authorization
+  URL must use GitHub's expected HTTPS endpoint. On return, the completion marker
+  opens Sync and the account is verified. Discovery covers all accessible
+  installations and repositories without a broad repository-scope gate. Access
+  tokens and installation IDs stay in memory. Direct logout retains the saved
+  destination for reconnection with the same account. A failed logout offers an
+  inline retry.
+- The searchable dropdown filters authorized repositories. Choosing an entry
+  validates and saves it for both Import and Commit. An invalid choice leaves
+  the saved destination in place. Sync displays repository visibility and the
+  default branch and offers an explicit refresh. The first valid choice offers
+  import or Skip. Regular import remains available after either choice.
+- **Manage GitHub access** shows installation choices inline when applicable.
+  The validated install or management URL opens in a separate tab. Finish
+  interactions and save completed edits before opening the link. Refresh
+  discovery after changing access on GitHub.
+- Import and Commit verify account, repository identity, selected installation
+  membership, and the current default branch head. A default branch change
+  requires fresh discovery and explicit reselection. An empty repository needs
+  an initial commit on GitHub before Elseplane can use it. Read access enables
+  Import. Commit requires verified Contents write and push access and an active
+  repository. GitHub enforces current permissions and branch rules.
+- Import reads the whole repository from the latest default branch and uses
+  the shared additive merge. Overwrite review and results appear in Sync.
+  Review lists the existing paths and warns that shared images may change.
+  Canceling or dismissing the review leaves local data untouched. A successful
+  import records baselines for the imported canvases. A truncated tree cannot
+  be imported.
+- The signed-in account's selected destination gives the current canvas an
+  uncommitted-changes marker when its canvas path, canonical document, or
+  referenced bytes differ from its local baseline, or when it has no baseline
+  for that account, repository, and branch. Autosave leaves that comparison
+  intact. The title opens the explorer. Hover or keyboard focus reveals
+  **Commit…** beside the marker without shifting the name. The marker also
+  opens the commit dialog on touch when write access is verified.
+- Commit saves completed edits, captures the canvas, and asks for a nonempty
+  lowercase Conventional Commit subject of at most 72 characters. It publishes
+  the full local `.canvas.json` path and included referenced images in one
+  commit. Existing regular blobs at output paths may be overwritten. Unrelated
+  files and paths from before a rename or move stay in the repository. Structural
+  conflicts stop before uploads or a branch update. External media URLs stay
+  external.
+- A confirmed commit records the captured version. The marker clears when the
+  current version matches it. Canvas feedback links to the commit and reports
+  a local baseline save failure if one occurs. An uncertain branch update keeps
+  the marker and offers a link to check GitHub with a duplicate-commit warning.
+  Remote writes are never retried automatically.

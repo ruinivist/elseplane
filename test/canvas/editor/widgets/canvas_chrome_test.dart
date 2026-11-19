@@ -10,11 +10,81 @@ import 'package:elseplane/ui/common/surface.dart';
 import 'package:elseplane/ui/common/surface_icon_button.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // ---------- Tests ----------
 
 void main() {
+  for (final (theme, width) in [(starlessLightThemeData, 1000.0), (starlessDarkThemeData, 200.0)]) {
+    testWidgets('the title action supports mouse, keyboard and touch at width $width', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = Size(width, 520);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      var explorerOpens = 0;
+      var commitOpens = 0;
+      final name = width < 500 ? 'A very long canvas name within a narrow editor' : 'Physics';
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: CanvasChrome(
+              title: CanvasTitle(
+                path: ['Folder', name],
+                indicator: '*',
+                indicatorLabel: 'Uncommitted changes',
+                actionLabel: 'Commit…',
+                onAction: () => commitOpens++,
+                onPressed: () => explorerOpens++,
+              ),
+              toolbar: const SizedBox(width: 170, height: 40),
+              settingsButton: const IconButton(onPressed: null, icon: Icon(Icons.settings)),
+              toolOptions: null,
+            ),
+          ),
+        ),
+      );
+      final title = find.text(name);
+      final marker = find.byTooltip('Uncommitted changes');
+      final action = find.widgetWithText(TextButton, 'Commit…');
+      final initialTitle = tester.getRect(title);
+      expect(action.hitTestable(), findsNothing);
+      expect(marker.hitTestable(), findsOneWidget);
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: initialTitle.center);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(title), initialTitle);
+      expect(action.hitTestable(), findsOneWidget);
+      await mouse.moveTo(tester.getCenter(action));
+      await tester.pumpAndSettle();
+      expect(action.hitTestable(), findsOneWidget);
+      expect(tester.getRect(title), initialTitle);
+      await mouse.moveTo(const Offset(1, 500));
+      await tester.pumpAndSettle();
+      expect(action.hitTestable(), findsNothing);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(action.hitTestable(), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(commitOpens, 1);
+      expect(explorerOpens, 0);
+
+      await tester.tap(title);
+      expect(explorerOpens, 1);
+      await tester.tap(marker);
+      expect(commitOpens, 2);
+      expect(explorerOpens, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final density in [VisualDensity.compact, VisualDensity.standard]) {
     testWidgets('preserves desktop sizing and compacts with left title at density $density', (tester) async {
       tester.view.devicePixelRatio = 1;

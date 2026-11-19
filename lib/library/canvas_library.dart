@@ -15,6 +15,7 @@ class CanvasFile {
     required this.name,
     this.parentId,
     this.document,
+    this.githubBaseline,
   });
 
   factory CanvasFile.fromJson(Map<String, dynamic> json) {
@@ -23,6 +24,7 @@ class CanvasFile {
       name: json['name'] as String,
       parentId: json['parentId'] as String?,
       document: json['document'] == null ? null : CanvasDocument.fromJson(json['document']),
+      githubBaseline: json['githubBaseline'] == null ? null : GitHubBaseline.fromJson(json['githubBaseline']),
     );
   }
 
@@ -30,14 +32,16 @@ class CanvasFile {
   final String name;
   final String? parentId;
   final CanvasDocument? document;
+  final GitHubBaseline? githubBaseline;
 
   bool get isFolder => document == null;
 
-  CanvasFile copyWith({String? name, CanvasDocument? document}) => CanvasFile(
+  CanvasFile copyWith({String? name, CanvasDocument? document, GitHubBaseline? githubBaseline}) => CanvasFile(
     id: id,
     name: name ?? this.name,
     parentId: parentId,
     document: document ?? this.document,
+    githubBaseline: githubBaseline ?? this.githubBaseline,
   );
 
   Map<String, Object?> toJson() => {
@@ -45,14 +49,19 @@ class CanvasFile {
     'name': name,
     'parentId': parentId,
     'document': document?.toJson(),
+    if (githubBaseline != null) 'githubBaseline': githubBaseline!.toJson(),
   };
 }
 
 // ---------- Library ----------
 
 class CanvasLibrary {
-  CanvasLibrary({required List<CanvasFile> files, required this.currentId, this.githubDestination})
-    : files = List.unmodifiable(files);
+  CanvasLibrary({
+    required List<CanvasFile> files,
+    required this.currentId,
+    this.githubDestination,
+    this.githubImportPromptPending = false,
+  }) : files = List.unmodifiable(files);
 
   factory CanvasLibrary.initial([CanvasDocument? document]) {
     final file = CanvasFile(id: const Uuid().v4(), name: 'Untitled', document: document ?? emptyDocument);
@@ -71,12 +80,14 @@ class CanvasLibrary {
       githubDestination: source['githubDestination'] == null
           ? null
           : GitHubDestination.fromJson(source['githubDestination']),
+      githubImportPromptPending: source['githubImportPromptPending'] as bool? ?? false,
     );
     final ids = <String>{};
     for (final file in library.files) {
       if (file.id.isEmpty || file.name.trim().isEmpty || !ids.add(file.id)) {
         throw const FormatException('Invalid file name or id');
       }
+      if (file.isFolder && file.githubBaseline != null) throw const FormatException('Folder has a GitHub baseline');
       final ancestors = <String>{file.id};
       var parent = file.parentId;
       while (parent != null) {
@@ -95,6 +106,7 @@ class CanvasLibrary {
   final List<CanvasFile> files;
   final String currentId;
   final GitHubDestination? githubDestination;
+  final bool githubImportPromptPending;
 
   CanvasFile file(String id) => files.firstWhere((file) => file.id == id);
   CanvasFile get current => file(currentId);
@@ -157,13 +169,23 @@ class CanvasLibrary {
     validateTransferEntries(entries);
   }
 
-  CanvasLibrary replace(CanvasFile replacement) => CanvasLibrary(
+  CanvasLibrary copyWith({
+    List<CanvasFile>? files,
+    String? currentId,
+    GitHubDestination? githubDestination,
+    bool? githubImportPromptPending,
+  }) => CanvasLibrary(
+    files: files ?? this.files,
+    currentId: currentId ?? this.currentId,
+    githubDestination: githubDestination ?? this.githubDestination,
+    githubImportPromptPending: githubImportPromptPending ?? this.githubImportPromptPending,
+  );
+
+  CanvasLibrary replace(CanvasFile replacement) => copyWith(
     files: [
       for (final entry in files)
         if (entry.id == replacement.id) replacement else entry,
     ],
-    currentId: currentId,
-    githubDestination: githubDestination,
   );
 
   CanvasLibrary move(String id, {required String? parentId, String? beforeId}) {
@@ -193,16 +215,17 @@ class CanvasLibrary {
       name: source.name,
       parentId: parentId,
       document: source.document,
+      githubBaseline: source.githubBaseline,
     );
     final next = files.where((entry) => entry.id != id).toList();
     final insertAt = beforeId == null ? next.length : next.indexWhere((entry) => entry.id == beforeId);
     next.insert(insertAt, moved);
-    return CanvasLibrary(files: next, currentId: currentId, githubDestination: githubDestination);
+    return copyWith(files: next);
   }
 
   CanvasLibrary select(String id) {
     if (file(id).isFolder) throw ArgumentError('Cannot open a folder as a canvas');
-    return CanvasLibrary(files: files, currentId: id, githubDestination: githubDestination);
+    return copyWith(currentId: id);
   }
 
   String? nameError(String name, String? parentId, {String? exceptId, bool? isFolder}) {
@@ -230,7 +253,7 @@ class CanvasLibrary {
       candidate,
     ];
     try {
-      CanvasLibrary(files: candidateFiles, currentId: currentId, githubDestination: githubDestination).validatePaths();
+      copyWith(files: candidateFiles).validatePaths();
       return null;
     } on FormatException catch (error) {
       return error.message;
@@ -241,6 +264,7 @@ class CanvasLibrary {
     'version': 1,
     'currentId': currentId,
     'githubDestination': githubDestination?.toJson(),
+    if (githubImportPromptPending) 'githubImportPromptPending': true,
     'files': files.map((file) => file.toJson()).toList(),
   };
 }

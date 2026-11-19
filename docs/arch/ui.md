@@ -17,6 +17,15 @@
   layout and selection local. Retain shared primitives only with production
   consumers.
 
+## Sync presentation
+
+Settings owns section navigation and its responsive layout. Workspace supplies
+the GitHub feature's Sync content. It uses the shared searchable select and
+themed buttons, with setup feedback and overwrite review in the section.
+Canvas chrome lays out the generic title indicator and action. The title keeps
+the name in place while hover or descendant focus reveals the action. GitHub
+reports commit results in canvas notifications with links.
+
 ## Dependencies and reuse
 
 - Use `scroll_animator` 0.3.0 with `ChromiumEaseInOut` for smooth pointer

@@ -17,7 +17,6 @@ class CanvasChrome extends StatelessWidget {
     required this.toolbar,
     required this.settingsButton,
     required this.toolOptions,
-    this.bottomLeftPanel,
     super.key,
   });
 
@@ -25,7 +24,6 @@ class CanvasChrome extends StatelessWidget {
   final Widget toolbar;
   final Widget settingsButton;
   final Widget? toolOptions;
-  final Widget? bottomLeftPanel;
 
   // ---------- Rendering ----------
 
@@ -44,11 +42,13 @@ class CanvasChrome extends StatelessWidget {
             id: _Control.title,
             child: Align(
               alignment: Alignment.topLeft,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                reverse: true,
-                child: title,
-              ),
+              child: title.indicator != null
+                  ? title
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      reverse: true,
+                      child: title,
+                    ),
             ),
           ),
           LayoutId(id: _Control.settings, child: settingsButton),
@@ -56,7 +56,6 @@ class CanvasChrome extends StatelessWidget {
             id: _Control.options,
             child: ToolOptions(child: toolOptions),
           ),
-          if (bottomLeftPanel case final panel?) LayoutId(id: _Control.bottomLeftPanel, child: panel),
         ],
       ),
     ),
@@ -65,7 +64,7 @@ class CanvasChrome extends StatelessWidget {
 
 // ---------- Layout ----------
 
-enum _Control { toolbar, title, settings, options, bottomLeftPanel }
+enum _Control { toolbar, title, settings, options }
 
 /// Places controls using their natural sizes, including Flutter density.
 /// Keeps title and settings clear of the toolbar and its wrapped rows.
@@ -104,14 +103,6 @@ class _ChromeLayout extends MultiChildLayoutDelegate {
       ),
     );
     positionChild(_Control.options, Offset(size.width - options.width, optionsTop));
-
-    if (hasChild(_Control.bottomLeftPanel)) {
-      final panel = layoutChild(
-        _Control.bottomLeftPanel,
-        BoxConstraints(maxWidth: math.min(size.width, 360), maxHeight: size.height / 2),
-      );
-      positionChild(_Control.bottomLeftPanel, Offset(0, size.height - panel.height));
-    }
   }
 
   @override

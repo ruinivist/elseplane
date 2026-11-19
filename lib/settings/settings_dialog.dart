@@ -28,6 +28,8 @@ class SettingsDialog extends StatefulWidget {
     this.onImport,
     this.onExportCanvas,
     this.onExportLibrary,
+    this.syncContent,
+    this.openSync = false,
     super.key,
   });
 
@@ -43,6 +45,8 @@ class SettingsDialog extends StatefulWidget {
   final Future<bool> Function()? onImport;
   final Future<void> Function()? onExportCanvas;
   final Future<void> Function()? onExportLibrary;
+  final Widget? syncContent;
+  final bool openSync;
 
   @override
   State<SettingsDialog> createState() => _SettingsDialogState();
@@ -50,16 +54,19 @@ class SettingsDialog extends StatefulWidget {
 
 // ---------- Sections ----------
 
-enum _SettingsSection { about, appearance, canvas }
+enum _SettingsSection { about, appearance, canvas, sync }
 
 class _SettingsDialogState extends State<SettingsDialog> {
+  static const _contentPadding = EdgeInsets.fromLTRB(16, 24, 16, 16);
   static const _aboutLogo = SvgAssetLoader('assets/brand/elseplane-logo.svg');
   static const _repositoryUrl = 'https://github.com/ruinivist/elseplane';
   static const _gitSha = String.fromEnvironment('GIT_SHA');
 
   // ---------- State ----------
 
-  _SettingsSection _section = _SettingsSection.canvas;
+  late _SettingsSection _section = widget.openSync && widget.syncContent != null
+      ? _SettingsSection.sync
+      : _SettingsSection.canvas;
   late ThemeMode _themeMode = widget.themeMode;
   late CanvasBackgroundKind _canvasBackgroundKind = widget.canvasBackgroundKind;
   var _transferActive = false;
@@ -162,7 +169,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
         _divider(theme),
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: _contentPadding,
             child: _sectionContent(context),
           ),
         ),
@@ -174,7 +181,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     final theme = BTheme.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final horizontalNavigation = constraints.maxWidth >= 480;
+        final horizontalNavigation = constraints.maxWidth >= 480 && widget.syncContent == null;
         final navigation = _navigation(
           context,
           padding: const EdgeInsets.all(16),
@@ -193,7 +200,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: _contentPadding,
                 child: _sectionContent(context),
               ),
             ],
@@ -224,6 +231,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
         icon: Icons.grid_view,
         label: 'Canvas',
       ),
+      if (widget.syncContent != null)
+        _navigationItem(
+          context,
+          section: _SettingsSection.sync,
+          icon: Icons.sync,
+          label: 'Sync',
+        ),
       _navigationItem(
         context,
         section: _SettingsSection.about,
@@ -315,6 +329,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       _SettingsSection.about => _aboutContent(context),
       _SettingsSection.appearance => _appearanceContent(context),
       _SettingsSection.canvas => _canvasContent(context),
+      _SettingsSection.sync => widget.syncContent!,
     };
   }
 

@@ -119,13 +119,11 @@ class LibraryController extends ChangeNotifier {
   Future<String?> create(CanvasFile draft, {String? openId}) => _change(() async {
     if (library.files.any((file) => file.id == draft.id)) throw ArgumentError('File already exists');
     _validateName(draft.name, draft.parentId, isFolder: draft.isFolder);
-    var next = CanvasLibrary(
+    var next = library.copyWith(
       files: [
         ...library.files,
         draft.copyWith(name: draft.name.trim()),
       ],
-      currentId: library.currentId,
-      githubDestination: library.githubDestination,
     );
     final selected = openId ?? (draft.isFolder ? null : draft.id);
     if (selected != null) next = next.select(selected);
@@ -161,7 +159,7 @@ class LibraryController extends ChangeNotifier {
         ? library.currentId
         : remaining.firstWhere((entry) => !entry.isFolder).id;
     final changed = currentId != library.currentId;
-    await _persist(CanvasLibrary(files: remaining, currentId: currentId, githubDestination: library.githubDestination));
+    await _persist(library.copyWith(files: remaining, currentId: currentId));
     _discardPending(_pending.keys.where((id) => !remaining.any((file) => file.id == id)).toList());
     return changed ? currentId : null;
   });
@@ -173,8 +171,21 @@ class LibraryController extends ChangeNotifier {
   }
 
   Future<void> setGitHubDestination(GitHubDestination destination) => _change(() async {
-    await _persist(CanvasLibrary(files: library.files, currentId: library.currentId, githubDestination: destination));
+    await _persist(
+      library.copyWith(
+        githubDestination: destination,
+        githubImportPromptPending: library.githubDestination == null || library.githubImportPromptPending,
+      ),
+    );
   });
+
+  Future<void> dismissGitHubImportPrompt() => _change(() async {
+    if (!library.githubImportPromptPending) return;
+    await _persist(library.copyWith(githubImportPromptPending: false));
+  });
+
+  Future<void> saveGitHubBaseline(String fileId, GitHubBaseline baseline) =>
+      _change(() => _persist(library.replace(library.file(fileId).copyWith(githubBaseline: baseline))));
 
   // ---------- Transfers ----------
 
@@ -198,6 +209,7 @@ class LibraryController extends ChangeNotifier {
   Future<TransferImportResult> importTransfer(
     TransferMerge merge, {
     required Set<String> confirmedOverwritePaths,
+    GitHubDestination? githubDestination,
   }) {
     final confirmedPaths = Set<String>.of(confirmedOverwritePaths);
     TransferImportResult result({
@@ -225,7 +237,7 @@ class LibraryController extends ChangeNotifier {
       late final _TransferCandidateMerge prepared;
       late final Map<String, Uint8List> eligibleImages;
       try {
-        prepared = _mergeTransferCandidate(library, merge.candidate);
+        prepared = _mergeTransferCandidate(library, merge.candidate, githubDestination: githubDestination);
         prepared.library.validatePaths();
         eligibleImages = _eligibleTransferImages(merge.candidate);
       } on FormatException {
@@ -310,7 +322,11 @@ class LibraryController extends ChangeNotifier {
     });
   }
 
-  _TransferCandidateMerge _mergeTransferCandidate(CanvasLibrary current, TransferImport candidate) {
+  _TransferCandidateMerge _mergeTransferCandidate(
+    CanvasLibrary current,
+    TransferImport candidate, {
+    GitHubDestination? githubDestination,
+  }) {
     current.validatePaths();
     final folderIds = <String, String>{};
     final existingCanvasIds = <String, String>{};
@@ -368,25 +384,24 @@ class LibraryController extends ChangeNotifier {
       final parentId = parentPath.isEmpty ? null : folderIds[parentPath];
       if (parentPath.isNotEmpty && parentId == null) throw FormatException('Invalid canvas path: $path');
       final existingId = existingCanvasIds[path];
+      final document = candidate.canvases[path]!;
+      final baseline = githubDestination == null
+          ? null
+          : GitHubBaseline.capture(githubDestination, path, document, candidate.attachments);
       if (existingId != null) {
         final index = files.indexWhere((file) => file.id == existingId);
-        files[index] = files[index].copyWith(document: candidate.canvases[path]);
+        files[index] = files[index].copyWith(document: document, githubBaseline: baseline);
         overwritePaths.add(path);
       } else {
         final id = _newLocalId(usedIds);
         usedIds.add(id);
-        files.add(CanvasFile(id: id, name: name, parentId: parentId, document: candidate.canvases[path]));
+        files.add(CanvasFile(id: id, name: name, parentId: parentId, document: document, githubBaseline: baseline));
       }
       changed = true;
     }
 
-    final merged = CanvasLibrary(
-      files: files,
-      currentId: current.currentId,
-      githubDestination: current.githubDestination,
-    );
     return _TransferCandidateMerge(
-      library: merged,
+      library: current.copyWith(files: files),
       overwritePaths: Set.unmodifiable(overwritePaths),
       existingCanvasIds: Map.unmodifiable(existingCanvasIds),
       changed: changed,
@@ -486,13 +501,12 @@ class LibraryController extends ChangeNotifier {
         await _attachments.write(path, images[path]!);
       }
       await _persist(
-        CanvasLibrary(
+        library.copyWith(
           files: [
             ...library.files,
             CanvasFile(id: id, name: name, document: document),
           ],
           currentId: id,
-          githubDestination: library.githubDestination,
         ),
         replaceDocument: true,
       );

@@ -47,13 +47,11 @@ and mediator state stay in local ignored configuration.
    ```
 
    Start the app with both public values configured and connect through the
-   GitHub panel. The installation flow
-   grants the app access to selected repositories or all repositories; the
-   searchable setup picker then chooses one saved destination for both Import
-   and Commit. Import and Commit use the displayed saved destination and do not
-   reopen the picker.
-5. To add or remove repository access, use **Manage repository access** in the
-   panel and then select **Refresh** in Elseplane. Choose a repository with a
+   **Settings → Sync**. The installation flow grants repository access. The
+   searchable dropdown saves a destination for both **Import from GitHub…** in
+   Sync and **Commit…** beside the canvas title.
+5. To add or remove repository access, use **Manage GitHub access** in Sync
+   and then select **Refresh repositories** in Elseplane. Choose a repository with a
    default-branch commit. Empty repositories are rejected with: "This repository
    is empty. Add a README on GitHub, then refresh." Add the README on GitHub,
    refresh the list, and select the repository again; Elseplane does not
@@ -61,11 +59,11 @@ and mediator state stay in local ignored configuration.
 
 ## Verification and recovery
 
-- Confirm the GitHub panel is configured only when both public frontend values
+- Confirm Sync appears only when both public frontend values
   are present and the mediator URL uses HTTPS.
-- After OAuth, confirm account verification and repository discovery. A failed
-  discovery leaves the current saved destination unchanged and can be retried
-  with **Refresh**; it does not by itself mean the account is disconnected.
+- After OAuth, confirm that Settings returns to Sync and shows the verified
+  account. When discovery fails, the saved destination is preserved and
+  **Refresh repositories** retries discovery.
 - If the app has no accessible installations or repositories, manage its
   installation grant on GitHub and refresh. Do not replace a missing saved
   choice silently.

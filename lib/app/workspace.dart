@@ -8,7 +8,10 @@ import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/github/github_api.dart';
-import 'package:elseplane/github/github_workspace_panel.dart';
+import 'package:elseplane/github/github_browser.dart';
+import 'package:elseplane/github/github_sync.dart';
+import 'package:elseplane/github/github_sync_settings.dart';
+import 'package:elseplane/library/github_metadata.dart';
 import 'package:elseplane/library/library_controller.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_project_files.dart';
@@ -66,25 +69,43 @@ class _WorkspaceState extends State<Workspace> {
     files: widget.projectFiles,
     onAttachmentPathsChanged: _invalidateAttachments,
   );
+  late final GitHubSync? _github = widget.githubApi == null
+      ? null
+      : GitHubSync(
+          api: widget.githubApi!,
+          appSlug: widget.githubAppSlug!,
+          library: _library,
+          attachmentStore: widget.attachmentStore,
+          beginTransfer: _beginTransfer,
+          endTransfer: _endTransfer,
+          onImport: _importTransfer,
+          navigate: widget.navigateGitHubAuthorization ?? navigateGitHubAuthorization,
+          consumeCompletion: widget.consumeGitHubCompletion ?? consumeGitHubCompletion,
+          openLink: widget.openGitHubLink ?? openGitHubLink,
+        );
   EditorSession? _editor;
   VoidCallback? _documentListener;
   String? _fileId;
   Object? _reportedSaveError;
   var _blocked = false;
   var _transferActive = false;
+  var _returnToSync = false;
   void Function(Set<String>)? _attachmentInvalidator;
 
   @override
   void initState() {
     super.initState();
     _library.addListener(_libraryChanged);
+    _github?.addListener(_githubChanged);
     unawaited(_load());
   }
 
   Future<void> _load() async {
     try {
       await _library.load();
-      if (mounted) _replaceEditor();
+      if (!mounted) return;
+      _returnToSync = _github?.restore() ?? false;
+      _replaceEditor();
     } on Object {
       if (mounted) _showMessage('Could not load saved canvas');
     }
@@ -113,10 +134,18 @@ class _WorkspaceState extends State<Workspace> {
     final error = _library.saveError;
     if (error != null && !identical(error, _reportedSaveError)) _showMessage('Could not save canvas');
     _reportedSaveError = error;
+    _github?.updateCanvas();
     setState(() {});
   }
 
-  void _invalidateAttachments(Set<String> paths) => _attachmentInvalidator?.call(paths);
+  void _githubChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _invalidateAttachments(Set<String> paths) {
+    _attachmentInvalidator?.call(paths);
+    _github?.attachmentsChanged();
+  }
 
   // Keep a stable callback tear-off so CanvasView does not re-register on every rebuild.
   // ignore: use_setters_to_change_properties
@@ -134,7 +163,10 @@ class _WorkspaceState extends State<Workspace> {
       defaults: previous?.defaults,
     );
     _documentListener = () {
-      if (editor.isLive && identical(token, _library.documentToken)) _library.updateDocument(fileId, editor.document);
+      if (editor.isLive && identical(token, _library.documentToken)) {
+        _library.updateDocument(fileId, editor.document);
+        _github?.updateCanvas();
+      }
     };
     editor.documentChanges.addListener(_documentListener!);
     if (previous != null) WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
@@ -144,6 +176,7 @@ class _WorkspaceState extends State<Workspace> {
   void dispose() {
     if (_documentListener != null) _editor?.documentChanges.removeListener(_documentListener!);
     _editor?.dispose();
+    _github?.dispose();
     _library
       ..removeListener(_libraryChanged)
       ..dispose();
@@ -204,16 +237,6 @@ class _WorkspaceState extends State<Workspace> {
       if (!mounted || source == null) return false;
       final result = await _importTransfer(source);
       return result.failure == null && result.metadataSaved;
-    } on FormatException {
-      await _showTransferReport(
-        TransferImportResult(
-          skippedCanvases: const [],
-          writtenImagePaths: const [],
-          metadataSaved: false,
-          failure: const TransferFailure(reason: 'Could not prepare transfer', stage: TransferFailureStage.preparation),
-        ),
-      );
-      return false;
     } on Exception {
       await _showTransferReport(
         TransferImportResult(
@@ -229,8 +252,17 @@ class _WorkspaceState extends State<Workspace> {
     }
   }
 
-  Future<TransferImportResult> _importTransfer(TransferSource source) async {
+  Future<TransferImportResult> _importTransfer(
+    TransferSource source, {
+    GitHubDestination? githubDestination,
+    Future<bool> Function(Set<String>)? confirmOverwrite,
+    ValueChanged<String>? report,
+  }) async {
     TransferImport? candidate;
+    Future<void> presentResult(TransferImportResult result, {bool cancelled = false}) async {
+      await _showTransferReport(result, candidate: candidate, cancelled: cancelled, inline: report);
+    }
+
     try {
       await _library.flush();
       candidate = await decodeTransfer(source);
@@ -238,43 +270,36 @@ class _WorkspaceState extends State<Workspace> {
       if (!mounted) {
         return _transferResult(candidate.skippedCanvases);
       }
-      if (merge.overwritePaths.isNotEmpty && !await _confirmTransferOverwrite(merge.overwritePaths)) {
+      if (merge.overwritePaths.isNotEmpty &&
+          !await (confirmOverwrite ?? _confirmTransferOverwrite)(merge.overwritePaths)) {
         final result = _transferResult(candidate.skippedCanvases);
-        await _showTransferReport(result, cancelled: true);
+        await presentResult(result, cancelled: true);
         return result;
       }
       if (!mounted) return _transferResult(candidate.skippedCanvases);
 
       final token = _library.documentToken;
-      final result = await _library.importTransfer(merge, confirmedOverwritePaths: merge.overwritePaths);
-      final affected = <String>{
-        ...result.writtenImagePaths,
-        if (result.failure?.stage == TransferFailureStage.imageWrite) result.failure!.path!,
-      };
-      if (affected.isNotEmpty) _invalidateAttachments(affected);
-      if (result.metadataSaved && !identical(token, _library.documentToken) && mounted) _replaceEditor();
-      await _showTransferReport(result, candidate: candidate);
-      return result;
-    } on FormatException {
-      final result = _transferResult(
-        candidate?.skippedCanvases ?? const [],
-        failure: const TransferFailure(reason: 'Could not prepare transfer', stage: TransferFailureStage.preparation),
+      final result = await _library.importTransfer(
+        merge,
+        confirmedOverwritePaths: merge.overwritePaths,
+        githubDestination: githubDestination,
       );
-      await _showTransferReport(result);
+      if (result.metadataSaved && !identical(token, _library.documentToken) && mounted) _replaceEditor();
+      await presentResult(result);
       return result;
     } on GitHubApiException catch (error) {
       final result = _transferResult(
         candidate?.skippedCanvases ?? const [],
         failure: TransferFailure(reason: error.message, stage: TransferFailureStage.preparation),
       );
-      await _showTransferReport(result);
+      await presentResult(result);
       return result;
     } on Exception {
       final result = _transferResult(
         candidate?.skippedCanvases ?? const [],
         failure: const TransferFailure(reason: 'Could not prepare transfer', stage: TransferFailureStage.preparation),
       );
-      await _showTransferReport(result);
+      await presentResult(result);
       return result;
     }
   }
@@ -318,12 +343,18 @@ class _WorkspaceState extends State<Workspace> {
     TransferImportResult result, {
     TransferImport? candidate,
     bool cancelled = false,
+    ValueChanged<String>? inline,
   }) async {
     if (!mounted) return;
     final lines = <String>[
       if (cancelled) 'Import canceled.',
       if (!cancelled && result.metadataSaved)
         'Imported ${candidate?.canvases.length ?? 0} ${candidate?.canvases.length == 1 ? 'canvas' : 'canvases'}.',
+      if (inline != null && result.metadataSaved && candidate != null) ...(candidate.canvases.keys.toList()..sort()),
+      if (inline != null && result.writtenImagePaths.isNotEmpty) ...[
+        'Updated images:',
+        ...result.writtenImagePaths,
+      ],
       if (!cancelled && !result.metadataSaved && result.writtenImagePaths.isNotEmpty && result.failure == null)
         'Images changed; the library metadata was unchanged.',
       if (result.failure case final failure?) ...[
@@ -337,6 +368,10 @@ class _WorkspaceState extends State<Workspace> {
       if (!cancelled && result.failure == null && !result.metadataSaved && result.writtenImagePaths.isEmpty)
         'No changes to import.',
     ];
+    if (inline != null) {
+      inline(lines.join('\n'));
+      return;
+    }
     await showDialog<void>(
       context: context,
       builder: (context) => SurfaceConfirmationDialog(
@@ -358,6 +393,7 @@ class _WorkspaceState extends State<Workspace> {
   Widget build(BuildContext context) {
     final fileId = _fileId;
     final fileExists = fileId != null && _library.library.files.any((file) => file.id == fileId);
+    final github = _github;
     return CanvasPage(
       session: _editor,
       blocked: _blocked,
@@ -376,23 +412,14 @@ class _WorkspaceState extends State<Workspace> {
       themeMode: widget.themeMode,
       onSurfaceStyleChanged: widget.onSurfaceStyleChanged,
       onThemeModeChanged: widget.onThemeModeChanged,
-      bottomLeftPanelBuilder: widget.githubApi == null || _editor == null
-          ? null
-          : (finishInteraction) => GitHubWorkspacePanel(
-              api: widget.githubApi!,
-              githubAppSlug: widget.githubAppSlug,
-              library: _library,
-              attachmentStore: widget.attachmentStore,
-              currentFileId: fileId!,
-              blocked: _blocked || _transferActive,
-              beginTransfer: _beginTransfer,
-              endTransfer: _endTransfer,
-              onImportTransfer: _importTransfer,
-              finishInteraction: finishInteraction,
-              navigateGitHubAuthorization: widget.navigateGitHubAuthorization,
-              consumeGitHubCompletion: widget.consumeGitHubCompletion,
-              openGitHubLink: widget.openGitHubLink,
-            ),
+      syncSettings: github == null ? null : GitHubSyncSettings(sync: github),
+      openSyncOnLaunch: _returnToSync,
+      titleIndicator: github?.uncommitted == true ? '*' : null,
+      titleIndicatorLabel: 'Uncommitted changes',
+      titleActionLabel: 'Commit…',
+      onTitleAction: github != null && _editor != null && github.canCommitCurrent && !github.busy
+          ? github.commit
+          : null,
     );
   }
 }

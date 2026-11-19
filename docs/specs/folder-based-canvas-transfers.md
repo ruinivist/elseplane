@@ -366,8 +366,7 @@ local merge operation; it is not a separate replacement mode.
 Each checkpoint independently verifies the saved account and repository and
 freshly checks membership in the selected installation, then captures a fresh
 default-branch head and bounded recursive tree at that operation's start. It
-does not reuse an import tree or track a baseline. Encode
-the captured current canvas and publish it with all included image bytes in one
+captures its own tree. Encode the captured current canvas and publish it with all included image bytes in one
 commit. The document path mirrors its full local parent path and name with
 `.canvas.json`; image paths are relative to that document's parent. Before
 uploading blobs, validate the proposed paths against the freshly captured tree:
@@ -394,11 +393,12 @@ remote cleanup, or retry behavior.
 Keep the current explicit commit-message requirement: a nonempty lowercase
 Conventional Commit subject of at most 72 characters.
 
-There is no remote content baseline, per-canvas tracking, pending-write guard,
-remote attachment collision remapping, force push, conflict UI, or automatic
-retry. A branch race may reject the commit. If the result is uncertain, report
-that it may have succeeded and show its link. Do not retry automatically. A user
-may submit again; GitHub may then contain another identical history commit.
+The [GitHub sync UX](github-sync-ux.md) records local per-canvas baselines after
+confirmed commits and successful imports. These baselines describe transferred
+versions and do not affect remote overwrite or conflict rules. A branch race
+may reject the commit. An uncertain update leaves the baseline intact and
+offers a link to check GitHub. An explicit later submission may create a duplicate
+commit. Remote writes are never retried automatically.
 
 Keep the existing GitHub account and repository identity checks, in-memory
 session credentials, cookie-enabled mediator separation, sanitized errors,
