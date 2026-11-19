@@ -104,17 +104,19 @@ do not rewrite existing content when appearance settings change. Library
 durability details are in [persistence](persistence.md).
 
 `app/app.dart` creates the browser GitHub client only when the HTTPS
-`GITHUB_MEDIATOR_URL` build value is configured; tests can inject the API and
-browser callbacks. `Workspace` composes `GitHubWorkspacePanel` with the library
-and editor. It owns settings transfers, the shared transfer interlock, the
-provider-neutral import coordinator, and imported-editor replacement after
-durable success. The GitHub feature widget owns the session controller, account
-restoration, repository UI, transport orchestration, and browser navigation; it
+`GITHUB_MEDIATOR_URL` and public `GITHUB_APP_SLUG` build values are configured;
+tests can inject the API and browser callbacks. `Workspace` composes
+`GitHubWorkspacePanel` with the library and editor. It owns settings transfers,
+the shared transfer interlock, the provider-neutral import coordinator, and
+imported-editor replacement after durable success. The GitHub feature widget
+owns the session controller, account restoration, installation/repository
+discovery state, repository UI, transport orchestration, and browser navigation.
+Installation IDs are transient GitHub-feature operation context; the feature
 uses Workspace callbacks for common import and persists only the selected
-destination through the library controller. No remote content baseline,
-per-canvas tracking, or pending-write guard is persisted. `CanvasPage` exposes a
-generic bottom-left panel builder and passes it an editor interaction-finishing
-callback; editor code does not import GitHub.
+destination through the library controller. No access token, installation ID,
+remote content baseline, per-canvas tracking, or pending-write guard is
+persisted. `CanvasPage` exposes a generic bottom-left panel builder and passes it
+an editor interaction-finishing callback; editor code does not import GitHub.
 
 ## Design and file rules
 

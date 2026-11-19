@@ -32,6 +32,7 @@ class Workspace extends StatefulWidget {
     this.onSurfaceStyleChanged,
     this.onThemeModeChanged,
     this.githubApi,
+    this.githubAppSlug,
     this.navigateGitHubAuthorization,
     this.consumeGitHubCompletion,
     this.openGitHubLink,
@@ -47,6 +48,7 @@ class Workspace extends StatefulWidget {
   final Future<void> Function(SurfaceStyle)? onSurfaceStyleChanged;
   final Future<void> Function(ThemeMode)? onThemeModeChanged;
   final GitHubApi? githubApi;
+  final String? githubAppSlug;
   final void Function(Uri)? navigateGitHubAuthorization;
   final bool Function()? consumeGitHubCompletion;
   final void Function(String url)? openGitHubLink;
@@ -378,6 +380,7 @@ class _WorkspaceState extends State<Workspace> {
           ? null
           : (finishInteraction) => GitHubWorkspacePanel(
               api: widget.githubApi!,
+              githubAppSlug: widget.githubAppSlug,
               library: _library,
               attachmentStore: widget.attachmentStore,
               currentFileId: fileId!,

@@ -539,20 +539,54 @@ asynchronous-lifetime rules unchanged.
 
 ## GitHub transport
 
-The GitHub feature keeps OAuth, account/repository identity checks, default
-branch selection, and rate-limit/error handling. Import and commit both use the
-existing selected `GitHubDestination` and owner/repository entry flow. Import
-uses the latest default branch and whole repository; there is no separate import
-URL or independently selected destination. Changing repositories uses the
-normal existing flow, and import does not change the saved destination. Replace
-content-baseline tracking with two transport operations:
+The GitHub feature uses the mediator's existing OAuth flow for expiring GitHub
+App user access tokens; it does not use installation tokens or require a `repo`
+scope. It keeps account/repository identity checks, default-branch selection,
+and rate-limit/error handling. A single searchable setup picker saves one
+explicit `GitHubDestination` for both Import and Commit; transfers only display
+and use that saved choice. GitHub's installation flow
+controls the granted repositories, and the picker only chooses the current
+destination. Installation IDs and access tokens are in-memory operation state,
+not library metadata. Import uses the latest default branch and whole
+repository; there is no separate import URL or independently selected
+destination. Replace content-baseline tracking with one discovery operation and
+two transfer operations:
 
 ```dart
-Future<TransferSource> readRepository(GitHubDestination destination);
+final class GitHubInstallation {
+  final int id;
+  final int accountId;
+  final String accountLogin;
+  final Uri htmlUrl; // validated GitHub installation-management URL
+  final String contentsPermission; // read or write
+}
+
+final class GitHubRepository {
+  final int installationId;
+  final int id;
+  final String owner;
+  final String name;
+  final String visibility;
+  final String defaultBranch;
+  final Map<String, bool> permissions;
+  final bool archived;
+  final bool disabled;
+}
+
+Future<({
+  List<GitHubInstallation> installations,
+  List<GitHubRepository> repositories,
+})> discoverRepositories();
+
+Future<TransferSource> readRepository(
+  GitHubDestination destination, {
+  required int installationId,
+});
 
 Future<GitHubCommitResult> commitTransfer(
   GitHubDestination destination,
   TransferTree tree, {
+  required int installationId,
   required String message,
 });
 
@@ -562,20 +596,48 @@ final class GitHubCommitResult {
 }
 ```
 
-`readRepository` independently verifies the saved account and repository IDs,
-captures that operation's default-branch head, reads one bounded recursive Git
-tree, and rejects a truncated tree. Its source keeps immutable path-to-blob-SHA
-metadata. Reads use those SHAs and enforce declared sizes before allocation and
-actual sizes after decoding. The shared codec discovers all `.canvas.json`
-files and recognized `attachments/<uuid>.<ext>` image paths in the whole repository;
-non-format regular files are ignored. No archive endpoint bypasses path or byte
-limits. Import reads only the latest default-branch head; no historical commit
-import or revision-link import is supported.
+`discoverRepositories` returns the accessible installations and their
+repositories together. Use one access token for the operation, paginate
+`GET /user/installations` and each
+`GET /user/installations/{installation_id}/repositories` with `per_page=100`,
+and build every next-page request on the fixed GitHub API origin. Keep pagination
+helpers private; never follow an arbitrary response URL with credentials. Validate
+page envelopes and fields, use provider pagination metadata, deduplicate
+repositories by ID, and sort by full name. Publish only a complete fresh result;
+a failed page or the 60-second overall deadline leaves the previous selectable
+state intact and offers explicit retry. Keep the existing 15-second
+per-request timeout and finite response bounds. Do not add a cache or persist
+installation IDs.
 
-Each `commitTransfer` independently verifies the saved account and repository,
-then captures a fresh default-branch head and bounded recursive tree at that
-checkpoint's operation time. It does not reuse an import transfer or track a
-baseline. Before uploading blobs, use the fresh tree metadata to reject an
+`readRepository` independently verifies the saved account and repository IDs
+and freshly checks membership only in the supplied installation, using that
+operation's token. The installation ID is required lookup context, not proof of
+access. After checking membership, capture that operation's current
+default-branch head, read one bounded recursive Git tree, and reject a truncated
+tree. Its source keeps immutable path-to-blob-SHA metadata. Reads use those SHAs
+and enforce declared sizes before allocation and actual sizes after decoding.
+The shared codec discovers all `.canvas.json` files and recognized
+`attachments/<uuid>.<ext>` image paths in the whole repository; non-format
+regular files are ignored. No archive endpoint bypasses path or byte limits.
+Import reads only the latest default-branch head; no historical commit import
+or revision-link import is supported.
+
+Resolve a saved choice against current discovery after reload; do not guess its
+installation. Before each transfer, retain the existing same-account and
+repository-ID checks, verify membership in only the selected installation, and
+reject a changed default branch until the user refreshes and explicitly confirms
+the updated selection.
+Verify the selected default-branch head on selection and immediately before
+transfer. If it is missing, use a bounded branch query to distinguish a truly
+empty repository from a default-branch inconsistency; never infer emptiness from
+repository size or generic HTTP errors. Empty repositories fail with the
+specified README-and-refresh message and are never initialized.
+
+Each `commitTransfer` independently verifies the saved account and repository
+and freshly checks membership in the supplied installation, then captures a
+fresh default-branch head and bounded recursive tree at that checkpoint's
+operation time. It does not reuse an import transfer or track a baseline. Before
+uploading blobs, use the fresh tree metadata to reject an
 output blob path occupied by a tree, symlink, submodule, or other unsupported
 Git object, and reject any required directory ancestor occupied by a
 non-directory. Report the conflicting path and stop before uploads or branch
@@ -609,11 +671,16 @@ sequenceDiagram
   participant C as Shared transfer codec
   participant L as LibraryController
   participant U as Confirmation UI
-  alt User imports repository
+  alt User connects or refreshes repositories
+    F->>G: discoverRepositories()
+    G->>H: paginate installations and their repositories
+    H-->>G: complete installation/repository pages
+    G-->>F: installations + repositories record
+  else User imports repository
     F->>W: finish interaction; acquire interlock; flush completed edits
     W-->>F: ready for import; interlock held
-    F->>G: readRepository(destination); verify account and repository
-    G->>H: capture default-branch head and bounded recursive tree
+    F->>G: readRepository(destination, installationId: selectedId)
+    G->>H: verify identity and selected-installation membership; capture head + tree
     H-->>G: import head + tree entries
     G-->>F: immutable TransferSource keyed by blob SHA
     F->>C: decodeTransfer(source)
@@ -631,8 +698,8 @@ sequenceDiagram
     W-->>F: immutable current-canvas snapshot
     F->>C: encodeTransfer(captured canvas)
     C-->>F: TransferTree
-    F->>G: commitTransfer(destination, tree, message)
-    G->>H: independently verify account/repository; capture fresh head + tree
+    F->>G: commitTransfer(destination, tree, installationId: selectedId, message: message)
+    G->>H: verify identity and selected-installation membership; capture head + tree
     H-->>G: checkpoint head + bounded tree entries
     G->>G: reject structural output-path conflicts before blob uploads
     G->>H: create blobs, tree on fresh head, commit, PATCH ref force=false
@@ -666,9 +733,9 @@ exports encode the tree as ZIP before saving through the same boundary. GitHub
 remains the other `TransferSource` transport.
 
 Standalone `.canvas.json` input imports at the root; ZIP carries a full tree.
-The existing GitHub repository chooser and saved destination serve both import
-and commit, with import reading the latest default branch and the whole
-repository. Folder segments `attachments` and `.git` are reserved
+The GitHub setup picker saves the single destination used by both import and
+commit; transfers do not prompt for or change it. Import reads the latest default
+branch and whole repository. Folder segments `attachments` and `.git` are reserved
 case-sensitively, and serialized file/folder collisions fail with the offending
 path. These accepted product rules are defined in the transfer specification and
 aligned interaction and persistence contracts.

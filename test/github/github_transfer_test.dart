@@ -26,6 +26,20 @@ GitHubDestination _destination({String branch = 'main', int accountId = 1}) => G
   branch: branch,
 );
 
+GitHubRepository _selectedRepository({String owner = 'owner', String name = 'repo', String branch = 'main'}) =>
+    GitHubRepository(
+      installationId: 10,
+      id: 2,
+      owner: owner,
+      name: name,
+      isPrivate: true,
+      defaultBranch: branch,
+      canPull: true,
+      canPush: true,
+      archived: false,
+      disabled: false,
+    );
+
 http.Response _json(Object? value, {int status = 200}) => http.Response(
   jsonEncode(value),
   status,
@@ -33,13 +47,54 @@ http.Response _json(Object? value, {int status = 200}) => http.Response(
 );
 
 http.Response _token(http.Request request) =>
-    _json({'access_token': 'secret-token', 'token_type': 'Bearer', 'scope': 'repo'});
+    _json({'access_token': 'secret-token', 'token_type': 'Bearer', 'scope': ''});
 
 http.Response _user() => _json({'id': 1, 'login': 'owner'});
 
-http.Response _repository({int id = 2, String branch = 'main'}) => _json({
+Map<String, Object?> _repository({
+  int id = 2,
+  String branch = 'main',
+  bool canPull = true,
+  bool canPush = true,
+  bool archived = false,
+  bool disabled = false,
+  String owner = 'owner',
+  String name = 'repo',
+}) => {
   'id': id,
+  'name': name,
+  'full_name': '$owner/$name',
+  'owner': {'login': owner},
+  'private': true,
   'default_branch': branch,
+  'permissions': {'pull': canPull, 'push': canPush},
+  'archived': archived,
+  'disabled': disabled,
+};
+
+http.Response _membership({
+  int id = 2,
+  String branch = 'main',
+  bool canPull = true,
+  bool canPush = true,
+  bool archived = false,
+  bool disabled = false,
+  String owner = 'owner',
+  String name = 'repo',
+}) => _json({
+  'total_count': 1,
+  'repositories': [
+    _repository(
+      id: id,
+      branch: branch,
+      canPull: canPull,
+      canPush: canPush,
+      archived: archived,
+      disabled: disabled,
+      owner: owner,
+      name: name,
+    ),
+  ],
 });
 
 http.Response _ref([String sha = _headSha]) => _json({
@@ -84,8 +139,8 @@ Future<http.Response> _emptySnapshot(
   int repositoryId = 2,
 }) async {
   if (request.url.path == '/user') return _user();
-  if (request.url.path == '/repos/owner/repo') {
-    return _repository(id: repositoryId, branch: defaultBranch);
+  if (request.url.path == '/user/installations/10/repositories') {
+    return _membership(id: repositoryId, branch: defaultBranch);
   }
   if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
   if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
@@ -113,7 +168,7 @@ void main() {
       final api = _api((request) async {
         requests.add('${request.method} ${request.url.path}');
         if (request.url.path == '/user') return _user();
-        if (request.url.path == '/repos/owner/repo') return _repository();
+        if (request.url.path == '/user/installations/10/repositories') return _membership();
         if (request.url.path.endsWith('/git/ref/heads/main')) return _ref(currentHead);
         if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
         if (request.url.path.endsWith('/git/commits/$_secondCommitSha')) return _commitTree(_nextTreeSha);
@@ -142,7 +197,7 @@ void main() {
         return _json({'error': 'unexpected request'}, status: 404);
       });
 
-      final source = await api.readRepository(_destination());
+      final source = await api.readRepository(_destination(), installationId: 10);
       currentHead = _secondCommitSha;
       final entries = await source.entries();
       expect(entries.map((entry) => (entry.path, entry.kind, entry.size)), [
@@ -163,7 +218,7 @@ void main() {
       expect(blobReads, [_documentSha]);
       expect(requests, [
         'GET /user',
-        'GET /repos/owner/repo',
+        'GET /user/installations/10/repositories',
         'GET /repos/owner/repo/git/ref/heads/main',
         'GET /repos/owner/repo/git/commits/$_headSha',
         'GET /repos/owner/repo/git/trees/$_treeSha',
@@ -182,32 +237,187 @@ void main() {
           final api = _api((request) async {
             requests.add(request.url.path);
             if (request.url.path == '/user') return _user();
-            if (request.url.path == '/repos/owner/repo') {
-              return _repository(id: mismatch.repositoryId, branch: mismatch.branch);
+            if (request.url.path == '/user/installations/10/repositories') {
+              return _membership(id: mismatch.repositoryId, branch: mismatch.branch);
             }
             return _json({'error': 'must not proceed'}, status: 404);
           });
           final destination = _destination(accountId: mismatch.accountId);
           if (action == 'read') {
-            await expectLater(api.readRepository(destination), throwsA(isA<GitHubApiException>()));
+            await expectLater(api.readRepository(destination, installationId: 10), throwsA(isA<GitHubApiException>()));
           } else {
             await expectLater(
-              api.commitTransfer(destination, _tree(), message: 'docs: save transfer'),
+              api.commitTransfer(destination, _tree(), installationId: 10, message: 'docs: save transfer'),
               throwsA(isA<GitHubApiException>()),
             );
           }
           expect(requests, [
             '/user',
-            if (mismatch.accountId == 1) '/repos/owner/repo',
+            if (mismatch.accountId == 1) '/user/installations/10/repositories',
           ]);
         }
       }
     });
 
+    test('requires selected installation membership and never falls back to a public repository request', () async {
+      for (final action in ['read', 'commit']) {
+        final requests = <String>[];
+        final api = _api((request) async {
+          requests.add(request.url.path);
+          if (request.url.path == '/user') return _user();
+          if (request.url.path == '/user/installations/10/repositories') {
+            return _json({'total_count': 0, 'repositories': <Object?>[]});
+          }
+          return _json({'message': 'not found'}, status: 404);
+        });
+        if (action == 'read') {
+          await expectLater(
+            api.readRepository(_destination(), installationId: 10),
+            throwsA(isA<GitHubApiException>().having((error) => error.kind, 'kind', GitHubErrorKind.permissionDenied)),
+          );
+        } else {
+          await expectLater(
+            api.commitTransfer(_destination(), _tree(), installationId: 10, message: 'docs: save transfer'),
+            throwsA(isA<GitHubApiException>().having((error) => error.kind, 'kind', GitHubErrorKind.permissionDenied)),
+          );
+        }
+        expect(requests, ['/user', '/user/installations/10/repositories']);
+        expect(requests, isNot(contains('/repos/owner/repo')));
+      }
+    });
+
+    test('rejects renamed repositories before branch access', () async {
+      final requests = <String>[];
+      final api = _api((request) async {
+        requests.add(request.url.path);
+        if (request.url.path == '/user') return _user();
+        if (request.url.path == '/user/installations/10/repositories') {
+          return _membership(name: 'renamed');
+        }
+        return _json({'error': 'must not proceed'}, status: 404);
+      });
+
+      await expectLater(
+        api.readRepository(_destination(), installationId: 10),
+        throwsA(isA<GitHubApiException>().having((error) => error.kind, 'kind', GitHubErrorKind.invalidData)),
+      );
+      expect(requests, ['/user', '/user/installations/10/repositories']);
+    });
+
+    test('allows read-only repositories for import but blocks commits before writes', () async {
+      final readApi = _api((request) async {
+        if (request.url.path == '/user') return _user();
+        if (request.url.path == '/user/installations/10/repositories') return _membership(canPush: false);
+        if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
+        if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
+        if (request.url.path.endsWith('/git/trees/$_treeSha')) {
+          return _json({'truncated': false, 'tree': <Map<String, Object?>>[]});
+        }
+        return _json({'error': 'unexpected request'}, status: 404);
+      });
+      await expectLater(readApi.readRepository(_destination(), installationId: 10), completes);
+
+      for (final status in [
+        (canPush: false, archived: false, disabled: false),
+        (canPush: true, archived: true, disabled: false),
+        (canPush: true, archived: false, disabled: true),
+      ]) {
+        var writes = 0;
+        final api = _api((request) async {
+          if (request.url.path == '/user') return _user();
+          if (request.url.path == '/user/installations/10/repositories') {
+            return _membership(canPush: status.canPush, archived: status.archived, disabled: status.disabled);
+          }
+          if (request.method == 'POST' || request.method == 'PATCH') writes++;
+          return _json({'error': 'must not proceed'}, status: 404);
+        });
+        await expectLater(
+          api.commitTransfer(_destination(), _tree(), installationId: 10, message: 'docs: save transfer'),
+          throwsA(isA<GitHubApiException>().having((error) => error.kind, 'kind', GitHubErrorKind.permissionDenied)),
+        );
+        expect(writes, 0);
+      }
+    });
+
+    test('confirms empty repositories through an empty bounded branches response only', () async {
+      for (final action in ['resolve', 'read', 'commit']) {
+        var writes = 0;
+        final api = _api((request) async {
+          if (request.url.path == '/user') return _user();
+          if (request.url.path == '/user/installations/10/repositories') return _membership();
+          if (request.url.path.endsWith('/git/ref/heads/main')) return _json({'message': 'not found'}, status: 404);
+          if (request.url.path == '/repos/owner/repo/branches') {
+            expect(request.url.queryParameters, {'per_page': '1'});
+            return _json(<Object?>[]);
+          }
+          if (request.method == 'POST' || request.method == 'PATCH') writes++;
+          return _json({'message': 'unexpected request'}, status: 404);
+        });
+        final operation = switch (action) {
+          'resolve' => api.resolveRepository(_selectedRepository()),
+          'read' => api.readRepository(_destination(), installationId: 10),
+          _ => api.commitTransfer(_destination(), _tree(), installationId: 10, message: 'docs: save transfer'),
+        };
+        await expectLater(
+          operation,
+          throwsA(
+            isA<GitHubApiException>()
+                .having((error) => error.kind, 'kind', GitHubErrorKind.emptyRepository)
+                .having(
+                  (error) => error.message,
+                  'message',
+                  'This repository is empty. Add a README on GitHub, then refresh.',
+                ),
+          ),
+        );
+        expect(writes, 0);
+      }
+    });
+
+    test('does not infer emptiness from generic branch failures or a populated branches response', () async {
+      for (final branchStatus in [403, 404]) {
+        final api = _api((request) async {
+          if (request.url.path == '/user') return _user();
+          if (request.url.path == '/user/installations/10/repositories') return _membership();
+          if (request.url.path.endsWith('/git/ref/heads/main')) return _json({'message': 'not found'}, status: 404);
+          if (request.url.path == '/repos/owner/repo/branches') {
+            return _json({'message': 'failure'}, status: branchStatus);
+          }
+          return _json({'error': 'unexpected request'}, status: 404);
+        });
+        await expectLater(
+          api.readRepository(_destination(), installationId: 10),
+          throwsA(
+            isA<GitHubApiException>().having(
+              (error) => error.kind,
+              'kind',
+              branchStatus == 403 ? GitHubErrorKind.permissionDenied : GitHubErrorKind.missingResource,
+            ),
+          ),
+        );
+      }
+
+      final populated = _api((request) async {
+        if (request.url.path == '/user') return _user();
+        if (request.url.path == '/user/installations/10/repositories') return _membership();
+        if (request.url.path.endsWith('/git/ref/heads/main')) return _json({'message': 'not found'}, status: 409);
+        if (request.url.path == '/repos/owner/repo/branches') {
+          return _json([
+            {'name': 'other'},
+          ]);
+        }
+        return _json({'error': 'unexpected request'}, status: 404);
+      });
+      await expectLater(
+        populated.readRepository(_destination(), installationId: 10),
+        throwsA(isA<GitHubApiException>().having((error) => error.kind, 'kind', GitHubErrorKind.conflict)),
+      );
+    });
+
     test('bounds a lazy blob response from its declared size', () async {
       final api = _api((request) async {
         if (request.url.path == '/user') return _user();
-        if (request.url.path == '/repos/owner/repo') return _repository();
+        if (request.url.path == '/user/installations/10/repositories') return _membership();
         if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
         if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
         if (request.url.path.endsWith('/git/trees/$_treeSha')) {
@@ -227,7 +437,7 @@ void main() {
         }
         return _json({'error': 'unexpected request'}, status: 404);
       });
-      final source = await api.readRepository(_destination());
+      final source = await api.readRepository(_destination(), installationId: 10);
 
       await expectLater(source.read('Map.canvas.json'), throwsA(isA<GitHubApiException>()));
     });
@@ -236,18 +446,21 @@ void main() {
       var content = '';
       final api = _api((request) async {
         if (request.url.path == '/user') return _user();
-        if (request.url.path == '/repos/owner/repo') return _repository();
+        if (request.url.path == '/user/installations/10/repositories') return _membership();
         if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
         if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
         if (request.url.path.endsWith('/git/trees/$_treeSha')) {
-          return _json({'truncated': false, 'tree': [_blobEntry('Map.canvas.json', _documentSha, 1)]});
+          return _json({
+            'truncated': false,
+            'tree': [_blobEntry('Map.canvas.json', _documentSha, 1)],
+          });
         }
         if (request.url.path.endsWith('/git/blobs/$_documentSha')) {
           return _json({'sha': _documentSha, 'size': 1, 'encoding': 'base64', 'content': content});
         }
         return _json({'error': 'unexpected request'}, status: 404);
       });
-      final source = await api.readRepository(_destination());
+      final source = await api.readRepository(_destination(), installationId: 10);
 
       for (final malformed in ['Z=g=', 'Zh==', 'Zm9v====', '__8=', 'Zg%3D%3D', 'Zg\r==', 'Zg= =']) {
         content = malformed;
@@ -260,28 +473,36 @@ void main() {
     });
 
     test('rejects unsafe tree paths and oversized declared images before blob reads', () async {
-      for (final path in ['/Map.canvas.json', 'Folder//Map.canvas.json', '../Map.canvas.json', r'Folder\Map.canvas.json']) {
+      for (final path in [
+        '/Map.canvas.json',
+        'Folder//Map.canvas.json',
+        '../Map.canvas.json',
+        r'Folder\Map.canvas.json',
+      ]) {
         var blobReads = 0;
         final api = _api((request) async {
           if (request.url.path == '/user') return _user();
-          if (request.url.path == '/repos/owner/repo') return _repository();
+          if (request.url.path == '/user/installations/10/repositories') return _membership();
           if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
           if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
           if (request.url.path.endsWith('/git/trees/$_treeSha')) {
-            return _json({'truncated': false, 'tree': [_blobEntry(path, _documentSha, 1)]});
+            return _json({
+              'truncated': false,
+              'tree': [_blobEntry(path, _documentSha, 1)],
+            });
           }
           if (request.url.path.contains('/git/blobs/')) blobReads++;
           return _json({'error': 'unexpected request'}, status: 404);
         });
 
-        await expectLater(api.readRepository(_destination()), throwsA(isA<GitHubApiException>()));
+        await expectLater(api.readRepository(_destination(), installationId: 10), throwsA(isA<GitHubApiException>()));
         expect(blobReads, 0, reason: path);
       }
 
       var blobReads = 0;
       final imageApi = _api((request) async {
         if (request.url.path == '/user') return _user();
-        if (request.url.path == '/repos/owner/repo') return _repository();
+        if (request.url.path == '/user/installations/10/repositories') return _membership();
         if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
         if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
         if (request.url.path.endsWith('/git/trees/$_treeSha')) {
@@ -293,7 +514,10 @@ void main() {
         if (request.url.path.contains('/git/blobs/')) blobReads++;
         return _json({'error': 'unexpected request'}, status: 404);
       });
-      await expectLater(imageApi.readRepository(_destination()), throwsA(isA<GitHubApiException>()));
+      await expectLater(
+        imageApi.readRepository(_destination(), installationId: 10),
+        throwsA(isA<GitHubApiException>()),
+      );
       expect(blobReads, 0);
     });
 
@@ -317,14 +541,14 @@ void main() {
         var blobReads = 0;
         final api = _api((request) async {
           if (request.url.path == '/user') return _user();
-          if (request.url.path == '/repos/owner/repo') return _repository();
+          if (request.url.path == '/user/installations/10/repositories') return _membership();
           if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
           if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
           if (request.url.path.endsWith('/git/trees/$_treeSha')) return _json(body);
           if (request.url.path.contains('/git/blobs/')) blobReads++;
           return _json({'error': 'unexpected request'}, status: 404);
         });
-        await expectLater(api.readRepository(_destination()), throwsA(isA<GitHubApiException>()));
+        await expectLater(api.readRepository(_destination(), installationId: 10), throwsA(isA<GitHubApiException>()));
         expect(blobReads, 0);
       }
     });
@@ -340,7 +564,7 @@ void main() {
       final api = _api((request) async {
         requestOrder.add('${request.method} ${request.url.path}');
         if (request.url.path == '/user') return _user();
-        if (request.url.path == '/repos/owner/repo') return _repository();
+        if (request.url.path == '/user/installations/10/repositories') return _membership();
         if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
         if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
         if (request.url.path.endsWith('/git/trees/$_treeSha')) {
@@ -377,7 +601,12 @@ void main() {
         return _json({'error': 'unexpected request'}, status: 404);
       });
 
-      final result = await api.commitTransfer(_destination(), _tree(), message: 'docs: save transfer');
+      final result = await api.commitTransfer(
+        _destination(),
+        _tree(),
+        installationId: 10,
+        message: 'docs: save transfer',
+      );
 
       expect(result.commitSha, _commitSha);
       expect(result.url, 'https://github.com/owner/repo/commit/$_commitSha');
@@ -420,7 +649,7 @@ void main() {
         final conflictPath = entry['path']! as String;
         final api = _api((request) async {
           if (request.url.path == '/user') return _user();
-          if (request.url.path == '/repos/owner/repo') return _repository();
+          if (request.url.path == '/user/installations/10/repositories') return _membership();
           if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
           if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
           if (request.url.path.endsWith('/git/trees/$_treeSha')) {
@@ -434,7 +663,7 @@ void main() {
         });
 
         await expectLater(
-          api.commitTransfer(_destination(), _tree(), message: 'docs: save transfer'),
+          api.commitTransfer(_destination(), _tree(), installationId: 10, message: 'docs: save transfer'),
           throwsA(isA<GitHubConflict>().having((error) => error.path, 'path', conflictPath)),
         );
         expect(blobPosts, 0);
@@ -445,7 +674,7 @@ void main() {
       var blobPosts = 0;
       final api = _api((request) async {
         if (request.url.path == '/user') return _user();
-        if (request.url.path == '/repos/owner/repo') return _repository();
+        if (request.url.path == '/user/installations/10/repositories') return _membership();
         if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
         if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
         if (request.url.path.endsWith('/git/trees/$_treeSha')) {
@@ -464,7 +693,7 @@ void main() {
       });
 
       await expectLater(
-        api.commitTransfer(_destination(), _tree(), message: 'docs: save transfer'),
+        api.commitTransfer(_destination(), _tree(), installationId: 10, message: 'docs: save transfer'),
         throwsA(
           isA<GitHubUnconfirmedCommit>()
               .having((error) => error.sha, 'sha', _secondCommitSha)
@@ -488,6 +717,7 @@ void main() {
               'README.md': Uint8List.fromList([1]),
             },
           ),
+          installationId: 10,
           message: 'docs: save transfer',
         ),
         throwsA(isA<GitHubApiException>()),

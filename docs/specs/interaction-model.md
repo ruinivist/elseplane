@@ -224,24 +224,58 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 ### GitHub canvas transfers
 
 - In production, the bottom-left GitHub panel appears only when an HTTPS
-  `GITHUB_MEDIATOR_URL` is configured. It connects an account and selects a
-  repository using `owner/repository` and that repository's default branch. The
-  selected repository serves both Import and Commit. Operations are manual;
-  there is no background synchronization or automatic remote-write retry. Busy
-  transfers block conflicting workspace actions.
+  `GITHUB_MEDIATOR_URL` and public `GITHUB_APP_SLUG` are configured. It connects
+  a GitHub account through the mediator's OAuth flow and discovers repositories
+  in accessible installations of the configured GitHub App. GitHub's
+  installation page controls the repository grant; the app's single searchable
+  setup picker chooses Elseplane's current destination. After confirmation, the
+  panel displays the saved `owner/repository`, visibility, and default branch.
+  "Change repository" reopens that picker. The selected repository serves both
+  Import and Commit. Operations are manual; there is no background
+  synchronization or automatic remote-write retry. Busy transfers block
+  conflicting workspace actions.
 - Connecting saves completed canvas edits before navigation and does not begin
   OAuth if that save fails. The returned authorization URL must be HTTPS on
   GitHub's expected authorization endpoint. On return, the completion marker
-  is consumed, the account is verified, and a saved destination is reused only
-  for the same account. Access tokens stay in memory. Logout ends the local
-  session after mediator success but does not revoke GitHub access; it retains
-  the selected destination for reconnection, and a failed logout can be retried.
-- Each action independently verifies account and repository identity and reads
-  the latest default-branch head. Import reads the whole repository and passes
-  it through the same additive merge and collision confirmation as local input.
-  It does not change the saved destination, delete local content for remote
-  deletions, or trigger a checkpoint. A truncated repository tree cannot be
-  imported. Changing the account or repository uses the existing selection flow.
+  is consumed and the account is verified. Repository discovery covers all
+  accessible installations and their repositories; it does not use a broad
+  repository-scope gate. A saved destination is reused only for the same account
+  and after it is resolved against the current authorized list. Access tokens
+  and installation IDs stay in memory. Logout ends the local session after
+  mediator success but does not revoke GitHub access; it retains the selected
+  destination for reconnection, and a failed logout can be retried.
+- Repository setup is a draft until the user confirms it. Search filters the
+  authorized list and never treats typed text as a destination. Cancel leaves
+  the saved choice unchanged; confirmation validates and saves the explicit
+  selection. If exactly one repository is available and there is no saved
+  choice, it may be preselected in the setup dialog but no transfer starts
+  automatically. Never silently replace an inaccessible saved choice. Import
+  and Commit only display and use the saved destination: neither asks for a
+  repository again nor changes the saved choice.
+- "Manage repository access" opens the validated GitHub installation or
+  management page in a separate tab. Use the validated
+  `https://github.com/apps/<slug>/installations/new` URL to add an account and
+  the selected installation's validated `html_url` to
+  manage an existing grant. When several installations are available, let the
+  user choose; do not guess. Finish interactions and flush completed edits
+  before opening the link; after access changes, the user explicitly refreshes
+  the list. Open the link directly without popup detection or fallback handling.
+- Repositories without push permission remain available for Import. Disable
+  Commit when the user lacks push permission or the repository is archived or
+  disabled; GitHub remains authoritative for branch rules and current
+  permissions.
+- Each action independently verifies account and repository identity, current
+  membership in the selected installation, and the latest default-branch head.
+  The installation is operation context, not proof of access; transfers do not
+  enumerate unrelated installations. Import reads the whole repository and
+  passes it through the same additive merge and collision confirmation as local
+  input. It does not change the saved destination, delete local content for
+  remote deletions, or trigger a checkpoint. A truncated repository tree cannot
+  be imported. There is no branch selector. If the default branch changes,
+  block transfer until the user refreshes and explicitly confirms the updated
+  selection. An empty repository blocks Import and Commit with: "This repository
+  is empty. Add a README on GitHub, then refresh." Do not create files, branches,
+  or commits to initialize it.
 - Commit saves completed edits and captures the current canvas, then asks for an
   explicit nonempty lowercase Conventional Commit subject of at most 72
   characters. It publishes the document at its full local path with

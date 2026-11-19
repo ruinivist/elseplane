@@ -2,8 +2,10 @@
 
 import 'dart:async';
 
+import 'package:elseplane/github/github_api.dart';
 import 'package:elseplane/library/github_metadata.dart';
 import 'package:elseplane/theme/theme.dart';
+import 'package:elseplane/ui/common/select.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:flutter/material.dart';
@@ -12,34 +14,46 @@ class GitHubPanel extends StatelessWidget {
   const GitHubPanel({
     required this.accountLogin,
     required this.destination,
+    required this.repository,
+    required this.repositoryStatus,
     required this.connected,
     required this.busy,
     required this.canCommit,
     required this.canImport,
+    required this.discoveryLoading,
     required this.logoutNeedsRetry,
     required this.onBeforeAction,
     required this.onConnect,
     required this.onCommit,
     required this.onImport,
     required this.onChooseRepository,
+    required this.onManageAccess,
+    required this.onRefreshRepositories,
     required this.onLogout,
     this.statusMessage,
+    this.discoveryError,
     super.key,
   });
 
   final String? accountLogin;
   final GitHubDestination? destination;
+  final GitHubRepository? repository;
+  final String? repositoryStatus;
   final bool connected;
   final bool busy;
   final bool canCommit;
   final bool canImport;
+  final bool discoveryLoading;
   final bool logoutNeedsRetry;
   final String? statusMessage;
+  final String? discoveryError;
   final VoidCallback onBeforeAction;
   final Future<void> Function() onConnect;
   final Future<void> Function() onCommit;
   final Future<void> Function() onImport;
   final Future<void> Function() onChooseRepository;
+  final Future<void> Function() onManageAccess;
+  final Future<void> Function() onRefreshRepositories;
   final Future<void> Function() onLogout;
 
   VoidCallback? _action(Future<void> Function()? action) => action == null || busy
@@ -53,10 +67,11 @@ class GitHubPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final accountLogin = this.accountLogin;
     final destination = this.destination;
+    final repository = this.repository;
     final theme = BTheme.of(context);
     return SingleChildScrollView(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 340),
+        constraints: const BoxConstraints(maxWidth: 360),
         child: Surface(
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -83,17 +98,23 @@ class GitHubPanel extends StatelessWidget {
                         child: const Text('Retry logout'),
                       ),
                     ),
+                  if (statusMessage != null) Text(statusMessage!, style: Theme.of(context).textTheme.bodySmall),
                 ] else ...[
-                  if (statusMessage != null) ...[
-                    Text(statusMessage!, style: Theme.of(context).textTheme.bodySmall),
-                    const SizedBox(height: 6),
-                  ],
-                  Text(
-                    '@$accountLogin${destination == null ? '' : ' · ${destination.owner}/${destination.repository} · ${destination.branch}'}',
-                    style: theme.typo.label.copyWith(color: theme.colors.textPrimary),
-                  ),
+                  Text('@$accountLogin', style: theme.typo.label.copyWith(color: theme.colors.textPrimary)),
                   const SizedBox(height: 8),
                   if (destination != null) ...[
+                    Text('${destination.owner}/${destination.repository}', style: theme.typo.body),
+                    Text(
+                      repository == null
+                          ? 'Saved default branch: ${destination.branch}'
+                          : '${repository.isPrivate ? 'Private' : 'Public'} · default branch: ${repository.defaultBranch}',
+                      style: theme.typo.body.copyWith(fontSize: 12, color: theme.colors.textSecondary),
+                    ),
+                    if (repositoryStatus != null) ...[
+                      const SizedBox(height: 4),
+                      Text(repositoryStatus!, style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                    const SizedBox(height: 8),
                     FilledButton.tonal(
                       key: const ValueKey('github-commit'),
                       onPressed: _action(canCommit ? onCommit : null),
@@ -104,24 +125,61 @@ class GitHubPanel extends StatelessWidget {
                       onPressed: _action(canImport ? onImport : null),
                       child: const Text('Import repository'),
                     ),
+                  ] else ...[
+                    if (repositoryStatus != null) ...[
+                      Text(repositoryStatus!, style: Theme.of(context).textTheme.bodySmall),
+                      const SizedBox(height: 8),
+                    ],
                   ],
-                  Row(
+                  if (discoveryError != null) ...[
+                    Text(discoveryError!, style: Theme.of(context).textTheme.bodySmall),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        key: const ValueKey('github-refresh-repositories'),
+                        onPressed: _action(onRefreshRepositories),
+                        child: const Text('Retry repository discovery'),
+                      ),
+                    ),
+                  ] else
+                    Row(
+                      children: [
+                        TextButton(
+                          key: const ValueKey('github-refresh-repositories'),
+                          onPressed: _action(discoveryLoading ? null : onRefreshRepositories),
+                          child: const Text('Refresh repositories'),
+                        ),
+                        if (discoveryLoading) const SizedBox(width: 12, height: 12, child: CircularProgressIndicator()),
+                      ],
+                    ),
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
                     children: [
                       TextButton(
                         key: const ValueKey('github-repository'),
-                        onPressed: _action(onChooseRepository),
-                        child: const Text('Repository…'),
+                        onPressed: _action(discoveryLoading || discoveryError != null ? null : onChooseRepository),
+                        child: Text(destination == null ? 'Choose repository' : 'Change repository'),
                       ),
-                      const Spacer(),
                       TextButton(
-                        key: const ValueKey('github-logout'),
-                        onPressed: _action(onLogout),
-                        child: const Text('Log out'),
+                        key: const ValueKey('github-manage-access'),
+                        onPressed: _action(discoveryLoading ? null : onManageAccess),
+                        child: const Text('Manage access'),
                       ),
                     ],
                   ),
+                  if (statusMessage != null) ...[
+                    Text(statusMessage!, style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(height: 4),
+                  ],
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      key: const ValueKey('github-logout'),
+                      onPressed: _action(onLogout),
+                      child: const Text('Log out'),
+                    ),
+                  ),
                 ],
-                if (!connected && statusMessage != null) Text(statusMessage!),
                 if (busy) ...[
                   const SizedBox(height: 4),
                   const LinearProgressIndicator(),
@@ -135,94 +193,149 @@ class GitHubPanel extends StatelessWidget {
   }
 }
 
-Future<String?> showGitHubRepositoryDialog(BuildContext context, {required String initial}) async {
-  final formKey = GlobalKey<FormState>();
-  String? submittedValue;
+Future<int?> showGitHubRepositoryDialog(
+  BuildContext context, {
+  required List<GitHubRepository> repositories,
+  required List<GitHubInstallation> installations,
+  required int? initialRepositoryId,
+  required Future<void> Function() onManageAccess,
+}) async {
+  final installationById = {for (final installation in installations) installation.id: installation};
+  final repositoryById = {for (final repository in repositories) repository.id: repository};
+  final options = <SelectOption<int?>>[
+    const SelectOption(value: null, label: 'Choose a repository'),
+    for (final repository in repositories) SelectOption(value: repository.id, label: repository.fullName),
+  ];
+  var selectedRepositoryId = repositoryById.containsKey(initialRepositoryId) ? initialRepositoryId : null;
+
   void submit(BuildContext context) {
-    final form = formKey.currentState!;
-    if (!form.validate()) return;
-    form.save();
-    Navigator.pop(context, submittedValue);
+    if (selectedRepositoryId != null) Navigator.pop(context, selectedRepositoryId);
   }
 
-  return await showDialog<String>(
+  return await showDialog<int>(
     context: context,
-    builder: (context) => SurfaceDialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 280, maxWidth: 480),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text('Choose a GitHub repository', style: Theme.of(context).textTheme.titleLarge),
-                      const SizedBox(height: 12),
-                      const Text('Enter owner/repository. Elseplane uses its default branch.'),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        key: const ValueKey('github-repository-field'),
-                        initialValue: initial,
-                        autofocus: true,
-                        decoration: const InputDecoration(labelText: 'owner/repository'),
-                        validator: (value) {
-                          final parts = (value ?? '').trim().split('/');
-                          final valid =
-                              parts.length == 2 &&
-                              parts.every((part) => RegExp(r'^[A-Za-z0-9_.-]+$').hasMatch(part)) &&
-                              parts.every((part) => part != '.' && part != '..');
-                          return valid ? null : 'Enter owner/repository';
-                        },
-                        onSaved: (value) => submittedValue = value?.trim() ?? '',
-                        onFieldSubmitted: (_) => submit(context),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) {
+        final repository = repositoryById[selectedRepositoryId];
+        final installation = repository == null ? null : installationById[repository.installationId];
+        final canRead = repository != null && repository.canPull && installation?.canReadContents == true;
+        return SurfaceDialog(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: 280,
+              maxWidth: 480,
+              maxHeight: MediaQuery.sizeOf(context).height * 0.8,
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-              child: OverflowBar(
-                alignment: MainAxisAlignment.end,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                  TextButton(onPressed: () => submit(context), child: const Text('Continue')),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text('Choose a GitHub repository', style: Theme.of(context).textTheme.titleLarge),
+                        const SizedBox(height: 12),
+                        const Text('Search authorized repositories. Search text is not a repository address.'),
+                        const SizedBox(height: 12),
+                        Semantics(
+                          label: 'GitHub repository',
+                          child: SearchableSelect<int?>(
+                            key: const ValueKey('github-repository-select'),
+                            value: selectedRepositoryId,
+                            options: options,
+                            searchHint: 'Search repositories',
+                            onChanged: (value) => setState(() => selectedRepositoryId = value),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (repository == null)
+                          Text(
+                            repositories.isEmpty
+                                ? 'No repositories are available through this GitHub App. Manage access or install the app on another account.'
+                                : 'Choose an authorized repository.',
+                          )
+                        else ...[
+                          Text(
+                            '${repository.isPrivate ? 'Private' : 'Public'} · default branch: ${repository.defaultBranch}',
+                          ),
+                          if (!canRead) ...[
+                            const SizedBox(height: 8),
+                            const Text('This repository does not have Contents read access through its installation.'),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton(
+                                key: const ValueKey('github-setup-manage-access'),
+                                onPressed: () => unawaited(onManageAccess()),
+                                child: const Text('Manage repository access'),
+                              ),
+                            ),
+                          ],
+                        ],
+                        if (repository == null && repositories.isEmpty)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              key: const ValueKey('github-setup-manage-access'),
+                              onPressed: () => unawaited(onManageAccess()),
+                              child: const Text('Manage repository access'),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                    child: OverflowBar(
+                      alignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                        FilledButton(
+                          key: const ValueKey('github-use-repository'),
+                          onPressed: canRead ? () => submit(context) : null,
+                          child: const Text('Use repository'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     ),
   );
 }
 
-Future<bool> confirmGitHubDestination(
+Future<Uri?> showGitHubAccessDialog(
   BuildContext context, {
-  required String ownerRepository,
-  required String branch,
-  required bool isPrivate,
-}) async =>
-    await showDialog<bool>(
-      context: context,
-      builder: (context) => SurfaceConfirmationDialog(
-        title: const Text('Use this repository?'),
-        content: Text(
-          '$ownerRepository is ${isPrivate ? 'private' : 'public'} and uses default branch “$branch”.',
+  required List<GitHubInstallation> installations,
+  required Uri installUri,
+}) async => await showDialog<Uri>(
+  context: context,
+  builder: (context) => SurfaceConfirmationDialog(
+    title: const Text('Manage repository access'),
+    content: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final installation in installations)
+          TextButton(
+            key: ValueKey('github-manage-installation-${installation.id}'),
+            onPressed: () => Navigator.pop(context, installation.managementUri),
+            child: Text('Manage ${installation.accountLogin}'),
+          ),
+        TextButton(
+          key: const ValueKey('github-install-another-account'),
+          onPressed: () => Navigator.pop(context, installUri),
+          child: const Text('Install another account'),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Use repository')),
-        ],
-      ),
-    ) ??
-    false;
+      ],
+    ),
+    actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel'))],
+  ),
+);
 
 Future<String?> showGitHubCommitDialog(
   BuildContext context, {

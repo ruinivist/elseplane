@@ -25,6 +25,7 @@ jobs:
       - run: make build
         env:
           GITHUB_MEDIATOR_URL: ${{ vars.GITHUB_MEDIATOR_URL || 'https://backend.elseplane.ruiny.de' }}
+          GITHUB_APP_SLUG: ${{ vars.GITHUB_APP_SLUG || 'elseplane-app' }}
       - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

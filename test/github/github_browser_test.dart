@@ -63,6 +63,16 @@ void main() {
     }
   });
 
+  test('GitHub App installation URL validates the configured slug', () {
+    expect(
+      gitHubAppInstallationUri('elseplane-app'),
+      Uri.parse('https://github.com/apps/elseplane-app/installations/new'),
+    );
+    for (final slug in ['', 'Elseplane', '../elseplane', 'app/name', 'app?x=1', '-app', 'app-']) {
+      expect(() => gitHubAppInstallationUri(slug), throwsArgumentError, reason: slug);
+    }
+  });
+
   test('rejects unsafe GitHub links without opening a window', () {
     final originalOpen = web.window.getProperty<JSAny?>('open'.toJS);
     var openCalls = 0;
@@ -88,6 +98,32 @@ void main() {
       }
 
       expect(openCalls, 0);
+    } finally {
+      web.window.setProperty('open'.toJS, originalOpen);
+    }
+  });
+
+  test('opens the validated app installation URL in a separate tab', () {
+    final originalOpen = web.window.getProperty<JSAny?>('open'.toJS);
+    final openedUrls = <String>[];
+    final targets = <String>[];
+    final features = <String>[];
+    web.window.setProperty(
+      'open'.toJS,
+      ((JSAny? url, JSAny? target, JSAny? feature) {
+        openedUrls.add((url! as JSString).toDart);
+        targets.add((target! as JSString).toDart);
+        features.add((feature! as JSString).toDart);
+        return null;
+      }).toJS,
+    );
+
+    try {
+      final uri = gitHubAppInstallationUri('elseplane-app');
+      openGitHubLink(uri.toString());
+      expect(openedUrls, ['https://github.com/apps/elseplane-app/installations/new']);
+      expect(targets, ['_blank']);
+      expect(features, ['noopener']);
     } finally {
       web.window.setProperty('open'.toJS, originalOpen);
     }

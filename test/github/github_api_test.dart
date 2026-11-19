@@ -13,10 +13,33 @@ http.Response _json(Object? value, {int status = 200, Map<String, String> header
   headers: {'content-type': 'application/json', ...headers},
 );
 
-http.Response _user({Map<String, String> headers = const {}}) => _json(
-  {'id': 1, 'login': 'owner'},
-  headers: {'x-oauth-scopes': 'repo, user:email', ...headers},
-);
+http.Response _user({Map<String, String> headers = const {}}) => _json({'id': 1, 'login': 'owner'}, headers: headers);
+
+Map<String, Object?> _installation({int id = 10, String login = 'owner', String? url}) => {
+  'id': id,
+  'account': {'id': id + 100, 'login': login},
+  'html_url': url ?? 'https://github.com/settings/installations/$id',
+  'permissions': {'contents': 'write'},
+};
+
+Map<String, Object?> _repository({
+  required int id,
+  required String owner,
+  required String name,
+  String branch = 'main',
+  bool canPull = true,
+  bool canPush = true,
+}) => {
+  'id': id,
+  'owner': {'login': owner},
+  'name': name,
+  'full_name': '$owner/$name',
+  'private': true,
+  'default_branch': branch,
+  'permissions': {'pull': canPull, 'push': canPush},
+  'archived': false,
+  'disabled': false,
+};
 
 Future<http.Response> _defaultMediator(http.Request request) async {
   if (request.method != 'POST' || request.body != '{}') return _json({'error': 'not found'}, status: 404);
@@ -25,7 +48,7 @@ Future<http.Response> _defaultMediator(http.Request request) async {
   }
   if (request.url.path == '/session/logout') return http.Response('', 204);
   if (request.url.path == '/oauth/github/token') {
-    return _json({'access_token': 'secret-token', 'token_type': 'Bearer', 'scope': 'repo'});
+    return _json({'access_token': 'secret-token', 'token_type': 'Bearer', 'scope': ''});
   }
   return _json({'error': 'not found'}, status: 404);
 }
@@ -73,74 +96,70 @@ void main() {
       expect(githubRequests.single.headers.containsKey('Cookie'), isFalse);
     });
 
-    test('rejects unsafe authorization urls and missing repo scope', () async {
+    test('rejects unsafe authorization urls and accepts empty or omitted scopes', () async {
       final unsafe = _api(
         mediator: (request) async => _json({'authorization_url': 'https://github.com.evil.test/login/oauth/authorize'}),
         github: (_) async => _user(),
       );
       await expectLater(unsafe.startAuthorization(), throwsA(isA<GitHubApiException>()));
 
-      final noScope = _api(
-        mediator: (request) async => _json({'access_token': 'x', 'scope': 'read:user'}),
-        github: (_) async => _user(headers: const {'x-oauth-scopes': 'repo'}),
-      );
-      await expectLater(
-        noScope.account(),
-        throwsA(isA<GitHubApiException>().having((error) => error.kind, 'kind', GitHubErrorKind.insufficientScope)),
-      );
-    });
-
-    test('rejects explicit empty scopes but accepts omitted scope fields', () async {
-      for (final scope in ['', '   ']) {
-        final tokenScope = _api(
-          mediator: (_) async => _json({'access_token': 'secret-token', 'scope': scope}),
+      for (final response in [
+        _api(
+          mediator: (_) async => _json({'access_token': 'secret-token', 'scope': ''}),
           github: (_) async => _user(),
-        );
-        await expectLater(
-          tokenScope.account(),
-          throwsA(isA<GitHubApiException>().having((error) => error.kind, 'kind', GitHubErrorKind.insufficientScope)),
-          reason: 'Rejected token scope "$scope"',
-        );
-
-        final githubScope = _api(
-          mediator: (_) async => _json({'access_token': 'secret-token', 'scope': 'repo'}),
-          github: (_) async => _user(headers: {'x-oauth-scopes': scope}),
-        );
-        await expectLater(
-          githubScope.account(),
-          throwsA(isA<GitHubApiException>().having((error) => error.kind, 'kind', GitHubErrorKind.insufficientScope)),
-          reason: 'Rejected GitHub scope "$scope"',
-        );
+        ),
+        _api(
+          mediator: (_) async => _json({'access_token': 'secret-token'}),
+          github: (_) async => _user(headers: const {'x-oauth-scopes': ''}),
+        ),
+      ]) {
+        expect((await response.account()).id, 1);
       }
 
-      final omitted = _api(
-        mediator: (_) async => _json({'access_token': 'secret-token'}),
-        github: (_) async => _json({'id': 1, 'login': 'owner'}),
+      final malformed = _api(
+        mediator: (_) async => _json({'access_token': 'secret-token', 'scope': 1}),
+        github: (_) async => _user(),
       );
-      expect((await omitted.account()).id, 1);
+      await expectLater(
+        malformed.account(),
+        throwsA(isA<GitHubApiException>().having((error) => error.kind, 'kind', GitHubErrorKind.invalidData)),
+      );
     });
 
-    test('repository lookup uses default branch and exposes visibility', () async {
+    test('repository resolution verifies selected installation membership and default branch', () async {
+      const selected = GitHubRepository(
+        installationId: 10,
+        id: 2,
+        owner: 'owner',
+        name: 'repo',
+        isPrivate: true,
+        defaultBranch: 'main',
+        canPull: true,
+        canPush: true,
+        archived: false,
+        disabled: false,
+      );
       final api = _api(
         github: (request) async {
           if (request.url.path == '/user') return _user();
-          if (request.url.path == '/repos/owner/repo') {
+          if (request.url.path == '/user/installations/10/repositories') {
+            expect(request.url.queryParameters, {'per_page': '100', 'page': '1'});
             return _json({
-              'id': 2,
-              'name': 'repo',
-              'owner': {'login': 'owner'},
-              'default_branch': 'main',
-              'private': true,
+              'total_count': 1,
+              'repositories': [_repository(id: 2, owner: 'owner', name: 'repo')],
+            });
+          }
+          if (request.url.path == '/repos/owner/repo/git/ref/heads/main') {
+            return _json({
+              'object': {'type': 'commit', 'sha': 'a' * 40},
             });
           }
           return _json({'message': 'not found'}, status: 404);
         },
       );
-      final destination = await api.repository('owner/repo');
+      final destination = await api.resolveRepository(selected);
       expect(destination.branch, 'main');
       expect(destination.repositoryId, 2);
-      expect(api.lastRepositoryPrivate, isTrue);
-      await expectLater(api.repository('owner/repo/tree/main'), throwsA(isA<GitHubApiException>()));
     });
 
     test('logout accepts empty 204 and non-JSON failures stay sanitized', () async {
@@ -164,8 +183,156 @@ void main() {
     });
   });
 
+  group('repository discovery', () {
+    test('loads every installation and repository page, deduplicates, and sorts results', () async {
+      final requests = <http.Request>[];
+      var tokenRequests = 0;
+      final api = _api(
+        mediator: (request) async {
+          if (request.url.path == '/oauth/github/token') tokenRequests++;
+          return await _defaultMediator(request);
+        },
+        github: (request) async {
+          requests.add(request);
+          if (request.url.path == '/user') return _user();
+          if (request.url.path == '/user/installations') {
+            if (request.url.queryParameters['page'] == '1') {
+              return _json(
+                {
+                  'total_count': 2,
+                  'installations': [_installation()],
+                },
+                headers: {'link': '<https://api.github.com/user/installations?per_page=100&page=2>; rel="next"'},
+              );
+            }
+            return _json({
+              'total_count': 2,
+              'installations': [
+                _installation(
+                  id: 20,
+                  login: 'team',
+                  url: 'https://github.com/organizations/team/settings/installations/20',
+                ),
+              ],
+            });
+          }
+          if (request.url.path == '/user/installations/10/repositories') {
+            if (request.url.queryParameters['page'] == '1') {
+              return _json(
+                {
+                  'total_count': 3,
+                  'repositories': [_repository(id: 2, owner: 'owner', name: 'zeta')],
+                },
+                headers: {
+                  'link': '<https://api.github.com/user/installations/10/repositories?per_page=100&page=2>; rel="next"',
+                },
+              );
+            }
+            return _json({
+              'total_count': 3,
+              'repositories': [
+                _repository(id: 2, owner: 'owner', name: 'zeta'),
+                _repository(id: 3, owner: 'owner', name: 'alpha'),
+              ],
+            });
+          }
+          if (request.url.path == '/user/installations/20/repositories') {
+            return _json({
+              'total_count': 1,
+              'repositories': [_repository(id: 4, owner: 'team', name: 'beta')],
+            });
+          }
+          return _json({'error': 'unexpected request'}, status: 404);
+        },
+      );
+
+      final result = await api.discoverRepositories();
+
+      expect(tokenRequests, 1);
+      expect(result.installations.map((item) => item.id), [10, 20]);
+      expect(result.installations.last.managementUri.path, '/organizations/team/settings/installations/20');
+      expect(result.installations.first.canWriteContents, isTrue);
+      expect(result.repositories.map((item) => item.fullName), ['owner/alpha', 'owner/zeta', 'team/beta']);
+      expect(result.repositories.map((item) => item.id), [3, 2, 4]);
+      expect(() => result.repositories.add(result.repositories.first), throwsUnsupportedError);
+      expect(requests, hasLength(6));
+      for (final request in requests.where((request) => request.url.path != '/user')) {
+        expect(request.url.host, 'api.github.com');
+        expect(request.url.queryParameters['per_page'], '100');
+        expect(request.headers['Authorization'], 'Bearer secret-token');
+      }
+    });
+
+    test('rejects unsafe pagination URLs without sending credentials to them', () async {
+      final requests = <http.Request>[];
+      final api = _api(
+        github: (request) async {
+          requests.add(request);
+          if (request.url.path == '/user') return _user();
+          if (request.url.path == '/user/installations') {
+            return _json(
+              {
+                'total_count': 2,
+                'installations': [_installation()],
+              },
+              headers: {'link': '<https://evil.example/user/installations?per_page=100&page=2>; rel="next"'},
+            );
+          }
+          fail('Pagination followed an untrusted URL');
+        },
+      );
+
+      await expectLater(
+        api.discoverRepositories(),
+        throwsA(isA<GitHubApiException>().having((error) => error.kind, 'kind', GitHubErrorKind.invalidData)),
+      );
+      expect(requests.map((request) => request.url.host), ['api.github.com', 'api.github.com']);
+    });
+
+    test('fails closed on malformed pages and later-page errors', () async {
+      for (final failSecondPage in [false, true]) {
+        final api = _api(
+          github: (request) async {
+            if (request.url.path == '/user') return _user();
+            if (request.url.path == '/user/installations') {
+              return _json({
+                'total_count': 1,
+                'installations': [_installation()],
+              });
+            }
+            if (request.url.path == '/user/installations/10/repositories') {
+              if (failSecondPage && request.url.queryParameters['page'] == '2') {
+                return _json({'error': 'temporary'}, status: 500);
+              }
+              if (request.url.queryParameters['page'] == '1') {
+                return _json(
+                  {
+                    'total_count': failSecondPage ? 2 : 1,
+                    'repositories': [
+                      if (failSecondPage)
+                        _repository(id: 2, owner: 'owner', name: 'repo')
+                      else
+                        {..._repository(id: 2, owner: 'owner', name: 'repo'), 'permissions': 'bad'},
+                    ],
+                  },
+                  headers: failSecondPage
+                      ? {
+                          'link': '<https://api.github.com/user/installations/10/repositories?per_page=100&page=2>; rel="next"',
+                        }
+                      : const {},
+                );
+              }
+            }
+            return _json({'error': 'unexpected request'}, status: 404);
+          },
+        );
+        await expectLater(api.discoverRepositories(), throwsA(isA<GitHubApiException>()));
+      }
+    });
+  });
+
   group('GitHub failures', () {
-    test('403 reset headers alone do not classify permission denials as rate limits', () async {
+    test('403 scope and reset headers do not override permission denial', () async {
       final reset = ((DateTime.now().millisecondsSinceEpoch ~/ 1000) + 60).toString();
       var mediatorRequests = 0;
       var githubRequests = 0;
@@ -179,7 +346,12 @@ void main() {
           return _json(
             {'message': 'forbidden'},
             status: 403,
-            headers: {'x-ratelimit-remaining': '10', 'x-ratelimit-reset': reset},
+            headers: {
+              'x-ratelimit-remaining': '10',
+              'x-ratelimit-reset': reset,
+              'x-accepted-oauth-scopes': 'repo',
+              'x-oauth-scopes': '',
+            },
           );
         },
       );

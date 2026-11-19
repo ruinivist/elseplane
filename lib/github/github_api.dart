@@ -10,16 +10,18 @@ import 'package:elseplane/library/transfer/canvas_transfer.dart';
 import 'package:http/http.dart' as http;
 
 const Duration _requestTimeout = Duration(seconds: 15);
+const Duration _discoveryTimeout = Duration(seconds: 60);
+const int _pageSize = 100;
 const int _maximumJsonResponseBytes = 32 * 1024 * 1024;
 const int _maximumGitHubBlobBytes = 100 * 1024 * 1024;
 const _githubApiVersion = '2022-11-28';
 
 enum GitHubErrorKind {
   reconnect,
-  insufficientScope,
   rateLimited,
   permissionDenied,
   missingResource,
+  emptyRepository,
   invalidData,
   conflict,
   network,
@@ -64,6 +66,53 @@ final class GitHubAccount {
 
   final int id;
   final String login;
+}
+
+final class GitHubInstallation {
+  const GitHubInstallation({
+    required this.id,
+    required this.accountId,
+    required this.accountLogin,
+    required this.managementUri,
+    required this.contentsPermission,
+  });
+
+  final int id;
+  final int accountId;
+  final String accountLogin;
+  final Uri managementUri;
+  final String contentsPermission;
+
+  bool get canReadContents => contentsPermission == 'read' || contentsPermission == 'write';
+  bool get canWriteContents => contentsPermission == 'write';
+}
+
+final class GitHubRepository {
+  const GitHubRepository({
+    required this.installationId,
+    required this.id,
+    required this.owner,
+    required this.name,
+    required this.isPrivate,
+    required this.defaultBranch,
+    required this.canPull,
+    required this.canPush,
+    required this.archived,
+    required this.disabled,
+  });
+
+  final int installationId;
+  final int id;
+  final String owner;
+  final String name;
+  final bool isPrivate;
+  final String defaultBranch;
+  final bool canPull;
+  final bool canPush;
+  final bool archived;
+  final bool disabled;
+
+  String get fullName => '$owner/$name';
 }
 
 final class GitHubTreeEntry {
@@ -118,10 +167,7 @@ final class GitHubApi {
   final Uri _mediatorUrl;
   late final http.Client _mediatorClient;
   late final http.Client _githubClient;
-  bool? _lastRepositoryPrivate;
   DateTime? _retryAt;
-
-  bool? get lastRepositoryPrivate => _lastRepositoryPrivate;
 
   Future<Uri> startAuthorization() async {
     final response = await _mediatorPost('/oauth/github/start');
@@ -142,15 +188,68 @@ final class GitHubApi {
 
   Future<GitHubAccount> account() async {
     final token = await _currentToken();
-    final response = await _githubRequest('GET', _apiUri(['user']), token: token.value);
+    final response = await _githubRequest('GET', _apiUri(['user']), token: token);
     final object = _decodeObject(response.bodyBytes, 'Invalid GitHub account response');
     final id = object['id'];
     final login = object['login'];
     if (id is! int || id <= 0 || login is! String || login.isEmpty) {
       _invalid('Invalid GitHub account response');
     }
-    _requireRepoScope(token.scope, response.headers['x-oauth-scopes']);
     return GitHubAccount(id: id, login: login);
+  }
+
+  Future<({List<GitHubInstallation> installations, List<GitHubRepository> repositories})> discoverRepositories() async {
+    final deadline = _DiscoveryDeadline();
+    try {
+      final token = await _currentToken(deadline: deadline);
+      await _accountWithToken(token, deadline: deadline);
+      final installations = await _discoverInstallations(token, deadline);
+      final repositoriesById = <int, GitHubRepository>{};
+      for (final installation in installations) {
+        final repositories = await _discoverInstallationRepositories(installation.id, token, deadline);
+        for (final repository in repositories) {
+          final previous = repositoriesById[repository.id];
+          if (previous != null && !_sameRepositoryDetails(previous, repository)) {
+            _invalid('GitHub returned inconsistent repository details');
+          }
+          repositoriesById.putIfAbsent(repository.id, () => repository);
+        }
+      }
+      deadline.check();
+      final repositories = repositoriesById.values.toList()
+        ..sort((left, right) {
+          final folded = left.fullName.toLowerCase().compareTo(right.fullName.toLowerCase());
+          return folded != 0 ? folded : left.fullName.compareTo(right.fullName);
+        });
+      return (
+        installations: List<GitHubInstallation>.unmodifiable(installations),
+        repositories: List<GitHubRepository>.unmodifiable(repositories),
+      );
+    } on _DiscoveryDeadlineExceeded {
+      throw const GitHubApiException(
+        'Repository discovery took too long. Refresh to try again.',
+        kind: GitHubErrorKind.network,
+      );
+    }
+  }
+
+  Future<GitHubDestination> resolveRepository(GitHubRepository repository) async {
+    _validateRepositorySelection(repository);
+    final token = await _currentToken();
+    final account = await _accountWithToken(token);
+    final current = await _findInstallationRepository(repository.installationId, repository.id, token);
+    if (current == null) _membershipDenied();
+    _verifyRepositorySelection(repository, current);
+    _requirePullAccess(current);
+    final destination = GitHubDestination(
+      accountId: account.id,
+      repositoryId: current.id,
+      owner: current.owner,
+      repository: current.name,
+      branch: current.defaultBranch,
+    );
+    await _branchHead(destination, token);
+    return destination;
   }
 
   Future<void> logout() async {
@@ -160,59 +259,17 @@ final class GitHubApi {
     }
   }
 
-  Future<GitHubDestination> repository(String ownerRepository) async {
-    _lastRepositoryPrivate = null;
-    final parts = ownerRepository.split('/');
-    if (parts.length != 2 || !_validRepositoryName(parts[0]) || !_validRepositoryName(parts[1])) {
-      _invalid('Enter a repository as owner/repository');
-    }
-    final token = await _currentToken();
-    final account = await _accountWithToken(token);
-    final response = await _githubRequest(
-      'GET',
-      _apiUri(['repos', parts[0], parts[1]]),
-      token: token.value,
-    );
-    final object = _decodeObject(response.bodyBytes, 'Invalid GitHub repository response');
-    final owner = object['owner'];
-    final ownerLogin = owner is Map ? owner['login'] : null;
-    final id = object['id'];
-    final name = object['name'];
-    final branch = object['default_branch'];
-    final isPrivate = object['private'];
-    if (id is! int ||
-        id <= 0 ||
-        ownerLogin is! String ||
-        name is! String ||
-        branch is! String ||
-        branch.isEmpty ||
-        isPrivate is! bool ||
-        ownerLogin.toLowerCase() != parts[0].toLowerCase() ||
-        name.toLowerCase() != parts[1].toLowerCase()) {
-      _invalid('GitHub returned a different or invalid repository');
-    }
-    if (!_validBranch(branch)) _invalid('GitHub returned an invalid default branch');
-    _lastRepositoryPrivate = isPrivate;
-    return GitHubDestination(
-      accountId: account.id,
-      repositoryId: id,
-      owner: ownerLogin,
-      repository: name,
-      branch: branch,
-    );
-  }
-
   /// Captures one latest-default-branch tree and reads supported files lazily by
   /// their immutable blob SHAs.
-  Future<TransferSource> readRepository(GitHubDestination destination) async {
+  Future<TransferSource> readRepository(GitHubDestination destination, {required int installationId}) async {
     final token = await _currentToken();
-    await _verifyTransferDestination(destination, token);
-    final snapshot = await _snapshot(destination, token.value);
+    await _verifyTransferDestination(destination, installationId, token);
+    final snapshot = await _snapshot(destination, token);
     final entries = _transferEntries(snapshot);
     final byPath = {for (final entry in snapshot.entries.values) entry.path: entry};
     return _GitHubTransferSource(
       entries,
-      (path) => _readTransferBlob(destination, token.value, byPath, path),
+      (path) => _readTransferBlob(destination, token, byPath, path),
     );
   }
 
@@ -221,6 +278,7 @@ final class GitHubApi {
   Future<GitHubCommitResult> commitTransfer(
     GitHubDestination destination,
     TransferTree tree, {
+    required int installationId,
     required String message,
   }) async {
     if (!isValidGitHubCommitMessage(message)) {
@@ -229,20 +287,20 @@ final class GitHubApi {
     _validateTransferTree(tree);
 
     final token = await _currentToken();
-    await _verifyTransferDestination(destination, token);
-    final current = await _snapshot(destination, token.value);
+    await _verifyTransferDestination(destination, installationId, token, forCommit: true);
+    final current = await _snapshot(destination, token);
     _validateTransferOutput(current, tree);
 
     final changes = <Map<String, Object?>>[];
     for (final path in tree.files.keys.toList()..sort()) {
-      final sha = await _createBlob(destination, token.value, tree.files[path]!);
+      final sha = await _createBlob(destination, token, tree.files[path]!);
       changes.add(_treeBlob(path, sha));
     }
 
     final treeResponse = await _githubRequest(
       'POST',
       _repoUri(destination, ['git', 'trees']),
-      token: token.value,
+      token: token,
       body: {'base_tree': current.treeSha, 'tree': changes},
     );
     final createdTree = _decodeObject(treeResponse.bodyBytes, 'Invalid GitHub tree response');
@@ -250,7 +308,7 @@ final class GitHubApi {
     final commitResponse = await _githubRequest(
       'POST',
       _repoUri(destination, ['git', 'commits']),
-      token: token.value,
+      token: token,
       body: {
         'message': message,
         'tree': treeSha,
@@ -267,7 +325,7 @@ final class GitHubApi {
       refResponse = await _githubRequest(
         'PATCH',
         _refUpdateUri(destination),
-        token: token.value,
+        token: token,
         body: {'sha': commitSha, 'force': false},
         checkResponse: false,
       );
@@ -292,11 +350,7 @@ final class GitHubApi {
   }
 
   Future<GitHubSnapshot> _snapshot(GitHubDestination destination, String token) async {
-    final ref = await _githubRequest('GET', _refUri(destination), token: token);
-    final refObject = _decodeObject(ref.bodyBytes, 'Invalid GitHub branch response');
-    final object = refObject['object'];
-    if (object is! Map || object['type'] != 'commit') _invalid('GitHub branch does not point to a commit');
-    final commitSha = _requiredSha(object['sha'], 'Invalid GitHub branch response');
+    final commitSha = await _branchHead(destination, token);
     final commitResponse = await _githubRequest(
       'GET',
       _repoUri(destination, ['git', 'commits', commitSha]),
@@ -394,8 +448,332 @@ final class GitHubApi {
     );
   }
 
-  Future<({String value, String? scope})> _currentToken() async {
-    final response = await _mediatorPost('/oauth/github/token');
+  Future<List<GitHubInstallation>> _discoverInstallations(String token, _DiscoveryDeadline deadline) async {
+    final result = <GitHubInstallation>[];
+    final seen = <int, GitHubInstallation>{};
+    var pageNumber = 1;
+    var totalCount = -1;
+    var received = 0;
+    while (true) {
+      deadline.check();
+      final response = await _githubRequest(
+        'GET',
+        _apiUri(['user', 'installations']),
+        token: token,
+        query: {'per_page': '$_pageSize', 'page': '$pageNumber'},
+        deadline: deadline,
+      );
+      final page = _decodePage(response, 'installations', 'Invalid GitHub installations response');
+      if (totalCount < 0) {
+        totalCount = page.totalCount;
+      } else if (page.totalCount != totalCount) {
+        _invalid('GitHub installation pagination changed during discovery');
+      }
+      received += page.items.length;
+      for (final raw in page.items) {
+        final installation = _parseInstallation(raw);
+        final previous = seen[installation.id];
+        if (previous != null && !_sameInstallation(previous, installation)) {
+          _invalid('GitHub returned inconsistent installation details');
+        }
+        if (previous == null) {
+          seen[installation.id] = installation;
+          result.add(installation);
+        }
+      }
+      final nextPage = _nextPage(response.headers['link'], ['user', 'installations'], pageNumber);
+      _validatePageProgress(totalCount, received, nextPage);
+      if (nextPage == null) break;
+      pageNumber = nextPage;
+    }
+    result.sort((left, right) {
+      final folded = left.accountLogin.toLowerCase().compareTo(right.accountLogin.toLowerCase());
+      return folded != 0 ? folded : left.id.compareTo(right.id);
+    });
+    return result;
+  }
+
+  Future<List<GitHubRepository>> _discoverInstallationRepositories(
+    int installationId,
+    String token,
+    _DiscoveryDeadline deadline,
+  ) async {
+    final result = <GitHubRepository>[];
+    final seen = <int, GitHubRepository>{};
+    var pageNumber = 1;
+    var totalCount = -1;
+    var received = 0;
+    while (true) {
+      deadline.check();
+      final response = await _githubRequest(
+        'GET',
+        _installationRepositoriesUri(installationId),
+        token: token,
+        query: {'per_page': '$_pageSize', 'page': '$pageNumber'},
+        deadline: deadline,
+      );
+      final page = _decodePage(response, 'repositories', 'Invalid GitHub repositories response');
+      if (totalCount < 0) {
+        totalCount = page.totalCount;
+      } else if (page.totalCount != totalCount) {
+        _invalid('GitHub repository pagination changed during discovery');
+      }
+      received += page.items.length;
+      for (final raw in page.items) {
+        final repository = _parseRepository(raw, installationId);
+        final previous = seen[repository.id];
+        if (previous != null && !_sameRepositoryDetails(previous, repository)) {
+          _invalid('GitHub returned inconsistent repository details');
+        }
+        if (previous == null) {
+          seen[repository.id] = repository;
+          result.add(repository);
+        }
+      }
+      final path = ['user', 'installations', '$installationId', 'repositories'];
+      final nextPage = _nextPage(response.headers['link'], path, pageNumber);
+      _validatePageProgress(totalCount, received, nextPage);
+      if (nextPage == null) break;
+      pageNumber = nextPage;
+    }
+    return result;
+  }
+
+  Future<GitHubRepository?> _findInstallationRepository(int installationId, int repositoryId, String token) async {
+    if (installationId <= 0 || repositoryId <= 0) _invalid('Invalid GitHub repository selection');
+    var pageNumber = 1;
+    var totalCount = -1;
+    var received = 0;
+    GitHubRepository? match;
+    while (true) {
+      final path = ['user', 'installations', '$installationId', 'repositories'];
+      final response = await _githubRequest(
+        'GET',
+        _installationRepositoriesUri(installationId),
+        token: token,
+        query: {'per_page': '$_pageSize', 'page': '$pageNumber'},
+      );
+      final page = _decodePage(response, 'repositories', 'Invalid GitHub repositories response');
+      if (totalCount < 0) {
+        totalCount = page.totalCount;
+      } else if (page.totalCount != totalCount) {
+        _invalid('GitHub repository pagination changed during verification');
+      }
+      received += page.items.length;
+      for (final raw in page.items) {
+        final repository = _parseRepository(raw, installationId);
+        if (repository.id == repositoryId) match = repository;
+      }
+      final nextPage = _nextPage(response.headers['link'], path, pageNumber);
+      _validatePageProgress(totalCount, received, nextPage);
+      if (match != null || nextPage == null) return match;
+      pageNumber = nextPage;
+    }
+  }
+
+  Uri _installationRepositoriesUri(int installationId) =>
+      _apiUri(['user', 'installations', '$installationId', 'repositories']);
+
+  _GitHubPage _decodePage(http.Response response, String key, String error) {
+    final object = _decodeObject(response.bodyBytes, error);
+    final totalCount = object['total_count'];
+    final rawItems = object[key];
+    if (totalCount is! int || totalCount < 0 || rawItems is! List || rawItems.length > _pageSize) {
+      _invalid(error);
+    }
+    if (rawItems.any((item) => item is! Map || item.keys.any((key) => key is! String))) _invalid(error);
+    return _GitHubPage(totalCount, List<Object?>.unmodifiable(rawItems));
+  }
+
+  GitHubInstallation _parseInstallation(Object? raw) {
+    if (raw is! Map) _invalid('Invalid GitHub installation');
+    final id = raw['id'];
+    final account = raw['account'];
+    final permissions = raw['permissions'];
+    final accountId = account is Map ? account['id'] : null;
+    final accountLogin = account is Map ? account['login'] : null;
+    final contents = permissions is Map ? permissions['contents'] : null;
+    final managementUrl = raw['html_url'];
+    if (id is! int ||
+        id <= 0 ||
+        accountId is! int ||
+        accountId <= 0 ||
+        accountLogin is! String ||
+        !_validRepositoryName(accountLogin) ||
+        contents is! String ||
+        (contents != 'read' && contents != 'write') ||
+        managementUrl is! String) {
+      _invalid('Invalid GitHub installation');
+    }
+    final uri = Uri.tryParse(managementUrl);
+    if (uri == null || !_validInstallationManagementUri(uri, accountLogin, id)) {
+      _invalid('GitHub returned an unsafe installation management URL');
+    }
+    return GitHubInstallation(
+      id: id,
+      accountId: accountId,
+      accountLogin: accountLogin,
+      managementUri: uri,
+      contentsPermission: contents,
+    );
+  }
+
+  GitHubRepository _parseRepository(Object? raw, int installationId) {
+    if (raw is! Map) _invalid('Invalid GitHub repository');
+    final id = raw['id'];
+    final name = raw['name'];
+    final fullName = raw['full_name'];
+    final owner = raw['owner'];
+    final ownerLogin = owner is Map ? owner['login'] : null;
+    final isPrivate = raw['private'];
+    final defaultBranch = raw['default_branch'];
+    final permissions = raw['permissions'];
+    final canPull = permissions is Map ? permissions['pull'] : null;
+    final canPush = permissions is Map ? permissions['push'] : null;
+    final archived = raw['archived'];
+    final disabled = raw['disabled'];
+    if (installationId <= 0 ||
+        id is! int ||
+        id <= 0 ||
+        ownerLogin is! String ||
+        !_validRepositoryName(ownerLogin) ||
+        name is! String ||
+        !_validRepositoryName(name) ||
+        fullName != '$ownerLogin/$name' ||
+        isPrivate is! bool ||
+        defaultBranch is! String ||
+        !_validBranch(defaultBranch) ||
+        canPull is! bool ||
+        canPush is! bool ||
+        archived is! bool ||
+        disabled is! bool) {
+      _invalid('Invalid GitHub repository');
+    }
+    return GitHubRepository(
+      installationId: installationId,
+      id: id,
+      owner: ownerLogin,
+      name: name,
+      isPrivate: isPrivate,
+      defaultBranch: defaultBranch,
+      canPull: canPull,
+      canPush: canPush,
+      archived: archived,
+      disabled: disabled,
+    );
+  }
+
+  bool _validInstallationManagementUri(Uri uri, String accountLogin, int id) {
+    if (uri.scheme != 'https' ||
+        uri.host.toLowerCase() != 'github.com' ||
+        uri.port != 443 ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      return false;
+    }
+    final segments = uri.pathSegments;
+    final personal = segments.length == 3 && segments[0] == 'settings' && segments[1] == 'installations';
+    final organization =
+        segments.length == 5 &&
+        segments[0] == 'organizations' &&
+        segments[1].toLowerCase() == accountLogin.toLowerCase() &&
+        segments[2] == 'settings' &&
+        segments[3] == 'installations';
+    return (personal || organization) && segments.last == '$id';
+  }
+
+  int? _nextPage(String? linkHeader, List<String> pathSegments, int pageNumber) {
+    if (linkHeader == null || linkHeader.trim().isEmpty) return null;
+    final links = _splitLinkHeader(linkHeader);
+    int? nextPage;
+    for (final value in links) {
+      final match = RegExp(r'^\s*<([^<>]+)>\s*;(.*)$').firstMatch(value);
+      if (match == null) _invalid('Invalid GitHub pagination metadata');
+      final parameters = match.group(2)!.split(';');
+      String? relation;
+      for (final parameter in parameters) {
+        final entry = RegExp(r'^\s*([A-Za-z][A-Za-z0-9_-]*)\s*=\s*(?:"([^"]*)"|([^\s]+))\s*$').firstMatch(parameter);
+        if (entry == null) _invalid('Invalid GitHub pagination metadata');
+        if (entry.group(1)!.toLowerCase() == 'rel') relation = entry.group(2) ?? entry.group(3);
+      }
+      if (relation == null || relation.isEmpty) _invalid('Invalid GitHub pagination metadata');
+      if (relation.split(RegExp(r'\s+')).contains('next')) {
+        if (nextPage != null) _invalid('Invalid GitHub pagination metadata');
+        final uri = Uri.tryParse(match.group(1)!);
+        if (uri == null ||
+            uri.scheme != 'https' ||
+            uri.host.toLowerCase() != 'api.github.com' ||
+            uri.port != 443 ||
+            uri.userInfo.isNotEmpty ||
+            uri.path != _apiUri(pathSegments).path ||
+            uri.hasFragment) {
+          _invalid('Unsafe GitHub pagination metadata');
+        }
+        final query = uri.queryParametersAll;
+        if (query.length != 2 ||
+            query['per_page']?.length != 1 ||
+            query['per_page']!.single != '$_pageSize' ||
+            query['page']?.length != 1) {
+          _invalid('Invalid GitHub pagination metadata');
+        }
+        final valuePage = int.tryParse(query['page']!.single);
+        if (valuePage == null || valuePage != pageNumber + 1) _invalid('Invalid GitHub pagination metadata');
+        nextPage = valuePage;
+      }
+    }
+    return nextPage;
+  }
+
+  List<String> _splitLinkHeader(String header) {
+    final result = <String>[];
+    var start = 0;
+    var inAngle = false;
+    var inQuote = false;
+    for (var index = 0; index < header.length; index++) {
+      final char = header[index];
+      if (char == '"' && (index == 0 || header[index - 1] != r'\')) inQuote = !inQuote;
+      if (!inQuote) {
+        if (char == '<') inAngle = true;
+        if (char == '>') inAngle = false;
+        if (char == ',' && !inAngle) {
+          result.add(header.substring(start, index).trim());
+          start = index + 1;
+        }
+      }
+    }
+    if (inAngle || inQuote) _invalid('Invalid GitHub pagination metadata');
+    result.add(header.substring(start).trim());
+    if (result.any((item) => item.isEmpty)) _invalid('Invalid GitHub pagination metadata');
+    return result;
+  }
+
+  void _validatePageProgress(int totalCount, int received, int? nextPage) {
+    if (received > totalCount ||
+        (nextPage == null && received != totalCount) ||
+        (nextPage != null && received >= totalCount)) {
+      _invalid('GitHub returned incomplete pagination metadata');
+    }
+  }
+
+  bool _sameInstallation(GitHubInstallation left, GitHubInstallation right) =>
+      left.accountId == right.accountId &&
+      left.accountLogin == right.accountLogin &&
+      left.managementUri == right.managementUri &&
+      left.contentsPermission == right.contentsPermission;
+
+  bool _sameRepositoryDetails(GitHubRepository left, GitHubRepository right) =>
+      left.owner == right.owner &&
+      left.name == right.name &&
+      left.isPrivate == right.isPrivate &&
+      left.defaultBranch == right.defaultBranch &&
+      left.canPull == right.canPull &&
+      left.canPush == right.canPush &&
+      left.archived == right.archived &&
+      left.disabled == right.disabled;
+
+  Future<String> _currentToken({_DiscoveryDeadline? deadline}) async {
+    final response = await _mediatorPost('/oauth/github/token', deadline: deadline);
     final object = _decodeObject(response.bodyBytes, 'Invalid session response');
     final value = object['access_token'];
     final tokenType = object['token_type'];
@@ -408,26 +786,26 @@ final class GitHubApi {
         (expiresIn != null && (expiresIn is! int || expiresIn <= 0))) {
       _invalid('Invalid session response');
     }
-    final currentScope = scope is String ? scope : null;
-    _requireRepoScope(currentScope, null);
-    return (value: value, scope: currentScope);
+    return value;
   }
 
-  Future<GitHubAccount> _accountWithToken(({String value, String? scope}) token) async {
-    final response = await _githubRequest('GET', _apiUri(['user']), token: token.value);
+  Future<GitHubAccount> _accountWithToken(String token, {_DiscoveryDeadline? deadline}) async {
+    final response = await _githubRequest('GET', _apiUri(['user']), token: token, deadline: deadline);
     final object = _decodeObject(response.bodyBytes, 'Invalid GitHub account response');
     final id = object['id'];
     final login = object['login'];
     if (id is! int || id <= 0 || login is! String || login.isEmpty) _invalid('Invalid GitHub account response');
-    _requireRepoScope(token.scope, response.headers['x-oauth-scopes']);
     return GitHubAccount(id: id, login: login);
   }
 
   Future<void> _verifyTransferDestination(
     GitHubDestination destination,
-    ({String value, String? scope}) token,
-  ) async {
+    int installationId,
+    String token, {
+    bool forCommit = false,
+  }) async {
     _validateDestination(destination);
+    if (installationId <= 0) _invalid('Invalid GitHub repository selection');
     final account = await _accountWithToken(token);
     if (account.id != destination.accountId) {
       throw const GitHubApiException(
@@ -435,29 +813,98 @@ final class GitHubApi {
         kind: GitHubErrorKind.reconnect,
       );
     }
-    final response = await _githubRequest(
-      'GET',
-      _apiUri(['repos', destination.owner, destination.repository]),
-      token: token.value,
-    );
-    final repository = _decodeObject(response.bodyBytes, 'Invalid GitHub repository response');
-    final id = repository['id'];
-    final defaultBranch = repository['default_branch'];
-    if (id is! int || id <= 0 || defaultBranch is! String || !_validBranch(defaultBranch)) {
-      _invalid('Invalid GitHub repository response');
-    }
-    if (id != destination.repositoryId) {
+    final repository = await _findInstallationRepository(installationId, destination.repositoryId, token);
+    if (repository == null) _membershipDenied();
+    if (repository.owner != destination.owner || repository.name != destination.repository) {
       throw const GitHubApiException(
         'Repository identity changed. Choose the repository again before transferring.',
         kind: GitHubErrorKind.invalidData,
       );
     }
-    if (defaultBranch != destination.branch) {
+    if (repository.defaultBranch != destination.branch) {
       throw const GitHubApiException(
         'The repository default branch changed. Choose the repository again before transferring.',
         kind: GitHubErrorKind.invalidData,
       );
     }
+    _requirePullAccess(repository);
+    if (forCommit && (!repository.canPush || repository.archived || repository.disabled)) {
+      throw const GitHubApiException(
+        'This repository does not allow commits. Check repository permissions and status.',
+        kind: GitHubErrorKind.permissionDenied,
+      );
+    }
+  }
+
+  void _validateRepositorySelection(GitHubRepository repository) {
+    if (repository.installationId <= 0 ||
+        repository.id <= 0 ||
+        !_validRepositoryName(repository.owner) ||
+        !_validRepositoryName(repository.name) ||
+        !_validBranch(repository.defaultBranch)) {
+      _invalid('Invalid GitHub repository selection');
+    }
+  }
+
+  void _verifyRepositorySelection(GitHubRepository selected, GitHubRepository current) {
+    if (selected.id != current.id || selected.owner != current.owner || selected.name != current.name) {
+      throw const GitHubApiException(
+        'Repository identity changed. Refresh and choose the repository again.',
+        kind: GitHubErrorKind.invalidData,
+      );
+    }
+    if (selected.defaultBranch != current.defaultBranch) {
+      throw const GitHubApiException(
+        'The repository default branch changed. Refresh and choose the repository again.',
+        kind: GitHubErrorKind.invalidData,
+      );
+    }
+  }
+
+  void _requirePullAccess(GitHubRepository repository) {
+    if (!repository.canPull) {
+      throw const GitHubApiException(
+        'You do not have permission to read this repository.',
+        kind: GitHubErrorKind.permissionDenied,
+      );
+    }
+  }
+
+  Never _membershipDenied() => throw const GitHubApiException(
+    'This repository is no longer available through the selected GitHub App installation.',
+    kind: GitHubErrorKind.permissionDenied,
+  );
+
+  Future<String> _branchHead(GitHubDestination destination, String token) async {
+    final response = await _githubRequest('GET', _refUri(destination), token: token, checkResponse: false);
+    if (response.statusCode == 404 || response.statusCode == 409) {
+      final branches = await _githubRequest(
+        'GET',
+        _repoUri(destination, ['branches']),
+        token: token,
+        query: {'per_page': '1'},
+        checkResponse: false,
+      );
+      if (branches.statusCode < 200 || branches.statusCode >= 300) _throwResponse(branches);
+      final values = _decodeList(branches.bodyBytes, 'Invalid GitHub branches response');
+      if (values.length > 1 || values.any((value) => value is! Map)) _invalid('Invalid GitHub branches response');
+      if (values.isEmpty) {
+        throw const GitHubApiException(
+          'This repository is empty. Add a README on GitHub, then refresh.',
+          kind: GitHubErrorKind.emptyRepository,
+        );
+      }
+      final branch = values.single;
+      if (branch is! Map) _invalid('Invalid GitHub branches response');
+      final name = branch['name'];
+      if (name is! String || !_validBranch(name)) _invalid('Invalid GitHub branches response');
+      _conflict('The repository default branch is unavailable. Refresh and choose the repository again.');
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) _throwResponse(response);
+    final refObject = _decodeObject(response.bodyBytes, 'Invalid GitHub branch response');
+    final object = refObject['object'];
+    if (object is! Map || object['type'] != 'commit') _invalid('GitHub branch does not point to a commit');
+    return _requiredSha(object['sha'], 'Invalid GitHub branch response');
   }
 
   List<TransferEntry> _transferEntries(GitHubSnapshot snapshot) {
@@ -596,19 +1043,24 @@ final class GitHubApi {
     }
   }
 
-  Future<http.Response> _mediatorPost(String path) async {
+  Future<http.Response> _mediatorPost(String path, {_DiscoveryDeadline? deadline}) async {
+    deadline?.check();
     _checkRateLimit();
     final uri = _mediatorUrl.replace(path: path);
     late final http.Response response;
     try {
-      final request = http.Request('POST', uri)
-        ..headers.addAll(const {
-          'Content-Type': 'application/json',
-          'X-OAuth-Bridge': '1',
-          'Accept': 'application/json',
-        })
-        ..body = '{}';
-      response = await _sendBounded(_mediatorClient, request, 64 * 1024);
+      final abort = deadline == null ? null : Completer<void>();
+      final request =
+          (abort == null ? http.Request('POST', uri) : http.AbortableRequest('POST', uri, abortTrigger: abort.future))
+            ..headers.addAll(const {
+              'Content-Type': 'application/json',
+              'X-OAuth-Bridge': '1',
+              'Accept': 'application/json',
+            })
+            ..body = '{}';
+      response = await _sendBounded(_mediatorClient, request, 64 * 1024, deadline: deadline, abort: abort);
+    } on _DiscoveryDeadlineExceeded {
+      rethrow;
     } on _ResponseTooLarge {
       _invalid('GitHub session service response is too large');
     } on Object {
@@ -626,23 +1078,31 @@ final class GitHubApi {
     Map<String, String>? query,
     bool checkResponse = true,
     int maximumResponseBytes = _maximumJsonResponseBytes,
+    _DiscoveryDeadline? deadline,
   }) async {
+    deadline?.check();
     _checkRateLimit();
     final target = query == null ? uri : uri.replace(queryParameters: query);
     late final http.Response response;
     try {
-      final request = http.Request(method, target)
-        ..headers.addAll({
-          'Accept': 'application/vnd.github+json',
-          'Authorization': 'Bearer $token',
-          'X-GitHub-Api-Version': _githubApiVersion,
-        });
+      final abort = deadline == null ? null : Completer<void>();
+      final request =
+          (abort == null
+                ? http.Request(method, target)
+                : http.AbortableRequest(method, target, abortTrigger: abort.future))
+            ..headers.addAll({
+              'Accept': 'application/vnd.github+json',
+              'Authorization': 'Bearer $token',
+              'X-GitHub-Api-Version': _githubApiVersion,
+            });
       if (body != null) {
         request
           ..headers['Content-Type'] = 'application/json'
           ..body = jsonEncode(body);
       }
-      response = await _sendBounded(_githubClient, request, maximumResponseBytes);
+      response = await _sendBounded(_githubClient, request, maximumResponseBytes, deadline: deadline, abort: abort);
+    } on _DiscoveryDeadlineExceeded {
+      rethrow;
     } on _ResponseTooLarge {
       _invalid('GitHub response is too large');
     } on Object {
@@ -673,15 +1133,6 @@ final class GitHubApi {
       );
     }
     if (status == 403) {
-      final accepted = headers['x-accepted-oauth-scopes'] ?? '';
-      final actual = headers['x-oauth-scopes'] ?? '';
-      if (_hasRepoScope(accepted) && !_hasRepoScope(actual)) {
-        throw GitHubApiException(
-          'Reconnect GitHub and grant the repo scope.',
-          kind: GitHubErrorKind.insufficientScope,
-          statusCode: status,
-        );
-      }
       throw GitHubApiException(
         'GitHub denied access. Check write permissions, organization restrictions, or branch protection.',
         kind: GitHubErrorKind.permissionDenied,
@@ -737,24 +1188,22 @@ final class GitHubApi {
     'sha': sha,
   };
 
-  void _requireRepoScope(String? tokenScope, String? githubScope) {
-    for (final scope in [tokenScope, githubScope]) {
-      if (scope != null && !_hasRepoScope(scope)) {
-        throw const GitHubApiException(
-          'Reconnect GitHub and grant the repo scope.',
-          kind: GitHubErrorKind.insufficientScope,
-        );
-      }
-    }
-  }
-
-  bool _hasRepoScope(String value) => value.split(RegExp(r'[,\s]+')).any((scope) => scope == 'repo');
-
   Map<String, Object?> _decodeObject(Uint8List bytes, String error, {int maximumBytes = _maximumJsonResponseBytes}) {
     if (bytes.length > maximumBytes) _invalid('GitHub response is too large');
     try {
       final value = jsonDecode(utf8.decode(bytes, allowMalformed: false));
       if (value is Map && value.keys.every((key) => key is String)) return value.cast<String, Object?>();
+    } on Object {
+      _invalid(error);
+    }
+    _invalid(error);
+  }
+
+  List<Object?> _decodeList(Uint8List bytes, String error, {int maximumBytes = _maximumJsonResponseBytes}) {
+    if (bytes.length > maximumBytes) _invalid('GitHub response is too large');
+    try {
+      final value = jsonDecode(utf8.decode(bytes, allowMalformed: false));
+      if (value is List) return List<Object?>.unmodifiable(value);
     } on Object {
       _invalid(error);
     }
@@ -808,15 +1257,43 @@ final class GitHubApi {
     return encodedBytes + wrappedLines * 4 + 256 * 1024;
   }
 
-  Future<http.Response> _sendBounded(http.Client client, http.BaseRequest request, int maximumBytes) async {
-    final streamed = await client.send(request).timeout(_requestTimeout);
-    final responseBytes = await _readBounded(streamed.stream, maximumBytes).timeout(_requestTimeout);
-    return http.Response.bytes(
-      responseBytes,
-      streamed.statusCode,
-      request: request,
-      headers: streamed.headers,
-      reasonPhrase: streamed.reasonPhrase,
+  Future<http.Response> _sendBounded(
+    http.Client client,
+    http.BaseRequest request,
+    int maximumBytes, {
+    _DiscoveryDeadline? deadline,
+    Completer<void>? abort,
+  }) async {
+    try {
+      final streamed = await _withRequestTimeout(client.send(request), deadline);
+      final responseBytes = await _withRequestTimeout(_readBounded(streamed.stream, maximumBytes), deadline);
+      return http.Response.bytes(
+        responseBytes,
+        streamed.statusCode,
+        request: request,
+        headers: streamed.headers,
+        reasonPhrase: streamed.reasonPhrase,
+      );
+    } on _DiscoveryDeadlineExceeded {
+      if (abort != null && !abort.isCompleted) abort.complete();
+      rethrow;
+    } on TimeoutException {
+      if (abort != null && !abort.isCompleted) abort.complete();
+      rethrow;
+    }
+  }
+
+  Future<T> _withRequestTimeout<T>(Future<T> future, _DiscoveryDeadline? deadline) {
+    if (deadline == null) return future.timeout(_requestTimeout);
+    deadline.check();
+    final remaining = deadline.remaining;
+    final timeout = remaining < _requestTimeout ? remaining : _requestTimeout;
+    return future.timeout(
+      timeout,
+      onTimeout: () {
+        if (deadline.expired) throw const _DiscoveryDeadlineExceeded();
+        throw TimeoutException('GitHub request timed out');
+      },
     );
   }
 
@@ -919,6 +1396,30 @@ final class GitHubApi {
 
 final class _ResponseTooLarge implements Exception {
   const _ResponseTooLarge();
+}
+
+final class _DiscoveryDeadlineExceeded implements Exception {
+  const _DiscoveryDeadlineExceeded();
+}
+
+final class _DiscoveryDeadline {
+  _DiscoveryDeadline() : _watch = Stopwatch()..start();
+
+  final Stopwatch _watch;
+
+  Duration get remaining => _discoveryTimeout - _watch.elapsed;
+  bool get expired => remaining.inMicroseconds <= 0;
+
+  void check() {
+    if (expired) throw const _DiscoveryDeadlineExceeded();
+  }
+}
+
+final class _GitHubPage {
+  const _GitHubPage(this.totalCount, this.items);
+
+  final int totalCount;
+  final List<Object?> items;
 }
 
 final class _GitHubTransferSource implements TransferSource {

@@ -10,6 +10,13 @@ GitHubApi createBrowserGitHubApi(Uri mediatorUrl) {
   return GitHubApi(mediatorUrl: mediatorUrl, mediatorClient: mediatorClient, githubClient: http.Client());
 }
 
+Uri gitHubAppInstallationUri(String slug) {
+  if (slug.length > 100 || !RegExp(r'^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$').hasMatch(slug)) {
+    throw ArgumentError.value(slug, 'slug', 'Expected a valid GitHub App slug');
+  }
+  return Uri.https('github.com', '/apps/$slug/installations/new');
+}
+
 void navigateGitHubAuthorization(Uri uri) {
   if (uri.scheme != 'https' ||
       uri.host.toLowerCase() != 'github.com' ||

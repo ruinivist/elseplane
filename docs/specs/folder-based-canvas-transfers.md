@@ -54,13 +54,31 @@ and add recognized content to the local library.
 - A local merge keeps unrelated local content. GitHub commits preserve unrelated
   repository content and publish the document and included images in one commit.
 - Repository import and current-canvas checkpoint are separate user-triggered
-  operations. Each verifies the saved account and repository independently; a
-  checkpoint reads its own fresh branch head and bounded tree and never reuses
-  an import transfer.
-- GitHub import and commit use the existing selected `GitHubDestination` and
-  owner/repository entry flow. Import uses the latest default branch and the
-  whole repository. There is no separate import URL or import destination, and
-  import does not change the saved destination.
+  operations. Each verifies the saved account and repository independently,
+  including fresh membership in the selected GitHub App installation; a
+  checkpoint reads its own fresh default-branch head and bounded tree and never
+  reuses an import transfer.
+- GitHub App OAuth uses the existing mediator and expiring user access tokens;
+  tokens remain in memory and authorization does not depend on a `repo` scope.
+  Discovery lists repositories from accessible installations of this app. The
+  installation screen controls the GitHub grant, while one searchable setup
+  picker sets the single saved `GitHubDestination` for both Import and Commit.
+  The installation ID is transient and is not part of saved library metadata.
+  After reload, resolve the saved account/repository identity against current
+  discovery before enabling transfers. Import and Commit display and use that
+  saved choice; neither prompts for another repository or changes the selection.
+  Import uses the latest default branch and the whole repository. There is no
+  separate import URL or destination.
+- Transfers use only the current default branch. Verify membership in the
+  selected installation and the repository/account identity before transfer;
+  do not enumerate other installations for this check or treat the installation
+  ID as authorization. If the default branch changed since selection, require
+  refresh and explicit confirmation rather than switching silently. Reject a
+  repository with no default-branch commit and confirm emptiness with a bounded
+  branch query rather than repository size. The user-facing error is: "This
+  repository is empty. Add a README on GitHub, then refresh." Empty repositories
+  cannot be imported or committed, and no files, branches, or commits are created
+  to initialize them.
 - A checkpoint rejects tree/object and path-prefix collisions from that fresh
   tree before blob uploads or branch updates. Existing regular output blobs are
   overwritten without content comparison, including shared image paths.
@@ -317,23 +335,38 @@ or an embedded-image bundle.
 
 GitHub is a manual checkpoint transport, not a linked library. Repository import
 and checkpoint are mutually exclusive operations started by separate user
-actions. Both use the existing selected `GitHubDestination` and owner/repository
-entry flow. Import uses the latest default branch and the whole repository; it
-does not accept a separate URL or independently selected destination, and does
-not change the saved destination. Importing reads the repository from one
-immutable default-branch head and bounded recursive tree, imports supported
-canvas files and recognized image paths through the shared source and codec, and
-applies the same additive local merge above. Repository deletions never delete
-local files. Existing non-format files such as `README` and `.gitignore` are
-ignored. Import never triggers a checkpoint.
+actions. Both display and use the saved `GitHubDestination`; neither prompts for
+or changes the repository selection. One searchable setup picker saves an
+explicit choice for both actions. Search only filters the current list of
+repositories discovered from accessible installations of the configured GitHub
+App. GitHub's installation screen controls the grant; the app picker does not
+change it. Import uses the latest default branch and the whole repository; it
+does not accept a separate URL or independently selected destination. Importing
+reads the repository from one immutable default-branch head and bounded recursive
+tree, imports supported canvas files and recognized image paths through the
+shared source and codec, and applies the same additive local merge above.
+Repository deletions never delete local files. Existing non-format files such as
+`README` and `.gitignore` are ignored. Import never triggers a checkpoint.
+
+The mediator's existing OAuth flow supplies expiring GitHub App user access
+tokens. Access tokens and installation IDs stay in memory; the persisted
+destination contains no installation ID. A reload resolves the saved account and
+repository against fresh discovery before enabling transfers. No `repo`-scope
+gate is used. A transfer receives the selected installation ID as required
+operation context and freshly verifies membership only within that installation,
+as well as the account, repository ID, and default branch. The ID alone is not
+proof of authorization; a membership lookup failure fails closed. Do not
+enumerate unrelated installations during transfer verification or add an
+authorization cache.
 
 GitHub import reads only the latest default-branch head. Importing an earlier
 commit or choosing a historical revision is not supported. Import uses the same
 local merge operation; it is not a separate replacement mode.
 
-Each checkpoint independently verifies the saved account and repository, then
-captures a fresh default-branch head and bounded recursive tree at that
-operation's start. It does not reuse an import tree or track a baseline. Encode
+Each checkpoint independently verifies the saved account and repository and
+freshly checks membership in the selected installation, then captures a fresh
+default-branch head and bounded recursive tree at that operation's start. It
+does not reuse an import tree or track a baseline. Encode
 the captured current canvas and publish it with all included image bytes in one
 commit. The document path mirrors its full local parent path and name with
 `.canvas.json`; image paths are relative to that document's parent. Before

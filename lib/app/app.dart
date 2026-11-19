@@ -48,6 +48,7 @@ class ElseplaneApp extends StatefulWidget {
     this.libraryStore,
     this.projectFiles,
     this.githubApi,
+    this.githubAppSlug,
     this.navigateGitHubAuthorization,
     this.consumeGitHubCompletion,
     this.openGitHubLink,
@@ -61,6 +62,7 @@ class ElseplaneApp extends StatefulWidget {
   final LibraryStore? libraryStore;
   final CanvasProjectFiles? projectFiles;
   final GitHubApi? githubApi;
+  final String? githubAppSlug;
   final void Function(Uri)? navigateGitHubAuthorization;
   final bool Function()? consumeGitHubCompletion;
   final void Function(String url)? openGitHubLink;
@@ -82,6 +84,11 @@ class _ElseplaneAppState extends State<ElseplaneApp> {
   late final AttachmentStore _attachmentStore = widget.attachmentStore ?? PlatformAttachmentStore();
   late final CanvasProjectFiles _projectFiles = widget.projectFiles ?? createCanvasProjectFiles();
   late final GitHubApi? _githubApi = widget.githubApi ?? _createConfiguredGitHubApi();
+  late final String? _githubAppSlug = _githubApi == null
+      ? null
+      : _requireGitHubAppSlug(
+          widget.githubAppSlug ?? (widget.githubApi == null ? const String.fromEnvironment('GITHUB_APP_SLUG') : null),
+        );
 
   GitHubApi? _createConfiguredGitHubApi() {
     const configuredUrl = String.fromEnvironment('GITHUB_MEDIATOR_URL');
@@ -95,7 +102,16 @@ class _ElseplaneAppState extends State<ElseplaneApp> {
         uri.hasFragment) {
       throw const FormatException('GITHUB_MEDIATOR_URL must be an HTTPS service URL.');
     }
+    _requireGitHubAppSlug(widget.githubAppSlug ?? const String.fromEnvironment('GITHUB_APP_SLUG'));
     return createBrowserGitHubApi(uri);
+  }
+
+  String _requireGitHubAppSlug(String? slug) {
+    if (slug == null || slug.isEmpty) {
+      throw const FormatException('GITHUB_APP_SLUG must be configured when GitHub is enabled.');
+    }
+    gitHubAppInstallationUri(slug);
+    return slug;
   }
 
   Future<void> _setThemeMode(ThemeMode mode) {
@@ -135,6 +151,7 @@ class _ElseplaneAppState extends State<ElseplaneApp> {
         libraryStore: _libraryStore,
         projectFiles: _projectFiles,
         githubApi: _githubApi,
+        githubAppSlug: _githubAppSlug,
         navigateGitHubAuthorization: widget.navigateGitHubAuthorization,
         consumeGitHubCompletion: widget.consumeGitHubCompletion,
         openGitHubLink: widget.openGitHubLink,

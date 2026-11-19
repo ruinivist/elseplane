@@ -27,6 +27,9 @@ and safety details.
 
 ## Prerequisites
 
+For local GitHub App authorization, follow the [GitHub setup
+playbook](github-setup.md) before starting the app.
+
 Install Flutter with a Dart SDK satisfying the constraint in `pubspec.yaml`,
 then fetch project dependencies:
 

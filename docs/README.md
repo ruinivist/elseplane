@@ -38,7 +38,11 @@ then read the authority relevant to the work. Do not create a separate
 - [Plans](plans/) track active work and its checks; they do not
   override architecture or accepted specifications. Completed plans belong in
   [archive](archive/).
-- [Playbooks](playbooks/) contain practical setup and development commands.
+  The [active GitHub repository selection plan](plans/github-repository-selection.md)
+  tracks GitHub App authorization, repository selection, and empty-repository
+  rejection; live discovery and integration checks remain pending.
+- [Playbooks](playbooks/) contain practical setup and development commands,
+  including the [local GitHub App setup](playbooks/github-setup.md).
 - [Research](research/) contains time-bound investigations and source evidence;
   findings are not confirmed defects or requirements unless accepted elsewhere.
 - [Archive](archive/) preserves superseded notes and completed work for history.

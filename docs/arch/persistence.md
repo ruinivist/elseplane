@@ -63,13 +63,18 @@ Local extras and current selection remain. Import and export sizes, ZIP
 integrity, path validation, skips, and UI behavior are specified in the accepted
 transfer specification.
 
-The library snapshot stores the selected GitHub destination and no per-canvas
-remote baseline, attachment-name map, or pending-write guard. Access tokens stay
-in memory. Repository import reads the latest default-branch tree and uses the
-same additive local merge; a current-canvas checkpoint independently captures a
-fresh head and publishes one commit while preserving unrelated paths. An
-uncertain remote update is reported without automatic retry. Portable transfers
-contain no GitHub destination or credentials.
+The library snapshot stores only the selected GitHub destination, not the
+installation ID, discovery results, access tokens, per-canvas remote baseline,
+attachment-name map, or pending-write guard. Installation/repository discovery
+and the installation ID used for a transfer remain in memory; after reload the
+feature resolves the saved account/repository against current authorized
+discovery. Only explicit repository setup/change saves the destination. Import
+and Commit use it without changing persistence. Repository import reads the
+latest default-branch tree and uses the same additive local merge; a current-canvas
+checkpoint independently captures a fresh head and publishes one commit while
+preserving unrelated paths. An uncertain remote update is reported without
+automatic retry. Portable transfers contain no GitHub destination or
+credentials.
 
 Media source strings are raw user content, not a transfer validation boundary.
 Clipboard, project, and library decoding preserve them without URL
