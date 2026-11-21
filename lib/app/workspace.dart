@@ -2,6 +2,7 @@
 // Used by the root app to compose injected storage, editor snapshots, and settings actions.
 
 import 'dart:async';
+import 'dart:js_interop';
 
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
@@ -21,6 +22,7 @@ import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:flutter/material.dart';
+import 'package:web/web.dart' as web;
 
 // ---------- Workspace ----------
 
@@ -39,6 +41,7 @@ class Workspace extends StatefulWidget {
     this.navigateGitHubAuthorization,
     this.consumeGitHubCompletion,
     this.openGitHubLink,
+    this.showTitleActionWithoutHover,
     super.key,
   });
 
@@ -55,6 +58,7 @@ class Workspace extends StatefulWidget {
   final void Function(Uri)? navigateGitHubAuthorization;
   final bool Function()? consumeGitHubCompletion;
   final void Function(String url)? openGitHubLink;
+  final bool? showTitleActionWithoutHover;
 
   @override
   State<Workspace> createState() => _WorkspaceState();
@@ -63,6 +67,8 @@ class Workspace extends StatefulWidget {
 class _WorkspaceState extends State<Workspace> {
   // ---------- Lifetime ----------
 
+  late final web.MediaQueryList _touchOnly = web.window.matchMedia('(any-hover: none) and (any-pointer: coarse)');
+  late final JSFunction _touchOnlyChanged = ((web.Event _) => setState(() {})).toJS;
   late final _library = LibraryController(
     store: widget.libraryStore,
     attachments: widget.attachmentStore,
@@ -95,6 +101,7 @@ class _WorkspaceState extends State<Workspace> {
   @override
   void initState() {
     super.initState();
+    _touchOnly.addEventListener('change', _touchOnlyChanged);
     _library.addListener(_libraryChanged);
     _github?.addListener(_githubChanged);
     unawaited(_load());
@@ -174,6 +181,7 @@ class _WorkspaceState extends State<Workspace> {
 
   @override
   void dispose() {
+    _touchOnly.removeEventListener('change', _touchOnlyChanged);
     if (_documentListener != null) _editor?.documentChanges.removeListener(_documentListener!);
     _editor?.dispose();
     _github?.dispose();
@@ -416,7 +424,8 @@ class _WorkspaceState extends State<Workspace> {
       openSyncOnLaunch: _returnToSync,
       titleIndicator: github?.uncommitted == true ? '*' : null,
       titleIndicatorLabel: 'Uncommitted changes',
-      titleActionLabel: 'Commit…',
+      titleActionLabel: 'Commit',
+      showTitleActionWithoutHover: widget.showTitleActionWithoutHover ?? _touchOnly.matches,
       onTitleAction: github != null && _editor != null && github.canCommitCurrent && !github.busy
           ? github.commit
           : null,

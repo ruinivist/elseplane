@@ -88,13 +88,18 @@ class _ChromeLayout extends MultiChildLayoutDelegate {
     final settingsTop = settingsBelow ? lowerTop : 0.0;
     positionChild(_Control.settings, Offset(size.width - settings.width, settingsTop));
 
-    final titleWidth = titleBelow
-        ? size.width - (settingsBelow ? settings.width : ToolOptions.outerWidth) - gap
-        : sideWidth;
-    layoutChild(_Control.title, BoxConstraints.tightFor(width: math.max(0, titleWidth)));
-    positionChild(_Control.title, Offset(0, titleBelow ? lowerTop : 0));
+    final titleWidth = math.max<double>(
+      0,
+      titleBelow ? size.width - (settingsBelow ? settings.width : ToolOptions.outerWidth) - gap : sideWidth,
+    );
+    final titleTop = titleBelow ? lowerTop : 0.0;
+    final title = layoutChild(_Control.title, BoxConstraints.tightFor(width: titleWidth));
+    positionChild(_Control.title, Offset(0, titleTop));
 
-    final optionsTop = math.max(settingsTop + settings.height, toolbar.height);
+    final optionsTop = math.max<double>(
+      math.max(settingsTop + settings.height, toolbar.height),
+      title.width + ToolOptions.outerWidth > size.width ? titleTop + title.height : 0,
+    );
     final options = layoutChild(
       _Control.options,
       BoxConstraints(

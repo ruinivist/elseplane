@@ -10,77 +10,137 @@ import 'package:elseplane/ui/common/surface.dart';
 import 'package:elseplane/ui/common/surface_icon_button.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // ---------- Tests ----------
 
 void main() {
-  for (final (theme, width) in [(starlessLightThemeData, 1000.0), (starlessDarkThemeData, 200.0)]) {
-    testWidgets('the title action supports mouse, keyboard and touch at width $width', (tester) async {
+  for (final (width, titleBelow, actionBelow) in [
+    (1000.0, false, false),
+    (500.0, false, true),
+    (200.0, true, true),
+  ]) {
+    testWidgets('the title stays fixed when Commit appears at width $width', (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = Size(width, 520);
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
+      final semantics = tester.ensureSemantics();
       var explorerOpens = 0;
       var commitOpens = 0;
-      final name = width < 500 ? 'A very long canvas name within a narrow editor' : 'Physics';
+      var touchOnly = false;
+      late StateSetter update;
+      final name = titleBelow ? 'A very long canvas name within a narrow editor' : 'Physics';
+      const toolbarKey = ValueKey('toolbar');
+      const settingsKey = ValueKey('settings');
+      const optionsKey = ValueKey('options');
+      final action = find.widgetWithText(TextButton, 'Commit');
+
       await tester.pumpWidget(
         MaterialApp(
-          theme: theme,
+          theme: starlessLightThemeData,
           home: Scaffold(
-            body: CanvasChrome(
-              title: CanvasTitle(
-                path: ['Folder', name],
-                indicator: '*',
-                indicatorLabel: 'Uncommitted changes',
-                actionLabel: 'Commit…',
-                onAction: () => commitOpens++,
-                onPressed: () => explorerOpens++,
-              ),
-              toolbar: const SizedBox(width: 170, height: 40),
-              settingsButton: const IconButton(onPressed: null, icon: Icon(Icons.settings)),
-              toolOptions: null,
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                update = setState;
+                return CanvasChrome(
+                  title: CanvasTitle(
+                    path: ['Folder', name],
+                    indicator: '*',
+                    indicatorLabel: 'Uncommitted changes',
+                    actionLabel: 'Commit',
+                    showActionWithoutHover: touchOnly,
+                    onAction: () => commitOpens++,
+                    onPressed: () => explorerOpens++,
+                  ),
+                  toolbar: const SizedBox(key: toolbarKey, width: 170, height: 40),
+                  settingsButton: const IconButton(key: settingsKey, onPressed: null, icon: Icon(Icons.settings)),
+                  toolOptions: const SizedBox(key: optionsKey, height: 60),
+                );
+              },
             ),
           ),
         ),
       );
-      final title = find.text(name);
-      final marker = find.byTooltip('Uncommitted changes');
-      final action = find.widgetWithText(TextButton, 'Commit…');
+      await tester.pumpAndSettle();
+      final marker = find.text('*');
+      final title = find.ancestor(of: marker, matching: find.byType(InkWell));
       final initialTitle = tester.getRect(title);
-      expect(action.hitTestable(), findsNothing);
+      final toolbar = tester.getRect(find.byKey(toolbarKey));
+      expect(tester.renderObject<RenderParagraph>(find.text(name)).didExceedMaxLines, titleBelow);
+      expect(initialTitle.top, titleBelow ? greaterThan(toolbar.bottom) : toolbar.top);
+      expect(action, findsNothing);
       expect(marker.hitTestable(), findsOneWidget);
+      expect(find.byTooltip('Uncommitted changes'), findsNothing);
+      expect(find.bySemanticsLabel('Folder / $name, Uncommitted changes'), findsOneWidget);
+      semantics.dispose();
 
+      final gap = Offset(tester.getRect(marker).right + 4, initialTitle.center.dy);
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       addTearDown(mouse.removePointer);
-      await mouse.addPointer(location: initialTitle.center);
-      await tester.pumpAndSettle();
-      expect(tester.getRect(title), initialTitle);
-      expect(action.hitTestable(), findsOneWidget);
-      await mouse.moveTo(tester.getCenter(action));
+      await mouse.addPointer(location: gap);
+      await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
       expect(action.hitTestable(), findsOneWidget);
       expect(tester.getRect(title), initialTitle);
+      final actionBounds = tester.getRect(action);
+      final path = find.text('Folder / $name');
+      if (titleBelow) {
+        final tooltip = find.ancestor(of: path, matching: find.byType(FadeTransition)).first;
+        expect(tester.getRect(tooltip).top, greaterThan(actionBounds.bottom));
+      } else {
+        expect(path, findsNothing);
+      }
+      if (actionBelow) {
+        expect(actionBounds.top, initialTitle.bottom);
+        expect(actionBounds.left, initialTitle.left);
+      } else {
+        expect(actionBounds.left, initialTitle.right);
+        expect(actionBounds.center.dy, initialTitle.center.dy);
+      }
+      for (final key in [toolbarKey, settingsKey, optionsKey]) {
+        expect(actionBounds.overlaps(tester.getRect(find.byKey(key))), isFalse);
+      }
+      await tester.tapAt(gap, kind: PointerDeviceKind.mouse);
+      expect(explorerOpens, 1);
+      expect(commitOpens, 0);
+
+      await mouse.moveTo(actionBounds.center);
+      await tester.pumpAndSettle();
+      expect(action.hitTestable(), findsOneWidget);
+      await tester.tap(action, kind: PointerDeviceKind.mouse);
+      expect(explorerOpens, 1);
+      expect(commitOpens, 1);
       await mouse.moveTo(const Offset(1, 500));
       await tester.pumpAndSettle();
-      expect(action.hitTestable(), findsNothing);
+      expect(action, findsNothing);
+      expect(tester.getRect(title), initialTitle);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
       expect(action.hitTestable(), findsOneWidget);
-      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(explorerOpens, 2);
+      expect(commitOpens, 1);
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      expect(commitOpens, 1);
-      expect(explorerOpens, 0);
-
-      await tester.tap(title);
-      expect(explorerOpens, 1);
-      await tester.tap(marker);
       expect(commitOpens, 2);
-      expect(explorerOpens, 1);
+      expect(explorerOpens, 2);
+
+      FocusManager.instance.primaryFocus?.unfocus();
+      update(() => touchOnly = true);
+      await tester.pumpAndSettle();
+      expect(action.hitTestable(), findsOneWidget);
+      expect(tester.getRect(title), initialTitle);
+      await tester.tap(marker);
+      expect(explorerOpens, 3);
+      expect(commitOpens, 2);
+      await tester.tap(action);
+      expect(commitOpens, 3);
+      expect(explorerOpens, 3);
       expect(tester.takeException(), isNull);
     });
   }

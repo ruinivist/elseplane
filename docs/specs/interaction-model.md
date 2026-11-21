@@ -259,9 +259,12 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
   uncommitted-changes marker when its canvas path, canonical document, or
   referenced bytes differ from its local baseline, or when it has no baseline
   for that account, repository, and branch. Autosave leaves that comparison
-  intact. The title opens the explorer. Hover or keyboard focus reveals
-  **Commit…** beside the marker without shifting the name. The marker also
-  opens the commit dialog on touch when write access is verified.
+  intact. Clicking or tapping the title, its padding, or the asterisk opens
+  the explorer. Hover or keyboard focus reveals **Commit** beside the title
+  when it fits or directly below it without moving the title. The marked title
+  shows a path tooltip only when clipped, with space between the tooltip and
+  **Commit**. On touch-only browsers, **Commit** is visible whenever committing
+  is available.
 - Commit saves completed edits, captures the canvas, and asks for a nonempty
   lowercase Conventional Commit subject of at most 72 characters. It publishes
   the full local `.canvas.json` path and included referenced images in one

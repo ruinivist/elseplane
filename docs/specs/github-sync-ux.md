@@ -36,7 +36,7 @@ Import canvases from repo?
 
 ## Uncommitted changes
 
-Append `*` to the current canvas title when the signed-in account has a selected repository and the canvas differs from its baseline or has no baseline for that account, repository, and branch. This includes existing canvases on first connection. The marker's tooltip and accessible label say **Uncommitted changes**.
+Append `*` to the current canvas title when the signed-in account has a selected repository and the canvas differs from its baseline or has no baseline for that account, repository, and branch. This includes existing canvases on first connection. The title's accessible label includes **Uncommitted changes**.
 
 The app compares the canvas path, canonical document, and referenced attachment contents using local data. Successful GitHub imports establish baselines for the imported versions. Local autosave keeps the marker visible while the canvas differs from its baseline. A confirmed commit clears it when the commit includes the current changes. Keep the marker visible if you cancel, the commit fails or remains unconfirmed, or you edit the canvas after the snapshot is taken.
 
@@ -44,12 +44,12 @@ The app compares the canvas path, canonical document, and referenced attachment 
 
 ```text
 At rest       some new*
-Hover/focus   some new*  [ Commit... ]
+Hover/focus   some new*  [ Commit ]
 ```
 
-- Hover over the title or move keyboard focus into the title area to reveal a small **Commit…** button immediately to the right of the marker. Keep the title in place and the button visible while the pointer or focus moves onto it.
-- Clicking the title opens the canvas explorer. The marked title exposes its folder path in a tooltip. Tapping the separate marker on a touch screen opens the commit dialog when write access is verified.
-- **Commit…** opens the existing commit dialog. The dialog shows the selected repository and branch and asks for a commit message before publishing the current canvas.
+- Clicking or tapping the title, including the asterisk and the padding before the button, opens the canvas explorer. If the title is clipped, its tooltip shows the full path and sits clear of the title and **Commit**.
+- Hover over the title or move keyboard focus into the title area to reveal **Commit**. The button appears beside the title when it fits and directly below when it needs its own row. The title stays in place and the button stays visible while the pointer or focus moves onto it.
+- On touch-only browsers, show **Commit** whenever committing is available. **Commit** opens the dialog with the selected repository and branch and asks for a commit message before publishing the current canvas.
 
 Confirmed commits show **View commit** on the canvas. If saving the local baseline fails, show both outcomes without retrying the remote write. An uncertain result shows **Check GitHub** and warns that submitting again may create a duplicate commit.
 

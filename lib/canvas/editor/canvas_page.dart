@@ -53,6 +53,7 @@ class CanvasPage extends StatefulWidget {
     this.titleIndicatorLabel,
     this.titleActionLabel,
     this.onTitleAction,
+    this.showTitleActionWithoutHover = false,
     super.key,
   });
 
@@ -77,6 +78,7 @@ class CanvasPage extends StatefulWidget {
   final String? titleIndicatorLabel;
   final String? titleActionLabel;
   final void Function(BuildContext)? onTitleAction;
+  final bool showTitleActionWithoutHover;
 
   @override
   State<CanvasPage> createState() => _CanvasPageState();
@@ -228,6 +230,7 @@ class _CanvasPageState extends State<CanvasPage> {
         indicator: widget.titleIndicator,
         indicatorLabel: widget.titleIndicatorLabel,
         actionLabel: widget.titleActionLabel,
+        showActionWithoutHover: widget.showTitleActionWithoutHover,
         onAction: action == null || !_documentLoaded || input == null
             ? null
             : () {

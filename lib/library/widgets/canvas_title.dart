@@ -18,6 +18,7 @@ class CanvasTitle extends StatefulWidget {
     this.indicatorLabel,
     this.actionLabel,
     this.onAction,
+    this.showActionWithoutHover = false,
     super.key,
   });
 
@@ -27,24 +28,19 @@ class CanvasTitle extends StatefulWidget {
   final String? indicatorLabel;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final bool showActionWithoutHover;
 
   // ---------- Sizing ----------
 
   static const _horizontalPadding = 12.0;
-  static const _indicatorWidth = 40.0;
-  static const _minimumNameWidth = 32.0;
-  static const _actionPadding = 32.0;
 
-  /// Reserves room for the name and any title action before placing the toolbar.
-  double collapsedWidthOf(BuildContext context) =>
-      _textWidth(context, path.last, _textStyleOf(context)) +
-      (indicator == null
-          ? _horizontalPadding * 2
-          : _horizontalPadding +
-                _indicatorWidth +
-                (actionLabel == null
-                    ? 0
-                    : _actionPadding + _textWidth(context, actionLabel!, Theme.of(context).textTheme.labelLarge)));
+  /// Measures the title used to place it beside the toolbar.
+  double collapsedWidthOf(BuildContext context) {
+    final style = _textStyleOf(context);
+    return _textWidth(context, path.last, style) +
+        _horizontalPadding * 2 +
+        (indicator == null ? 0 : _textWidth(context, indicator!, style));
+  }
 
   static double _textWidth(BuildContext context, String text, TextStyle? style) => TextPainter.computeWidth(
     text: TextSpan(
@@ -134,82 +130,86 @@ class _CanvasTitleState extends State<CanvasTitle> {
   }
 
   Widget _titleWithAction(BTheme theme, TextStyle textStyle) {
-    final path = widget.path.join(' / ');
-    final name = Semantics(
-      label: path,
-      button: widget.onPressed != null,
-      child: InkWell(
-        onTap: widget.onPressed,
-        borderRadius: theme.geo.radiusSmall,
-        child: Padding(
-          padding: const EdgeInsets.only(left: CanvasTitle._horizontalPadding),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            widthFactor: 1,
-            child: Text(widget.path.last, style: textStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
-        ),
-      ),
-    );
+    final showAction = _hovered || _focused || (widget.showActionWithoutHover && widget.onAction != null);
     return Focus(
       canRequestFocus: false,
       onFocusChange: (focused) => setState(() => _focused = focused),
       child: MouseRegion(
-        opaque: false,
-        hitTestBehavior: HitTestBehavior.deferToChild,
+        hitTestBehavior: HitTestBehavior.translucent,
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final controls = Wrap(
+              children: [
+                _markedTitle(theme, textStyle, constraints.maxWidth),
+                if (showAction && widget.actionLabel != null)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: _height),
+                    child: TextButton(
+                      key: const ValueKey('canvas-title-action'),
+                      style: constraints.maxWidth < 80
+                          ? TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6))
+                          : null,
+                      onPressed: widget.onAction,
+                      child: Text(widget.actionLabel!),
+                    ),
+                  ),
+              ],
+            );
+            if (widget.collapsedWidthOf(context) <= constraints.maxWidth) return controls;
+            return Tooltip(
+              message: widget.path.join(' / '),
+              excludeFromSemantics: true,
+              positionDelegate: (position) => positionDependentBox(
+                size: position.overlaySize,
+                childSize: position.tooltipSize,
+                target: position.target,
+                preferBelow: true,
+                verticalOffset: position.targetSize.height / 2 + 4,
+              ),
+              child: controls,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _markedTitle(BTheme theme, TextStyle textStyle, double maxWidth) {
+    final path = widget.path.join(' / ');
+    final indicatorLabel = widget.indicatorLabel;
+    const padding = EdgeInsets.symmetric(horizontal: CanvasTitle._horizontalPadding);
+
+    return Semantics(
+      label: indicatorLabel == null ? path : '$path, $indicatorLabel',
+      button: widget.onPressed != null,
+      child: InkWell(
+        onTap: widget.onPressed,
+        borderRadius: theme.geo.radiusSmall,
         child: SizedBox(
           height: _height,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final actionWidth = math.max<double>(
-                0,
-                constraints.maxWidth - CanvasTitle._indicatorWidth - CanvasTitle._minimumNameWidth,
-              );
-              return Row(
+          child: Padding(
+            padding: padding,
+            child: ExcludeSemantics(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Flexible(
-                    child: Tooltip(message: path, child: name),
-                  ),
-                  Tooltip(
-                    message: widget.indicatorLabel ?? widget.indicator!,
-                    child: InkWell(
-                      key: const ValueKey('canvas-title-indicator'),
-                      borderRadius: theme.geo.radiusSmall,
-                      onTap: widget.onAction,
-                      child: SizedBox(
-                        width: math.min(CanvasTitle._indicatorWidth, constraints.maxWidth),
-                        height: _height,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(widget.indicator!, style: textStyle, semanticsLabel: ''),
-                        ),
-                      ),
+                    child: Text(
+                      widget.path.last,
+                      style: textStyle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (widget.actionLabel case final label?)
-                    Visibility(
-                      visible: _hovered || _focused,
-                      maintainSize: true,
-                      maintainAnimation: true,
-                      maintainState: true,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: actionWidth),
-                        child: TextButton(
-                          key: const ValueKey('canvas-title-action'),
-                          style: actionWidth < 80
-                              ? TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4))
-                              : null,
-                          onPressed: actionWidth == 0 ? null : widget.onAction,
-                          child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        ),
-                      ),
-                    ),
+                  LimitedBox(
+                    maxWidth: math.max(0, maxWidth - padding.horizontal),
+                    child: Text(widget.indicator!, style: textStyle),
+                  ),
                 ],
-              );
-            },
+              ),
+            ),
           ),
         ),
       ),

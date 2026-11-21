@@ -11,6 +11,7 @@ import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_transfer.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/ui/common/select.dart';
+import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -172,8 +173,8 @@ void main() {
     expect(tester.widget<TextButton>(importButton).onPressed, isNotNull);
     expect(find.textContaining('read-only'), findsOneWidget);
     await _closeSync(tester);
-    expect(tester.widget<InkWell>(_marker).onTap, isNull);
-    expect(tester.widget<TextButton>(_commitAction).onPressed, isNull);
+    expect(_marker, findsOneWidget);
+    expect(_commitAction, findsNothing);
   });
 
   testWidgets('manage access installs the app when there are no installations', (tester) async {
@@ -301,7 +302,7 @@ void main() {
     await _tapVisible(tester, _importButton);
     await pumpUntil(tester, () => review.evaluate().isNotEmpty);
     await _closeSync(tester);
-    await _waitForMarkerAction(tester);
+    await _waitForEnabledButton(tester, _commitAction);
     expect(store.library, same(beforeReview));
 
     await _openSync(tester);
@@ -538,18 +539,18 @@ void main() {
       },
     );
     await _pumpWorkspace(tester, store, api, navigate: (_) {});
-    await _waitForMarkerAction(tester);
+    await _waitForEnabledButton(tester, _commitAction);
     tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText(' edited');
     await tester.pump();
 
-    await _tapVisible(tester, _marker);
+    await _tapVisible(tester, _commitAction);
     await _pumpUntilBusySafe(
       tester,
       () => find.byKey(const ValueKey('github-commit-message')).evaluate().isNotEmpty,
       'commit confirmation',
     );
     expect(find.byKey(const ValueKey('github-repository-select')), findsNothing);
-    await tester.tap(find.widgetWithText(TextButton, 'Commit'));
+    await tester.tap(_submitCommit);
     await _pumpUntilBusySafe(
       tester,
       () =>
@@ -611,17 +612,17 @@ void main() {
     );
     final captured = store.library.current.document!;
     await _pumpWorkspace(tester, store, api, navigate: (_) {});
-    await _waitForMarkerAction(tester);
-    await _tapVisible(tester, _marker);
-    await pumpUntil(tester, () => find.text('Commit').evaluate().isNotEmpty);
+    await _waitForEnabledButton(tester, _commitAction);
+    await _tapVisible(tester, _commitAction);
+    await pumpUntil(tester, () => _submitCommit.evaluate().isNotEmpty);
     await _tapVisible(tester, find.text('Cancel'));
-    await _waitForMarkerAction(tester);
+    await _waitForEnabledButton(tester, _commitAction);
     expect(patches, 0);
     expect(store.library.current.githubBaseline, isNull);
 
-    await _tapVisible(tester, _marker);
-    await pumpUntil(tester, () => find.text('Commit').evaluate().isNotEmpty);
-    await _tapVisible(tester, find.text('Commit'));
+    await _tapVisible(tester, _commitAction);
+    await pumpUntil(tester, () => _submitCommit.evaluate().isNotEmpty);
+    await _tapVisible(tester, _submitCommit);
     await _pumpUntilBusySafe(tester, () => patches == 1, 'branch update');
     final canvas = tester.widget<TextElementView>(find.byType(TextElementView));
     canvas.resources.insertPastedText(' later');
@@ -648,10 +649,10 @@ void main() {
     );
     String? opened;
     await _pumpWorkspace(tester, store, api, navigate: (_) {}, open: (url) => opened = url);
-    await _waitForMarkerAction(tester);
-    await _tapVisible(tester, _marker);
-    await pumpUntil(tester, () => find.text('Commit').evaluate().isNotEmpty);
-    await _tapVisible(tester, find.text('Commit'));
+    await _waitForEnabledButton(tester, _commitAction);
+    await _tapVisible(tester, _commitAction);
+    await pumpUntil(tester, () => _submitCommit.evaluate().isNotEmpty);
+    await _tapVisible(tester, _submitCommit);
     await pumpUntil(tester, () => find.text('View commit').evaluate().isNotEmpty);
     expect(find.textContaining('Canvas committed to GitHub. Could not save its local sync baseline.'), findsOneWidget);
     expect(store.library.current.githubBaseline, isNull);
@@ -676,7 +677,7 @@ void main() {
     final attachments = TestAttachmentStore({image: changedBytes});
     final api = _commitApi(github: (_) async => _json({'error': 'not found'}, status: 404));
     await _pumpWorkspace(tester, store, api, navigate: (_) {}, attachments: attachments);
-    await _waitForMarkerAction(tester);
+    await _waitForEnabledButton(tester, _commitAction);
     expect(_marker, findsOneWidget);
     expect(store.library.current.document, same(document));
 
@@ -711,7 +712,7 @@ void main() {
     final other = find.byKey(const ValueKey('file-tree-node-other'));
     await pumpUntil(tester, () => other.evaluate().isNotEmpty);
     await _tapVisible(tester, other);
-    await _waitForMarkerAction(tester);
+    await _waitForEnabledButton(tester, _commitAction);
     expect(store.library.currentId, 'other');
     attachments.complete();
     await tester.pumpAndSettle();
@@ -738,16 +739,16 @@ void main() {
       },
     );
     await _pumpWorkspace(tester, store, api, navigate: (_) {});
-    await _waitForMarkerAction(tester);
+    await _waitForEnabledButton(tester, _commitAction);
 
     for (var attempt = 1; attempt <= 2; attempt++) {
-      await _tapVisible(tester, _marker);
+      await _tapVisible(tester, _commitAction);
       await _pumpUntilBusySafe(
         tester,
         () => find.byKey(const ValueKey('github-commit-message')).evaluate().isNotEmpty,
         'commit confirmation $attempt',
       );
-      await tester.tap(find.text('Commit'));
+      await tester.tap(_submitCommit);
       await _pumpUntilBusySafe(
         tester,
         () => find.textContaining('may have succeeded').evaluate().isNotEmpty,
@@ -758,7 +759,7 @@ void main() {
       expect(_marker, findsOneWidget);
       expect(store.library.current.githubBaseline, isNull);
       ScaffoldMessenger.of(tester.element(find.byType(SnackBar))).removeCurrentSnackBar();
-      await _waitForMarkerAction(tester);
+      await _waitForEnabledButton(tester, _commitAction);
     }
 
     expect(patches, 2);
@@ -767,8 +768,12 @@ void main() {
 
 final Finder _repositoryPicker = find.byKey(const ValueKey('github-repository-select'));
 final Finder _importButton = find.byKey(const ValueKey('github-import'));
-final Finder _marker = find.byKey(const ValueKey('canvas-title-indicator'));
+final Finder _marker = find.text('*');
 final Finder _commitAction = find.byKey(const ValueKey('canvas-title-action'));
+final Finder _submitCommit = find.descendant(
+  of: find.byType(SurfaceDialog),
+  matching: find.widgetWithText(TextButton, 'Commit'),
+);
 
 Future<void> _openSync(WidgetTester tester) async {
   await _tapVisible(tester, find.byKey(const ValueKey('settings-button')));
@@ -799,11 +804,6 @@ Future<void> _selectRepository(WidgetTester tester, String name) async {
   await tester.sendKeyEvent(LogicalKeyboardKey.enter);
   await tester.pump();
 }
-
-Future<void> _waitForMarkerAction(WidgetTester tester) => pumpUntil(
-  tester,
-  () => _marker.evaluate().isNotEmpty && tester.widget<InkWell>(_marker).onTap != null,
-);
 
 TestLibraryStore _savedStore() {
   final document = _document('saved');
@@ -866,6 +866,7 @@ Future<void> _pumpWorkspace(
         navigateGitHubAuthorization: navigate,
         consumeGitHubCompletion: consumeCompletion ?? () => false,
         openGitHubLink: open ?? (_) {},
+        showTitleActionWithoutHover: true,
       ),
     ),
   );
