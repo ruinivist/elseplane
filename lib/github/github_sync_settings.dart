@@ -164,7 +164,9 @@ class _GitHubSyncSettingsState extends State<GitHubSyncSettings> {
           children: [
             TextButton(
               key: const ValueKey('github-import'),
-              onPressed: disabled || !_sync.canImport ? null : () => _sync.importRepository(() => mounted),
+              onPressed: (disabled && !_sync.commitInProgress) || !_sync.canImport
+                  ? null
+                  : () => _sync.importRepository(() => mounted),
               child: const Text('Import from GitHub…'),
             ),
             if (firstImport) TextButton(onPressed: disabled ? null : _sync.skipImport, child: const Text('Skip')),

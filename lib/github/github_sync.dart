@@ -25,6 +25,7 @@ class GitHubSync extends ChangeNotifier {
     required this.notifications,
     required this.beginTransfer,
     required this.endTransfer,
+    required this.resumeCanvasInput,
     required this.onImport,
     required String appSlug,
     this.navigate = navigateGitHubAuthorization,
@@ -41,6 +42,7 @@ class GitHubSync extends ChangeNotifier {
   final NotificationController notifications;
   final bool Function() beginTransfer;
   final VoidCallback endTransfer;
+  final VoidCallback resumeCanvasInput;
   final Future<void> Function(
     TransferSource source, {
     required GitHubDestination githubDestination,
@@ -57,6 +59,7 @@ class GitHubSync extends ChangeNotifier {
 
   var _disposed = false;
   var _refreshRequired = false;
+  var _commitInProgress = false;
   String? _progress;
   String? message;
   Completer<bool>? _overwriteDecision;
@@ -76,6 +79,7 @@ class GitHubSync extends ChangeNotifier {
   bool get uncommitted => _uncommitted;
   String? get progress => _progress;
   bool get busy => _progress != null || session.busy;
+  bool get commitInProgress => _commitInProgress;
   GitHubDestination? get destination {
     final saved = library.library.githubDestination;
     return saved != null && saved.accountId == session.account?.id ? saved : null;
@@ -116,6 +120,12 @@ class GitHubSync extends ChangeNotifier {
   }
 
   bool get canCommitCurrent => uncommitted && !_checkingAttachments && canCommit;
+
+  bool rejectDuringCommit() {
+    if (!_commitInProgress) return false;
+    notifications.show('Wait for the current commit to finish, then try again.');
+    return true;
+  }
 
   String? get repositoryStatus {
     if (_refreshRequired || session.discoveryLoading || session.discoveryError != null) return null;
@@ -208,21 +218,24 @@ class GitHubSync extends ChangeNotifier {
 
   // ---------- Transfers ----------
 
-  Future<void> importRepository(bool Function() reviewIsVisible) => _run('Preparing import…', () async {
-    await library.flush();
-    final repo = _readableRepository;
-    final saved = destination;
-    if (_disposed || !reviewIsVisible() || repo == null || saved == null) return;
-    if (library.library.githubImportPromptPending) await _dismissImportPrompt();
-    final source = await session.run(() => session.api.readRepository(saved, installationId: repo.installationId));
-    if (_disposed || !reviewIsVisible()) return;
-    await onImport(
-      source,
-      githubDestination: saved,
-      confirmOverwrite: (paths) => _reviewOverwrite(paths, reviewIsVisible),
-      report: _report,
-    );
-  });
+  Future<void> importRepository(bool Function() reviewIsVisible) async {
+    if (rejectDuringCommit()) return;
+    await _run('Preparing import…', () async {
+      await library.flush();
+      final repo = _readableRepository;
+      final saved = destination;
+      if (_disposed || !reviewIsVisible() || repo == null || saved == null) return;
+      if (library.library.githubImportPromptPending) await _dismissImportPrompt();
+      final source = await session.run(() => session.api.readRepository(saved, installationId: repo.installationId));
+      if (_disposed || !reviewIsVisible()) return;
+      await onImport(
+        source,
+        githubDestination: saved,
+        confirmOverwrite: (paths) => _reviewOverwrite(paths, reviewIsVisible),
+        report: _report,
+      );
+    });
+  }
 
   Future<bool> _reviewOverwrite(Set<String> paths, bool Function() reviewIsVisible) async {
     if (_disposed || !reviewIsVisible()) return false;
@@ -243,7 +256,7 @@ class GitHubSync extends ChangeNotifier {
   }
 
   Future<void> commit(BuildContext context) async {
-    if (!canCommitCurrent) return;
+    if (rejectDuringCommit() || !canCommitCurrent) return;
     NotificationOperation? notification;
     await _run(
       'Committing canvas…',
@@ -265,6 +278,7 @@ class GitHubSync extends ChangeNotifier {
         final tree = await encodeTransfer(captured, attachmentStore, TransferScope.currentCanvas);
         if (_disposed) return;
         final baseline = GitHubBaseline.capture(saved, path, captured.current.document!, tree.files);
+        resumeCanvasInput();
         await session.run(
           () => session.api.commitTransfer(saved, tree, installationId: repo.installationId, message: message),
         );
@@ -284,6 +298,7 @@ class GitHubSync extends ChangeNotifier {
           );
         }
       },
+      commitOnly: true,
       onError: (error) {
         if (!context.mounted || _disposed) return;
         final String text;
@@ -307,8 +322,14 @@ class GitHubSync extends ChangeNotifier {
     );
   }
 
-  Future<void> _run(String progress, Future<void> Function() operation, {void Function(Object)? onError}) async {
+  Future<void> _run(
+    String progress,
+    Future<void> Function() operation, {
+    bool commitOnly = false,
+    void Function(Object)? onError,
+  }) async {
     if (_disposed || busy || !beginTransfer()) return;
+    if (commitOnly) _commitInProgress = true;
     _progress = progress;
     message = null;
     notifyListeners();
@@ -320,6 +341,7 @@ class GitHubSync extends ChangeNotifier {
       if (onError == null || error is GitHubDefaultBranchChanged) _report(_errorMessage(error));
       onError?.call(error);
     } finally {
+      if (commitOnly) _commitInProgress = false;
       _progress = null;
       if (!_disposed) {
         endTransfer();

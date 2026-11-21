@@ -694,17 +694,21 @@ sequenceDiagram
       F->>L: apply exact confirmed path set through additive merge
     end
   else User checkpoints current canvas
-    F->>W: finish interaction; acquire interlock; flush and capture canvas
+    F->>W: finish interaction; acquire interlock and block canvas input; flush and capture canvas
     W-->>F: immutable current-canvas snapshot
     F->>C: encodeTransfer(captured canvas)
     C-->>F: TransferTree
+    F->>W: resume canvas input; keep transfer interlock
     F->>G: commitTransfer(destination, tree, installationId: selectedId, message: message)
     G->>H: verify identity and selected-installation membership; capture head + tree
     H-->>G: checkpoint head + bounded tree entries
     G->>G: reject structural output-path conflicts before blob uploads
     G->>H: create blobs, tree on fresh head, commit, PATCH ref force=false
     H-->>G: commit URL/SHA or failure
-    G-->>F: result; no tracking write or automatic retry
+    G-->>F: result; no automatic retry
+    opt Confirmed commit
+      F->>L: save captured baseline for the original canvas
+    end
   end
   F->>W: release transfer interlock in finally
 ```

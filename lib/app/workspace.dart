@@ -88,6 +88,7 @@ class _WorkspaceState extends State<Workspace> {
           notifications: _notifications,
           beginTransfer: _beginTransfer,
           endTransfer: _endTransfer,
+          resumeCanvasInput: _resumeCanvasInput,
           onImport: _importTransfer,
           navigate: widget.navigateGitHubAuthorization ?? navigateGitHubAuthorization,
           consumeCompletion: widget.consumeGitHubCompletion ?? consumeGitHubCompletion,
@@ -140,6 +141,10 @@ class _WorkspaceState extends State<Workspace> {
       _transferActive = false;
       _blocked = false;
     });
+  }
+
+  void _resumeCanvasInput() {
+    if (mounted) setState(() => _blocked = false);
   }
 
   void _libraryChanged() {
@@ -203,6 +208,7 @@ class _WorkspaceState extends State<Workspace> {
   // ---------- File presentation ----------
 
   Future<void> _showLibrary() async {
+    if (_github?.rejectDuringCommit() == true) return;
     if (_editor == null || _transferActive || _blocked) return;
     setState(() => _blocked = true);
     try {
@@ -224,6 +230,7 @@ class _WorkspaceState extends State<Workspace> {
   // ---------- Settings transfers ----------
 
   Future<void> _exportCanvas() async {
+    if (_github?.rejectDuringCommit() == true) return;
     if (_fileId == null || !_beginTransfer()) return;
     try {
       await _library.flush();
@@ -236,6 +243,7 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   Future<void> _exportLibrary() async {
+    if (_github?.rejectDuringCommit() == true) return;
     if (_fileId == null || !_beginTransfer()) return;
     try {
       await _library.flush();
@@ -248,6 +256,7 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   Future<bool> _import() async {
+    if (_github?.rejectDuringCommit() == true) return false;
     if (_fileId == null || !_beginTransfer()) return false;
     try {
       final source = await _library.readTransferSource();
@@ -435,7 +444,8 @@ class _WorkspaceState extends State<Workspace> {
       titleIndicatorLabel: 'Uncommitted changes',
       titleActionLabel: 'Commit',
       showTitleActionWithoutHover: widget.showTitleActionWithoutHover ?? _touchOnly.matches,
-      onTitleAction: github != null && _editor != null && github.canCommitCurrent && !github.busy
+      onTitleAction:
+          github != null && _editor != null && (github.commitInProgress || (github.canCommitCurrent && !github.busy))
           ? github.commit
           : null,
       notification: _notificationHost,

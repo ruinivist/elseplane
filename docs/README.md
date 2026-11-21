@@ -42,6 +42,8 @@ then read the authority relevant to the work. Do not create a separate
 - [Plans](plans/) track active work and its checks; they do not
   override architecture or accepted specifications. Completed plans belong in
   [archive](archive/).
+  The [editable canvas during commit plan](plans/editable-canvas-during-commit.md)
+  tracks separating canvas input from the transfer interlock.
   The [active GitHub repository selection plan](plans/github-repository-selection.md)
   tracks GitHub App authorization, repository selection, and empty-repository
   rejection; live discovery and integration checks remain pending.

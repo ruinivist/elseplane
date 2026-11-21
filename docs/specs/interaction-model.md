@@ -274,6 +274,16 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
   files and paths from before a rename or move stay in the repository. Structural
   conflicts stop before uploads or a branch update. External media URLs stay
   external.
+- Block canvas input through the commit dialog and while preparing the captured
+  document, path, and image bytes. Once the package is ready, let the user pan,
+  zoom, edit, and undo as usual while GitHub processes the commit. Later edits
+  autosave locally and do not change the package being published.
+- Keep the transfer interlock until the commit finishes, including the attempt
+  to save the local baseline. During that time, attempts to commit again, open
+  the canvas picker, import, or export show a
+  [workspace notification](notifications.md#github-commit-feedback). Do not
+  start or queue the requested action. Keep the GitHub account and destination
+  unchanged while committing.
 - A confirmed commit records the captured version. The marker clears when the
   current version matches it. Canvas feedback reports confirmed success; if the
   local baseline save fails, a persistent warning reports both outcomes. Neither

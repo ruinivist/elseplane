@@ -55,3 +55,5 @@ GitHub** with a warning that submitting again may create a duplicate commit.
 Never retry automatically.
 See the [interaction model](interaction-model.md#github-canvas-transfers) for
 the commit workflow.
+
+If a user tries to start another commit, open the canvas picker, import, or export while a commit is in progress, show the informational notification **“Wait for the current commit to finish, then try again.”** Keep it separate from commit progress and follow the existing rules for notifications covered by a modal.

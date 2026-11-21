@@ -3,20 +3,24 @@ import 'dart:convert';
 
 import 'package:elseplane/app/workspace.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
+import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/github/github_api.dart';
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/github_metadata.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_transfer.dart';
+import 'package:elseplane/library/widgets/canvas_file_picker.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 
 import '../canvas/test_helpers.dart';
 
@@ -622,42 +626,195 @@ void main() {
 
   testWidgets('a commit preserves edits made after its capture', (tester) async {
     final store = _savedStore();
+    final document = store.library.current.document!;
+    final captured = document.copyWith(
+      elements: [
+        ...document.elements,
+        MediaElementData(
+          id: 'unseen-image',
+          position: const Offset(10000, 10000),
+          width: 160,
+          url: 'attachments/00000000-0000-4000-8000-000000000000.png',
+        ),
+      ],
+    );
+    store.library = store.library.replace(store.library.current.copyWith(document: captured));
+    final attachments = _FailingReadAttachmentStore();
+    final projectFiles = _TrackingProjectFiles();
     final refUpdate = Completer<http.Response>();
+    final requests = <String>[];
     var patches = 0;
+    Map<String, Object?>? uploadedDocument;
     final api = _commitApi(
+      requests: requests,
       github: (request) async {
         if (request.method == 'PATCH') {
           patches++;
           return await refUpdate.future;
         }
+        if (request.method == 'POST' && request.url.path.endsWith('/git/blobs')) {
+          final blob = jsonDecode(request.body) as Map<String, Object?>;
+          uploadedDocument = jsonDecode(utf8.decode(base64Decode(blob['content']! as String))) as Map<String, Object?>;
+        }
         return _commitResponse(request);
       },
     );
-    final captured = store.library.current.document!;
-    await _pumpWorkspace(tester, store, api, navigate: (_) {});
+    await _pumpWorkspace(
+      tester,
+      store,
+      api,
+      navigate: (_) {},
+      attachments: attachments,
+      projectFiles: projectFiles,
+    );
     await _waitForEnabledButton(tester, _commitAction);
     await _tapVisible(tester, _commitAction);
     await pumpUntil(tester, () => _submitCommit.evaluate().isNotEmpty);
+    expect(tester.widget<CanvasPage>(find.byType(CanvasPage)).blocked, isTrue);
     await _tapVisible(tester, find.text('Cancel'));
     await _waitForEnabledButton(tester, _commitAction);
+    expect(tester.widget<CanvasPage>(find.byType(CanvasPage)).blocked, isFalse);
     expect(find.byTooltip('Dismiss notification'), findsNothing);
     expect(patches, 0);
     expect(store.library.current.githubBaseline, isNull);
 
     await _tapVisible(tester, _commitAction);
     await pumpUntil(tester, () => _submitCommit.evaluate().isNotEmpty);
+    attachments.holdNextRead = true;
+    await _tapVisible(tester, _submitCommit);
+    await _pumpUntilBusySafe(
+      tester,
+      () => attachments.readStarted.isCompleted,
+      'attachment preparation',
+    );
+    expect(tester.widget<CanvasPage>(find.byType(CanvasPage)).blocked, isTrue);
+    expect(patches, 0);
+    attachments.failPendingRead();
+    await pumpUntil(tester, () => find.text('Attachment preparation failed').evaluate().isNotEmpty);
+    expect(tester.widget<CanvasPage>(find.byType(CanvasPage)).blocked, isFalse);
+    expect(patches, 0);
+    expect(store.library.current.githubBaseline, isNull);
+    await _tapVisible(tester, find.byTooltip('Dismiss notification').first);
+    await tester.pump(const Duration(milliseconds: 180));
+
+    await _tapVisible(tester, _commitAction);
+    await pumpUntil(tester, () => _submitCommit.evaluate().isNotEmpty);
     await _tapVisible(tester, _submitCommit);
     await _pumpUntilBusySafe(tester, () => patches == 1, 'branch update');
+    await tester.pump(const Duration(milliseconds: 350));
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    final canvas = tester.widget<TextElementView>(find.byType(TextElementView));
-    canvas.resources.insertPastedText(' later');
+    expect(tester.widget<CanvasPage>(find.byType(CanvasPage)).blocked, isFalse);
+
+    final lazyCanvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas));
+    final originalOffset = lazyCanvas.controller.offset;
+    final pan = await tester.startGesture(
+      tester.getCenter(find.byType(LazyCanvas)),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await pan.moveBy(const Offset(250, 200));
+    await pan.up();
+    await tester.pump();
+    expect(lazyCanvas.controller.offset, isNot(originalOffset));
+
+    final preview = find.byKey(const ValueKey('text-markdown-preview-surface'));
+    await tester.ensureVisible(preview);
+    await tester.pump();
+    expect(preview.hitTestable(), findsOneWidget);
+    await tester.tap(preview, kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    final textResources = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+    expect(textResources.focusNode.hasFocus, isTrue);
+    await tester.showKeyboard(find.byKey(const ValueKey('text-markdown-editor')));
+    await tester.enterText(find.byKey(const ValueKey('text-markdown-editor')), 'saved later');
+    await tester.pump();
+    expect(textResources.node.markdown, 'saved later');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    expect(
+      store.persisted?.elements.whereType<TextElementData>().first.markdown,
+      'saved later',
+    );
+    expect(
+      store.library.current.document!.elements.whereType<TextElementData>().single.markdown,
+      'saved later',
+    );
+
+    final originalScale = lazyCanvas.controller.scale;
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendEventToBinding(
+      PointerScrollEvent(position: tester.getCenter(find.byType(LazyCanvas)), scrollDelta: const Offset(0, -100)),
+    );
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(lazyCanvas.controller.scale, isNot(originalScale));
+
+    final requestsBeforeRejectedActions = requests.length;
+    expect(_commitAction, findsOneWidget);
+    expect(tester.widget<TextButton>(_commitAction).onPressed, isNotNull);
+    await _tapVisible(tester, _commitAction);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('github-commit-message')), findsNothing);
+    expect(patches, 1);
+    expect(find.text(_commitBlockedNotice), findsOneWidget);
+    await _dismissCommitNotice(tester);
+
+    await tester.tapAt(tester.getCenter(find.text('Physics')), kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    expect(find.byType(CanvasFilePicker), findsNothing);
+    expect(find.text(_commitBlockedNotice), findsOneWidget);
+    await _dismissCommitNotice(tester);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyP);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyP);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(find.byType(CanvasFilePicker), findsNothing);
+    expect(find.text(_commitBlockedNotice), findsOneWidget);
+    await _dismissCommitNotice(tester);
+
+    await _openSync(tester);
+    expect(tester.widget<TextButton>(_importButton).onPressed, isNotNull);
+    await _tapVisible(tester, _importButton);
+    await tester.pump();
+    expect(requests, hasLength(requestsBeforeRejectedActions));
+    expect(find.text(_commitBlockedNotice), findsWidgets);
+    expect(find.byTooltip('Dismiss notification').hitTestable(), findsNothing);
+
+    final canvasTab = find.ancestor(of: find.text('Canvas').first, matching: find.byType(InkWell)).first;
+    await _tapVisible(tester, canvasTab);
+    await tester.pump();
+    for (final action in [
+      find.byKey(const ValueKey('canvas-import-button')),
+      find.byKey(const ValueKey('canvas-export-button')),
+      find.byKey(const ValueKey('library-export-button')),
+    ]) {
+      await _tapVisible(tester, action);
+      await tester.pump();
+      expect(find.text(_commitBlockedNotice), findsWidgets);
+      expect(projectFiles.opens, 0);
+      expect(projectFiles.saves, 0);
+    }
+    expect(find.byType(CanvasFilePicker), findsNothing);
+    expect(requests, hasLength(requestsBeforeRejectedActions));
+
+    await _tapVisible(tester, find.byKey(const ValueKey('settings-close')));
     await tester.pump();
     refUpdate.complete(_json({'ref': 'refs/heads/main'}));
     await pumpUntil(tester, () => find.text('Canvas committed to GitHub.').evaluate().isNotEmpty);
     expect(find.text('View commit'), findsNothing);
     expect(store.library.current.githubBaseline?.documentHash, GitHubBaseline.hashDocument(captured));
-    expect(store.library.current.document, isNot(captured));
+    expect(store.library.current.document!.elements.whereType<TextElementData>().single.markdown, 'saved later');
     expect(_marker, findsOneWidget);
+    final uploadedText = (uploadedDocument!['elements']! as List<Object?>).cast<Map<String, Object?>>().singleWhere(
+      (element) => element['id'] == 'text',
+    );
+    expect(uploadedText['markdown'], 'saved');
+    expect(projectFiles.opens, 0);
+    expect(projectFiles.saves, 0);
+    expect(requests, hasLength(requestsBeforeRejectedActions));
+    expect(find.byType(CanvasFilePicker), findsNothing);
   });
 
   testWidgets('a baseline save failure reports the confirmed commit without a second remote write', (tester) async {
@@ -784,6 +941,7 @@ void main() {
       expect(find.textContaining('duplicate commit'), findsOneWidget);
       expect(find.text('Check GitHub'), findsOneWidget);
       expect(_marker, findsOneWidget);
+      expect(tester.widget<CanvasPage>(find.byType(CanvasPage)).blocked, isFalse);
       expect(store.library.current.githubBaseline, isNull);
       if (attempt == 1) {
         await _tapVisible(tester, find.text('Check GitHub'));
@@ -801,6 +959,7 @@ void main() {
 final Finder _repositoryPicker = find.byKey(const ValueKey('github-repository-select'));
 final Finder _importButton = find.byKey(const ValueKey('github-import'));
 final Finder _marker = find.text('*');
+const String _commitBlockedNotice = 'Wait for the current commit to finish, then try again.';
 final Finder _commitAction = find.byKey(const ValueKey('canvas-title-action'));
 final Finder _submitCommit = find.descendant(
   of: find.byType(SurfaceDialog),
@@ -869,6 +1028,19 @@ Future<void> _waitForEnabledButton(WidgetTester tester, Finder finder) async {
   );
 }
 
+Future<void> _dismissCommitNotice(WidgetTester tester) async {
+  final message = find.text(_commitBlockedNotice).first;
+  final row = find.ancestor(of: message, matching: find.byType(Row)).first;
+  final dismiss = find.descendant(of: row, matching: find.byTooltip('Dismiss notification'));
+  await tester.ensureVisible(dismiss);
+  await tester.pump();
+  expect(dismiss.hitTestable(), findsOneWidget);
+  await tester.tap(dismiss);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 180));
+  expect(find.text(_commitBlockedNotice), findsNothing);
+}
+
 Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
   await tester.pump();
@@ -885,6 +1057,7 @@ Future<void> _pumpWorkspace(
   bool Function()? consumeCompletion,
   ThemeData? theme,
   TestAttachmentStore? attachments,
+  TestProjectFiles? projectFiles,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -892,7 +1065,7 @@ Future<void> _pumpWorkspace(
       home: Workspace(
         libraryStore: store,
         attachmentStore: attachments ?? TestAttachmentStore(),
-        projectFiles: TestProjectFiles(),
+        projectFiles: projectFiles ?? TestProjectFiles(),
         githubApi: api,
         githubAppSlug: 'test-app',
         navigateGitHubAuthorization: navigate,
@@ -1066,6 +1239,41 @@ class _FailingLibraryStore extends TestLibraryStore {
   Future<void> save(CanvasLibrary snapshot) async {
     if (failSaves) throw StateError('storage unavailable');
     await super.save(snapshot);
+  }
+}
+
+class _FailingReadAttachmentStore extends TestAttachmentStore {
+  bool holdNextRead = false;
+  final readStarted = Completer<void>();
+  final _pendingRead = Completer<Uint8List?>();
+
+  void failPendingRead() => _pendingRead.completeError(StateError('Attachment preparation failed'));
+
+  @override
+  Future<Uint8List?> readIfExists(String path) {
+    if (holdNextRead) {
+      holdNextRead = false;
+      readStarted.complete();
+      return _pendingRead.future;
+    }
+    return super.readIfExists(path);
+  }
+}
+
+class _TrackingProjectFiles extends TestProjectFiles {
+  int opens = 0;
+  int saves = 0;
+
+  @override
+  Future<({String name, Uint8List bytes})?> open() async {
+    opens++;
+    return null;
+  }
+
+  @override
+  Future<bool> save(Uint8List bytes, {required String suggestedName, required String mimeType}) async {
+    saves++;
+    return false;
   }
 }
 
