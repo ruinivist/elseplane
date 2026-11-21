@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 // ---------- Tests ----------
 
 void main() {
-  testWidgets('commit dialog validates latest text and survives immediate reopen', (tester) async {
+  testWidgets('commit dialog validates text and survives immediate reopen', (tester) async {
     final results = <String?>[];
     await tester.pumpWidget(
       MaterialApp(
@@ -45,6 +45,7 @@ void main() {
                     newPath: 'canvas.canvas.json',
                   ),
                 );
+                setState(() {});
               },
               child: const Text('Open'),
             ),
@@ -56,31 +57,32 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('open-commit')));
     await tester.pumpAndSettle();
     final field = find.byKey(const ValueKey('github-commit-message'));
-    expect(_fieldText(tester, field), 'docs: save canvas');
-    expect(tester.widget<TextField>(find.descendant(of: field, matching: find.byType(TextField))).maxLength, 72);
-
-    await tester.enterText(field, 'Not conventional');
+    expect(_fieldText(tester, field), '');
     await tester.tap(find.text('Commit'));
     await tester.pumpAndSettle();
-    expect(find.text('Use a lowercase Conventional Commit subject (72 characters max).'), findsOneWidget);
+    expect(find.text('A commit message is required.'), findsOneWidget);
     expect(field, findsOneWidget);
     expect(results, isEmpty);
 
-    await tester.enterText(field, 'docs: latest canvas');
+    await tester.enterText(field, ' \n\t ');
     await tester.tap(find.text('Commit'));
     await tester.pumpAndSettle();
-    expect(_fieldText(tester, field), 'docs: save canvas');
-    expect(tester.takeException(), isNull);
+    expect(find.text('A commit message is required.'), findsOneWidget);
 
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
-    expect(_fieldText(tester, field), 'docs: save canvas');
-    expect(tester.takeException(), isNull);
+    expect(results, [null]);
+    expect(_fieldText(tester, field), '');
 
-    await tester.enterText(field, 'docs: reopened canvas');
+    final message = '  Release: Save MixedCase Canvas\n${List.filled(80, 'x').join()}  ';
+    await tester.enterText(field, message);
     await tester.tap(find.text('Commit'));
     await tester.pumpAndSettle();
-    expect(results, ['docs: latest canvas', null, 'docs: reopened canvas']);
+    expect(results, [null, message]);
+    expect(_fieldText(tester, field), '');
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(results, [null, message, null]);
     expect(tester.takeException(), isNull);
   });
 }

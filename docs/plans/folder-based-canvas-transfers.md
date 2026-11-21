@@ -423,8 +423,8 @@ are converted; coordinate those shared files with slice 3, not concurrent edits.
   content fetch, attachment renaming, old-path deletion, or no-change shortcut.
 - [x] Preserve separate mediator/GitHub clients, in-memory tokens, scope checks,
   sanitized errors, rate-limit handling, 15-second timeout, 32 MiB metadata
-  response bound, and size-derived base64 blob-response bounds. Keep message
-  validation: nonempty lowercase Conventional Commit subject, at most 72 chars.
+  response bound, and size-derived base64 blob-response bounds. Require a
+  commit message before publishing.
 - [x] Replace remote canvas browsing/open/name-conflict flows with Import from
   the selected repository. Remove Check remote status, pending-write UI,
   before-reference local tracking saves, baseline comparisons, recovery,

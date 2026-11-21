@@ -47,13 +47,12 @@ Future<String?> showGitHubCommitDialog(
                       const SizedBox(height: 12),
                       TextFormField(
                         key: const ValueKey('github-commit-message'),
-                        initialValue: 'docs: save canvas',
                         autofocus: true,
-                        maxLength: 72,
+                        keyboardType: TextInputType.multiline,
+                        maxLines: 3,
                         decoration: const InputDecoration(labelText: 'Commit message'),
-                        validator: (value) => isValidGitHubCommitMessage(value ?? '')
-                            ? null
-                            : 'Use a lowercase Conventional Commit subject (72 characters max).',
+                        validator: (value) =>
+                            isValidGitHubCommitMessage(value ?? '') ? null : 'A commit message is required.',
                         onSaved: (value) => submittedValue = value ?? '',
                       ),
                     ],

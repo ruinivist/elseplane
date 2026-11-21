@@ -574,6 +574,7 @@ void main() {
     );
     expect(find.byTooltip('Dismiss notification'), findsNothing);
     expect(find.byKey(const ValueKey('github-repository-select')), findsNothing);
+    await _enterCommitMessage(tester);
     await tester.tap(_submitCommit);
     await _pumpUntilBusySafe(
       tester,
@@ -681,6 +682,7 @@ void main() {
     await _tapVisible(tester, _commitAction);
     await pumpUntil(tester, () => _submitCommit.evaluate().isNotEmpty);
     attachments.holdNextRead = true;
+    await _enterCommitMessage(tester);
     await _tapVisible(tester, _submitCommit);
     await _pumpUntilBusySafe(
       tester,
@@ -699,6 +701,7 @@ void main() {
 
     await _tapVisible(tester, _commitAction);
     await pumpUntil(tester, () => _submitCommit.evaluate().isNotEmpty);
+    await _enterCommitMessage(tester);
     await _tapVisible(tester, _submitCommit);
     await _pumpUntilBusySafe(tester, () => patches == 1, 'branch update');
     await tester.pump(const Duration(milliseconds: 350));
@@ -834,6 +837,7 @@ void main() {
     await _waitForEnabledButton(tester, _commitAction);
     await _tapVisible(tester, _commitAction);
     await pumpUntil(tester, () => _submitCommit.evaluate().isNotEmpty);
+    await _enterCommitMessage(tester);
     await _tapVisible(tester, _submitCommit);
     await pumpUntil(tester, () => find.textContaining('Canvas committed to GitHub.').evaluate().isNotEmpty);
     expect(find.textContaining('Canvas committed to GitHub. Could not save its local sync baseline.'), findsOneWidget);
@@ -932,6 +936,7 @@ void main() {
         () => find.byKey(const ValueKey('github-commit-message')).evaluate().isNotEmpty,
         'commit confirmation $attempt',
       );
+      await _enterCommitMessage(tester);
       await tester.tap(_submitCommit);
       await _pumpUntilBusySafe(
         tester,
@@ -1047,6 +1052,11 @@ Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   expect(finder.hitTestable(), findsOneWidget);
   await tester.tap(finder);
 }
+
+Future<void> _enterCommitMessage(WidgetTester tester) => tester.enterText(
+  find.byKey(const ValueKey('github-commit-message')),
+  'Update canvas',
+);
 
 Future<void> _pumpWorkspace(
   WidgetTester tester,

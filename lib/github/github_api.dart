@@ -155,14 +155,8 @@ final class GitHubCommitResult {
   final String url;
 }
 
-/// Returns whether [message] is a short lowercase Conventional Commit subject.
-bool isValidGitHubCommitMessage(String message) {
-  if (message.isEmpty || message != message.toLowerCase() || message.trim() != message || message.contains('\n')) {
-    return false;
-  }
-  if (message.runes.length > 72) return false;
-  return RegExp(r'^[a-z][a-z0-9-]*(?:\([a-z0-9][a-z0-9._/-]*\))?!?: [a-z0-9][^\r\n]*$').hasMatch(message);
-}
+/// Returns whether [message] contains non-whitespace content.
+bool isValidGitHubCommitMessage(String message) => message.trim().isNotEmpty;
 
 /// GitHub operations with memory-only session state. Clients remain caller-owned.
 final class GitHubApi {
@@ -290,7 +284,7 @@ final class GitHubApi {
     required String message,
   }) async {
     if (!isValidGitHubCommitMessage(message)) {
-      _invalid('Enter a lowercase Conventional Commit subject of 72 characters or fewer');
+      _invalid('A commit message is required.');
     }
     _validateTransferTree(tree);
 

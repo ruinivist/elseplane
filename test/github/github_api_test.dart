@@ -485,11 +485,12 @@ void main() {
     });
   });
 
-  test('validates lowercase conventional subjects', () {
+  test('validates only nonblank commit messages', () {
     expect(isValidGitHubCommitMessage('docs: save canvas'), isTrue);
-    expect(isValidGitHubCommitMessage('Docs: save canvas'), isFalse);
-    expect(isValidGitHubCommitMessage('docs: '), isFalse);
-    expect(isValidGitHubCommitMessage('docs: save\ncanvas'), isFalse);
-    expect(isValidGitHubCommitMessage('docs: ${List.filled(70, 'a').join()}'), isFalse);
+    expect(isValidGitHubCommitMessage(''), isFalse);
+    expect(isValidGitHubCommitMessage(' \n\t '), isFalse);
+    expect(isValidGitHubCommitMessage('Fix: Save Canvas'), isTrue);
+    expect(isValidGitHubCommitMessage('docs: save\ncanvas'), isTrue);
+    expect(isValidGitHubCommitMessage('docs: ${List.filled(70, 'a').join()}'), isTrue);
   });
 }

@@ -656,8 +656,7 @@ After structural validation, create blobs, one tree with `base_tree` set to the
 freshly captured tree, one commit whose parent is the fresh head, then update
 only the selected default-branch reference with force disabled. Do not fetch or
 compare old contents, delete paths, remap remote attachment names, or retry a
-race. Validate the existing explicit message rule: a nonempty lowercase
-Conventional Commit subject of at most 72 characters. If a branch update outcome
+race. Require a commit message. If a branch update outcome
 is uncertain, show that it may have succeeded and its link. Do not retry
 automatically; an explicit later submission can create a duplicate history
 commit.

@@ -267,13 +267,12 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
   shows a path tooltip only when clipped, with space between the tooltip and
   **Commit**. On touch-only browsers, **Commit** is visible whenever committing
   is available.
-- Commit saves completed edits, captures the canvas, and asks for a nonempty
-  lowercase Conventional Commit subject of at most 72 characters. It publishes
-  the full local `.canvas.json` path and included referenced images in one
-  commit. Existing regular blobs at output paths may be overwritten. Unrelated
-  files and paths from before a rename or move stay in the repository. Structural
-  conflicts stop before uploads or a branch update. External media URLs stay
-  external.
+- Commit saves completed edits, captures the canvas, and asks for a commit
+  message before publishing the full local `.canvas.json` path and included
+  referenced images in one commit. Existing regular blobs at output paths may be
+  overwritten. Unrelated files and paths from before a rename or move stay in the
+  repository. Structural conflicts stop before uploads or a branch update.
+  External media URLs stay external.
 - Block canvas input through the commit dialog and while preparing the captured
   document, path, and image bytes. Once the package is ready, let the user pan,
   zoom, edit, and undo as usual while GitHub processes the commit. Later edits

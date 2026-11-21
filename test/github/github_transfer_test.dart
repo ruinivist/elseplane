@@ -558,6 +558,7 @@ void main() {
     test('preflights then uploads, creates one tree and commit, and updates once without force', () async {
       final requestOrder = <String>[];
       final blobBodies = <Map<String, dynamic>>[];
+      final message = '  Release: Save MixedCase Canvas\n${List.filled(80, 'x').join()}  ';
       late Map<String, dynamic> treeBody;
       late Map<String, dynamic> commitBody;
       late Map<String, dynamic> refBody;
@@ -605,7 +606,7 @@ void main() {
         _destination(),
         _tree(),
         installationId: 10,
-        message: 'docs: save transfer',
+        message: message,
       );
 
       expect(result.commitSha, _commitSha);
@@ -626,12 +627,43 @@ void main() {
         _imagePath,
       ]);
       expect((treeBody['tree'] as List).cast<Map<String, dynamic>>().every((entry) => entry['sha'] != null), isTrue);
-      expect(commitBody['message'], 'docs: save transfer');
+      expect(commitBody['message'], message);
       expect(commitBody['parents'], [_headSha]);
       expect(refBody, {'sha': _commitSha, 'force': false});
       expect(requestOrder.where((request) => request.startsWith('PATCH ')), hasLength(1));
       expect(requestOrder.where((request) => request.contains('/git/blobs/')), isEmpty);
       expect(requestOrder.where((request) => request.contains('/git/blobs')), hasLength(2));
+    });
+
+    test('rejects blank messages before making network requests', () async {
+      var mediatorRequests = 0;
+      var githubRequests = 0;
+      final api = GitHubApi(
+        mediatorUrl: Uri.parse(_mediatorUrl),
+        mediatorClient: MockClient((request) async {
+          mediatorRequests++;
+          return _token(request);
+        }),
+        githubClient: MockClient((request) async {
+          githubRequests++;
+          return await _emptySnapshot(request);
+        }),
+      );
+
+      for (final message in ['', ' \n\t ']) {
+        await expectLater(
+          api.commitTransfer(_destination(), _tree(), installationId: 10, message: message),
+          throwsA(
+            isA<GitHubApiException>().having(
+              (error) => error.message,
+              'message',
+              'A commit message is required.',
+            ),
+          ),
+        );
+      }
+      expect(mediatorRequests, 0);
+      expect(githubRequests, 0);
     });
 
     test('rejects conflicting output and reserved attachments paths before upload', () async {

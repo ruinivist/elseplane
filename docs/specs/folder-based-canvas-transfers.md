@@ -390,9 +390,6 @@ remote path in place; no delete or cleanup is performed. Local best-effort image
 writes do not weaken GitHub's one-commit branch update or add local rollback,
 remote cleanup, or retry behavior.
 
-Keep the current explicit commit-message requirement: a nonempty lowercase
-Conventional Commit subject of at most 72 characters.
-
 The [GitHub sync UX](github-sync-ux.md) records local per-canvas baselines after
 confirmed commits and successful imports. These baselines describe transferred
 versions and do not affect remote overwrite or conflict rules. A branch race
