@@ -51,6 +51,9 @@ Hover/focus   some new*  [ Commit ]
 - Hover over the title or move keyboard focus into the title area to reveal **Commit**. The button appears beside the title when it fits and directly below when it needs its own row. The title stays in place and the button stays visible while the pointer or focus moves onto it.
 - On touch-only browsers, show **Commit** whenever committing is available. **Commit** opens the dialog with the selected repository and branch and asks for a commit message before publishing the current canvas.
 
-Confirmed commits show **View commit** on the canvas. If saving the local baseline fails, show both outcomes without retrying the remote write. An uncertain result shows **Check GitHub** and warns that submitting again may create a duplicate commit.
+Confirmed commits show a success notification without an action. If saving the
+local baseline fails, show both outcomes in a persistent warning without
+retrying the remote write. An uncertain result shows **Check GitHub** and warns
+that submitting again may create a duplicate commit.
 
 Repository eligibility and commit behavior follow the [GitHub canvas transfer contract](interaction-model.md#github-canvas-transfers).

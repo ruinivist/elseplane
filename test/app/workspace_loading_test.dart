@@ -6,6 +6,7 @@ import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
+import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/gestures.dart';
@@ -186,6 +187,7 @@ void main() {
 
     expect(find.byType(TextElementView), findsNothing);
     expect(find.text('Could not load saved canvas'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
     expect(await preferences.getString(PreferencesLibraryStore.libraryKey), invalid);
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
@@ -195,4 +197,52 @@ void main() {
     expect(find.byType(TextElementView), findsNothing);
     expect(await preferences.getString(PreferencesLibraryStore.libraryKey), invalid);
   });
+
+  testWidgets('workspace save failures appear as notification cards', (tester) async {
+    final store = _FailingWorkspaceStore(
+      CanvasDocument(
+        background: CanvasBackgroundKind.plain,
+        elements: [
+          TextElementData(
+            id: 'text',
+            position: Offset.zero,
+            width: 280,
+            height: 100,
+            markdown: 'saved',
+            style: const TextNodeStyle(fontFamily: 'Inter'),
+          ),
+        ],
+      ),
+    );
+    await pumpCanvas(tester, store);
+    store.failSaves = true;
+
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText(' changed');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+
+    expect(find.text('Could not save canvas'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText(' again');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    expect(find.text('Could not save canvas'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    store.failSaves = false;
+  });
+}
+
+class _FailingWorkspaceStore extends TestLibraryStore {
+  _FailingWorkspaceStore(super.initial);
+
+  final _error = StateError('storage unavailable');
+  bool failSaves = false;
+
+  @override
+  Future<void> save(CanvasLibrary snapshot) async {
+    if (failSaves) throw _error;
+    await super.save(snapshot);
+  }
 }

@@ -9,6 +9,8 @@ stacking, and file workflows. Ordinary touch navigation and native control or
 editor interactions are best effort; full touchscreen canvas editing is not a
 supported workflow.
 
+The [notification spec](notifications.md) governs workspace feedback cards.
+
 ## Acceptance criteria
 
 - Keep activation, selection, and editing independent, with the per-object and
@@ -273,7 +275,8 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
   conflicts stop before uploads or a branch update. External media URLs stay
   external.
 - A confirmed commit records the captured version. The marker clears when the
-  current version matches it. Canvas feedback links to the commit and reports
-  a local baseline save failure if one occurs. An uncertain branch update keeps
-  the marker and offers a link to check GitHub with a duplicate-commit warning.
-  Remote writes are never retried automatically.
+  current version matches it. Canvas feedback reports confirmed success; if the
+  local baseline save fails, a persistent warning reports both outcomes. Neither
+  confirmed outcome offers a commit link. An uncertain branch update keeps the
+  marker and offers **Check GitHub** with a duplicate-commit warning. Remote
+  writes are never retried automatically.

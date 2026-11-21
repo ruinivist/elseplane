@@ -20,6 +20,7 @@ import 'package:elseplane/library/transfer/canvas_transfer.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
+import 'package:elseplane/ui/common/notifications.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
@@ -75,6 +76,8 @@ class _WorkspaceState extends State<Workspace> {
     files: widget.projectFiles,
     onAttachmentPathsChanged: _invalidateAttachments,
   );
+  late final _notifications = NotificationController();
+  late final Widget _notificationHost = NotificationHost(controller: _notifications);
   late final GitHubSync? _github = widget.githubApi == null
       ? null
       : GitHubSync(
@@ -82,6 +85,7 @@ class _WorkspaceState extends State<Workspace> {
           appSlug: widget.githubAppSlug!,
           library: _library,
           attachmentStore: widget.attachmentStore,
+          notifications: _notifications,
           beginTransfer: _beginTransfer,
           endTransfer: _endTransfer,
           onImport: _importTransfer,
@@ -114,7 +118,9 @@ class _WorkspaceState extends State<Workspace> {
       _returnToSync = _github?.restore() ?? false;
       _replaceEditor();
     } on Object {
-      if (mounted) _showMessage('Could not load saved canvas');
+      if (mounted) {
+        _notifications.show('Could not load saved canvas', severity: NotificationSeverity.error);
+      }
     }
   }
 
@@ -139,7 +145,9 @@ class _WorkspaceState extends State<Workspace> {
   void _libraryChanged() {
     if (!mounted) return;
     final error = _library.saveError;
-    if (error != null && !identical(error, _reportedSaveError)) _showMessage('Could not save canvas');
+    if (error != null && !identical(error, _reportedSaveError)) {
+      _notifications.show('Could not save canvas', severity: NotificationSeverity.error);
+    }
     _reportedSaveError = error;
     _github?.updateCanvas();
     setState(() {});
@@ -185,6 +193,7 @@ class _WorkspaceState extends State<Workspace> {
     if (_documentListener != null) _editor?.documentChanges.removeListener(_documentListener!);
     _editor?.dispose();
     _github?.dispose();
+    _notifications.dispose();
     _library
       ..removeListener(_libraryChanged)
       ..dispose();
@@ -429,6 +438,7 @@ class _WorkspaceState extends State<Workspace> {
       onTitleAction: github != null && _editor != null && github.canCommitCurrent && !github.busy
           ? github.commit
           : null,
+      notification: _notificationHost,
     );
   }
 }

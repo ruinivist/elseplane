@@ -17,6 +17,7 @@ class CanvasChrome extends StatelessWidget {
     required this.toolbar,
     required this.settingsButton,
     required this.toolOptions,
+    this.notification,
     super.key,
   });
 
@@ -24,6 +25,7 @@ class CanvasChrome extends StatelessWidget {
   final Widget toolbar;
   final Widget settingsButton;
   final Widget? toolOptions;
+  final Widget? notification;
 
   // ---------- Rendering ----------
 
@@ -32,7 +34,9 @@ class CanvasChrome extends StatelessWidget {
     child: Padding(
       padding: const EdgeInsets.all(_ChromeLayout.gap),
       child: CustomMultiChildLayout(
-        delegate: _ChromeLayout(minimumTitleWidth: title.collapsedWidthOf(context)),
+        delegate: _ChromeLayout(
+          minimumTitleWidth: title.collapsedWidthOf(context),
+        ),
         children: [
           LayoutId(
             id: _Control.toolbar,
@@ -56,6 +60,10 @@ class CanvasChrome extends StatelessWidget {
             id: _Control.options,
             child: ToolOptions(child: toolOptions),
           ),
+          LayoutId(
+            id: _Control.notification,
+            child: notification ?? const SizedBox.shrink(),
+          ),
         ],
       ),
     ),
@@ -64,7 +72,7 @@ class CanvasChrome extends StatelessWidget {
 
 // ---------- Layout ----------
 
-enum _Control { toolbar, title, settings, options }
+enum _Control { toolbar, title, settings, options, notification }
 
 /// Places controls using their natural sizes, including Flutter density.
 /// Keeps title and settings clear of the toolbar and its wrapped rows.
@@ -72,6 +80,7 @@ class _ChromeLayout extends MultiChildLayoutDelegate {
   _ChromeLayout({required this.minimumTitleWidth});
 
   static const gap = 12.0;
+  static const notificationMaxWidth = 380.0;
 
   final double minimumTitleWidth;
 
@@ -96,9 +105,33 @@ class _ChromeLayout extends MultiChildLayoutDelegate {
     final title = layoutChild(_Control.title, BoxConstraints.tightFor(width: titleWidth));
     positionChild(_Control.title, Offset(0, titleTop));
 
-    final optionsTop = math.max<double>(
+    final trayWidth = math.min(notificationMaxWidth, size.width);
+    var notificationTop = titleTop + title.height;
+    if (trayWidth > (size.width - toolbar.width) / 2) {
+      notificationTop = math.max(notificationTop, toolbar.height);
+    }
+    if (trayWidth > size.width - settings.width) {
+      notificationTop = math.max(notificationTop, settingsTop + settings.height);
+    }
+    notificationTop += gap;
+    final notification = layoutChild(
+      _Control.notification,
+      BoxConstraints(
+        maxWidth: trayWidth,
+        maxHeight: math.max<double>(0, size.height - notificationTop),
+      ),
+    );
+    positionChild(_Control.notification, Offset(0, notificationTop));
+
+    final optionsBaseTop = math.max<double>(
       math.max(settingsTop + settings.height, toolbar.height),
       title.width + ToolOptions.outerWidth > size.width ? titleTop + title.height : 0,
+    );
+    final optionsColumnWidth = math.min(size.width, ToolOptions.outerWidth);
+    final optionsOverlap = notification.height > 0 && notification.width + optionsColumnWidth > size.width;
+    final optionsTop = math.max<double>(
+      optionsBaseTop,
+      optionsOverlap ? notificationTop + notification.height + gap : 0,
     );
     final options = layoutChild(
       _Control.options,

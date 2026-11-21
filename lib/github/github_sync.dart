@@ -12,6 +12,7 @@ import 'package:elseplane/github/github_controller.dart';
 import 'package:elseplane/library/github_metadata.dart';
 import 'package:elseplane/library/library_controller.dart';
 import 'package:elseplane/library/transfer/canvas_transfer.dart';
+import 'package:elseplane/ui/common/notifications.dart';
 import 'package:flutter/material.dart';
 
 // ---------- Workspace workflow ----------
@@ -21,6 +22,7 @@ class GitHubSync extends ChangeNotifier {
     required GitHubApi api,
     required this.library,
     required this.attachmentStore,
+    required this.notifications,
     required this.beginTransfer,
     required this.endTransfer,
     required this.onImport,
@@ -36,6 +38,7 @@ class GitHubSync extends ChangeNotifier {
   final GitHubController session;
   final LibraryController library;
   final AttachmentStore attachmentStore;
+  final NotificationController notifications;
   final bool Function() beginTransfer;
   final VoidCallback endTransfer;
   final Future<void> Function(
@@ -241,6 +244,7 @@ class GitHubSync extends ChangeNotifier {
 
   Future<void> commit(BuildContext context) async {
     if (!canCommitCurrent) return;
+    NotificationOperation? notification;
     await _run(
       'Committing canvas…',
       () async {
@@ -257,46 +261,49 @@ class GitHubSync extends ChangeNotifier {
           newPath: path,
         );
         if (_disposed || message == null) return;
+        final progress = notification = notifications.begin('Committing canvas…');
         final tree = await encodeTransfer(captured, attachmentStore, TransferScope.currentCanvas);
         if (_disposed) return;
         final baseline = GitHubBaseline.capture(saved, path, captured.current.document!, tree.files);
-        final result = await session.run(
+        await session.run(
           () => session.api.commitTransfer(saved, tree, installationId: repo.installationId, message: message),
         );
         if (_disposed) return;
         var feedback = 'Canvas committed to GitHub.';
+        var severity = NotificationSeverity.success;
         try {
           await library.saveGitHubBaseline(captured.currentId, baseline);
         } on Object {
           feedback = 'Canvas committed to GitHub. Could not save its local sync baseline.';
+          severity = NotificationSeverity.warning;
         }
-        if (context.mounted) _canvasFeedback(context, feedback, url: result.url, action: 'View commit');
+        if (context.mounted) {
+          progress.complete(
+            feedback,
+            severity: severity,
+          );
+        }
       },
       onError: (error) {
+        if (!context.mounted || _disposed) return;
+        final String text;
+        final NotificationSeverity severity;
+        final NotificationAction? action;
         if (error is GitHubUnconfirmedCommit) {
-          _canvasFeedback(
-            context,
-            'The branch update may have succeeded. Submitting again may create a duplicate commit.',
-            url: error.url,
-            action: 'Check GitHub',
-          );
+          text = 'The branch update may have succeeded. Submitting again may create a duplicate commit.';
+          severity = NotificationSeverity.warning;
+          action = NotificationAction(label: 'Check GitHub', onPressed: () => openLink(error.url));
         } else {
-          _canvasFeedback(context, _errorMessage(error));
+          text = _errorMessage(error);
+          severity = NotificationSeverity.error;
+          action = null;
+        }
+        if (notification case final progress?) {
+          progress.complete(text, severity: severity, action: action);
+        } else {
+          notifications.show(text, severity: severity, action: action);
         }
       },
-    );
-  }
-
-  // ---------- Feedback ----------
-
-  void _canvasFeedback(BuildContext context, String text, {String? url, String? action}) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(text),
-        duration: url == null ? const Duration(seconds: 4) : const Duration(seconds: 10),
-        action: url == null ? null : SnackBarAction(label: action!, onPressed: () => openLink(url)),
-      ),
     );
   }
 

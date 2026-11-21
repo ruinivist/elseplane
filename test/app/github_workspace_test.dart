@@ -464,6 +464,25 @@ void main() {
     store.failSaves = false;
   });
 
+  testWidgets('commit save failure before dialog shows a one-off error', (tester) async {
+    final store = _FailingLibraryStore(_document('saved'))..library = _savedStore().library;
+    final api = _commitApi(github: (_) async => _json({'error': 'not found'}, status: 404));
+    await _pumpWorkspace(tester, store, api, navigate: (_) {});
+    await _waitForEnabledButton(tester, _commitAction);
+    tester.widget<TextElementView>(find.byType(TextElementView)).resources.insertPastedText(' edited');
+    await tester.pump();
+    store.failSaves = true;
+
+    await _tapVisible(tester, _commitAction);
+    await pumpUntil(tester, () => find.text('storage unavailable').evaluate().isNotEmpty);
+
+    expect(find.byKey(const ValueKey('github-commit-message')), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(_marker, findsOneWidget);
+    store.failSaves = false;
+  });
+
   testWidgets('saves completed edits before starting authorization', (tester) async {
     final store = TestLibraryStore(_document('before'));
     var mediatorRequests = 0;
@@ -549,19 +568,18 @@ void main() {
       () => find.byKey(const ValueKey('github-commit-message')).evaluate().isNotEmpty,
       'commit confirmation',
     );
+    expect(find.byTooltip('Dismiss notification'), findsNothing);
     expect(find.byKey(const ValueKey('github-repository-select')), findsNothing);
     await tester.tap(_submitCommit);
     await _pumpUntilBusySafe(
       tester,
       () =>
           find.textContaining('Canvas committed to GitHub.').evaluate().isNotEmpty ||
-          find.byType(SnackBar).evaluate().isNotEmpty,
+          (find.byTooltip('Dismiss notification').evaluate().isNotEmpty &&
+              find.byType(CircularProgressIndicator).evaluate().isEmpty),
       'commit result',
     );
-    if (find.textContaining('Canvas committed to GitHub.').evaluate().isEmpty) {
-      final message = (tester.widget<SnackBar>(find.byType(SnackBar)).content as Text).data;
-      fail('Commit failed: $message; requests: ${requests.join(', ')}');
-    }
+    expect(find.text('Canvas committed to GitHub.'), findsOneWidget);
 
     final uploaded =
         jsonDecode(utf8.decode(base64Decode(blobBodies.single['content']! as String))) as Map<String, Object?>;
@@ -580,8 +598,13 @@ void main() {
     expect(store.library.current.document?.elements.whereType<TextElementData>().single.markdown, 'Maths edited');
     expect(store.library.current.githubBaseline?.path, 'Maths.canvas.json');
     expect(store.library.file('other').githubBaseline, isNull);
-    expect(find.text('View commit'), findsOneWidget);
+    expect(find.text('View commit'), findsNothing);
     expect(_marker, findsNothing);
+    await tester.pump(const Duration(milliseconds: 3900));
+    expect(find.text('Canvas committed to GitHub.'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 180));
+    expect(find.text('Canvas committed to GitHub.'), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
     store.library = CanvasLibrary.fromJson(store.library.toJson());
@@ -617,6 +640,7 @@ void main() {
     await pumpUntil(tester, () => _submitCommit.evaluate().isNotEmpty);
     await _tapVisible(tester, find.text('Cancel'));
     await _waitForEnabledButton(tester, _commitAction);
+    expect(find.byTooltip('Dismiss notification'), findsNothing);
     expect(patches, 0);
     expect(store.library.current.githubBaseline, isNull);
 
@@ -624,11 +648,13 @@ void main() {
     await pumpUntil(tester, () => _submitCommit.evaluate().isNotEmpty);
     await _tapVisible(tester, _submitCommit);
     await _pumpUntilBusySafe(tester, () => patches == 1, 'branch update');
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
     final canvas = tester.widget<TextElementView>(find.byType(TextElementView));
     canvas.resources.insertPastedText(' later');
     await tester.pump();
     refUpdate.complete(_json({'ref': 'refs/heads/main'}));
-    await pumpUntil(tester, () => find.text('View commit').evaluate().isNotEmpty);
+    await pumpUntil(tester, () => find.text('Canvas committed to GitHub.').evaluate().isNotEmpty);
+    expect(find.text('View commit'), findsNothing);
     expect(store.library.current.githubBaseline?.documentHash, GitHubBaseline.hashDocument(captured));
     expect(store.library.current.document, isNot(captured));
     expect(_marker, findsOneWidget);
@@ -647,18 +673,18 @@ void main() {
         return _commitResponse(request);
       },
     );
-    String? opened;
-    await _pumpWorkspace(tester, store, api, navigate: (_) {}, open: (url) => opened = url);
+    await _pumpWorkspace(tester, store, api, navigate: (_) {});
     await _waitForEnabledButton(tester, _commitAction);
     await _tapVisible(tester, _commitAction);
     await pumpUntil(tester, () => _submitCommit.evaluate().isNotEmpty);
     await _tapVisible(tester, _submitCommit);
-    await pumpUntil(tester, () => find.text('View commit').evaluate().isNotEmpty);
+    await pumpUntil(tester, () => find.textContaining('Canvas committed to GitHub.').evaluate().isNotEmpty);
     expect(find.textContaining('Canvas committed to GitHub. Could not save its local sync baseline.'), findsOneWidget);
+    expect(find.text('View commit'), findsNothing);
     expect(store.library.current.githubBaseline, isNull);
     expect(_marker, findsOneWidget);
-    await _tapVisible(tester, find.text('View commit'));
-    expect(opened, 'https://github.com/owner/repo/commit/$_nextCommit');
+    await tester.pump(const Duration(seconds: 20));
+    expect(find.textContaining('Canvas committed to GitHub. Could not save its local sync baseline.'), findsOneWidget);
     expect(patches, 1);
     store.failSaves = false;
   });
@@ -729,6 +755,7 @@ void main() {
         githubDestination: _destination,
       );
     var patches = 0;
+    String? opened;
     final api = _commitApi(
       github: (request) async {
         if (request.method == 'PATCH') {
@@ -738,7 +765,7 @@ void main() {
         return _commitResponse(request);
       },
     );
-    await _pumpWorkspace(tester, store, api, navigate: (_) {});
+    await _pumpWorkspace(tester, store, api, navigate: (_) {}, open: (url) => opened = url);
     await _waitForEnabledButton(tester, _commitAction);
 
     for (var attempt = 1; attempt <= 2; attempt++) {
@@ -758,7 +785,12 @@ void main() {
       expect(find.text('Check GitHub'), findsOneWidget);
       expect(_marker, findsOneWidget);
       expect(store.library.current.githubBaseline, isNull);
-      ScaffoldMessenger.of(tester.element(find.byType(SnackBar))).removeCurrentSnackBar();
+      if (attempt == 1) {
+        await _tapVisible(tester, find.text('Check GitHub'));
+        expect(opened, 'https://github.com/owner/repo/commit/$_nextCommit');
+      }
+      await _tapVisible(tester, find.byTooltip('Dismiss notification').first);
+      await tester.pump(const Duration(milliseconds: 180));
       await _waitForEnabledButton(tester, _commitAction);
     }
 

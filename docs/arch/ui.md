@@ -23,8 +23,12 @@ Settings owns section navigation and its responsive layout. Workspace supplies
 the GitHub feature's Sync content. It uses the shared searchable select and
 themed buttons, with setup feedback and overwrite review in the section.
 Canvas chrome lays out the generic title indicator and action. The title keeps
-the name in place while hover or descendant focus reveals the action. GitHub
-reports commit results in canvas notifications with links.
+the name in place while hover or descendant focus reveals the action. It also
+provides a generic widget slot directly below the title for workspace
+notifications. The slot follows title wrapping, stays clear of toolbar and tool
+options, and participates in chrome layout rather than a workspace-root overlay;
+it reserves no viewport clearance. GitHub supplies notification copy and its
+**Check GitHub** action for uncertain commits.
 
 ## Dependencies and reuse
 

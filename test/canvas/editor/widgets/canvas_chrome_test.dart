@@ -1,6 +1,8 @@
 // Verifies responsive controls against the original toolbar's geometry.
 // Exercises title anchoring, wrapping, and pointer access in canvas chrome.
 
+import 'dart:math' as math;
+
 import 'package:elseplane/canvas/editor/widgets/canvas_chrome.dart';
 import 'package:elseplane/canvas/editor/widgets/canvas_toolbar.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
@@ -471,4 +473,102 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('anchors notifications below top controls without covering options', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 700);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: starlessLightThemeData,
+        home: const Scaffold(
+          body: CanvasChrome(
+            title: CanvasTitle(path: ['Physics']),
+            toolbar: SizedBox(key: ValueKey('toolbar'), width: 700, height: 64),
+            settingsButton: SizedBox(key: ValueKey('settings'), width: 40, height: 40),
+            toolOptions: SizedBox(key: ValueKey('notification-options'), height: 300),
+            notification: SizedBox(key: ValueKey('notification-slot'), width: 380, height: 56),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final slot = tester.getRect(find.byKey(const ValueKey('notification-slot')));
+    final title = tester.getRect(find.byType(CanvasTitle));
+    final toolbar = tester.getRect(find.byKey(const ValueKey('toolbar')));
+    final settings = tester.getRect(find.byKey(const ValueKey('settings')));
+    final options = tester.getRect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('notification-options')),
+        matching: find.byType(SingleChildScrollView),
+      ),
+    );
+    expect(slot.left, 12);
+    expect(slot.top, math.max(title.bottom, math.max(toolbar.bottom, settings.bottom)) + 12);
+    expect(slot.right, lessThan(options.left));
+    expect(options.top, greaterThanOrEqualTo(toolbar.bottom));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('wrapped title positions tray and options restore when empty', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(220, 420);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    var showNotification = false;
+    late StateSetter update;
+
+    Widget app() => MaterialApp(
+      theme: starlessLightThemeData,
+      home: Scaffold(
+        body: StatefulBuilder(
+          builder: (context, setState) {
+            update = setState;
+            return CanvasChrome(
+              title: CanvasTitle(
+                path: const ['Physics'],
+                indicator: '*',
+                indicatorLabel: 'Uncommitted changes',
+                actionLabel: 'Commit',
+                showActionWithoutHover: true,
+                onAction: () {},
+              ),
+              toolbar: const SizedBox(key: ValueKey('wrapped-toolbar'), width: 160, height: 48),
+              settingsButton: const SizedBox(key: ValueKey('wrapped-settings'), width: 40, height: 40),
+              toolOptions: const SizedBox(key: ValueKey('wrapped-options'), height: 800),
+              notification: showNotification
+                  ? const SizedBox(key: ValueKey('wrapped-notification'), width: 196, height: 56)
+                  : null,
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+    final options = find.ancestor(
+      of: find.byKey(const ValueKey('wrapped-options')),
+      matching: find.byType(SingleChildScrollView),
+    );
+    final originalOptionsTop = tester.getRect(options).top;
+    final toolbar = tester.getRect(find.byKey(const ValueKey('wrapped-toolbar')));
+    final title = tester.getRect(find.byType(CanvasTitle));
+    expect(title.top, greaterThan(toolbar.bottom));
+    expect(title.height, greaterThan(40));
+
+    update(() => showNotification = true);
+    await tester.pumpAndSettle();
+    final slot = tester.getRect(find.byKey(const ValueKey('wrapped-notification')));
+    expect(slot.left, 12);
+    expect(slot.top, title.bottom + 12);
+    expect(tester.getRect(options).top, greaterThanOrEqualTo(slot.bottom + 12));
+
+    update(() => showNotification = false);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(options).top, originalOptionsTop);
+    expect(tester.takeException(), isNull);
+  });
 }

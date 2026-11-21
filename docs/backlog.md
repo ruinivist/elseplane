@@ -106,6 +106,11 @@ confirmed behavior.
   intended loss. Next: decide the race policy before changing the contract or
   code and adding a desired-outcome regression.
 
+- **Deferred — screen reader support:** Elseplane has not been tested with a
+  screen reader, and end-to-end support is not a current priority. When
+  prioritized, test the main workflows, including notification announcements,
+  and fix the gaps found. This does not block the notification pilot.
+
 ## Verification
 
 - **Nested-layout browser acceptance remains open.** Manually clear this app's

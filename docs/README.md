@@ -20,6 +20,8 @@ then read the authority relevant to the work. Do not create a separate
   superseded by ADR 0005.
 - [GitHub sync UX](specs/github-sync-ux.md) covers Sync settings and
   the canvas title's uncommitted-changes marker and commit action.
+- [Notifications](specs/notifications.md) defines workspace feedback cards.
+  The [implementation plan](plans/notifications.md) covers the pilot and rollout.
 - **Deferred:** [canvas input delegation ADR 0004](adr/0004-delegate-canvas-input-behavior.md)
   and its [migration plan](plans/input-delegation.md). They remain proposals;
   accepted architecture and behavior remain authoritative until the ADR is
