@@ -206,6 +206,7 @@ class _ContextMenuState extends State<ContextMenu> {
               label: widget.semanticLabel,
               button: true,
               child: InkWell(
+                borderRadius: theme.geo.radiusSmall,
                 mouseCursor: SystemMouseCursors.contextMenu,
                 onTap: menuController.open,
                 onSecondaryTapDown: (details) => menuController.open(position: details.localPosition),
