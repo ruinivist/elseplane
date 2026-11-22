@@ -2,7 +2,6 @@
 // Used by the text tool whenever a text element enters editing mode.
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/image_import.dart';
@@ -10,6 +9,7 @@ import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:uuid/uuid.dart';
 
@@ -66,6 +66,43 @@ class _TextMarkdownEditorState extends State<TextMarkdownEditor> {
     }
   }
 
+  SingleActivator _shortcut(LogicalKeyboardKey key, {bool shift = false}) {
+    final macOS = Theme.of(context).platform == TargetPlatform.macOS;
+    return SingleActivator(key, control: !macOS, meta: macOS, shift: shift, includeRepeats: false);
+  }
+
+  KeyEventResult _handleFormattingShortcut(FocusNode _, KeyEvent event) {
+    final delimiter = switch (event.logicalKey) {
+      LogicalKeyboardKey.keyB => '**',
+      LogicalKeyboardKey.keyI => '*',
+      _ => null,
+    };
+    if (delimiter == null || !_shortcut(event.logicalKey).accepts(event, HardwareKeyboard.instance)) {
+      return KeyEventResult.ignored;
+    }
+
+    final model = widget.model;
+    if (!model.editing || !model.focusNode.hasPrimaryFocus) {
+      return KeyEventResult.ignored;
+    }
+    final value = model.controller.value;
+    final selection = value.selection;
+    if (value.composing.isValid || !selection.isValid || selection.isCollapsed || selection.end > value.text.length) {
+      return KeyEventResult.ignored;
+    }
+
+    final start = selection.start;
+    final end = selection.end;
+    model.controller.value = value.copyWith(
+      text: value.text.replaceRange(start, end, '$delimiter${value.text.substring(start, end)}$delimiter'),
+      selection: selection.copyWith(
+        baseOffset: selection.baseOffset + delimiter.length,
+        extentOffset: selection.extentOffset + delimiter.length,
+      ),
+    );
+    return KeyEventResult.handled;
+  }
+
   // ---------- Rendering ----------
 
   @override
@@ -73,35 +110,47 @@ class _TextMarkdownEditorState extends State<TextMarkdownEditor> {
     final theme = BTheme.of(context);
     final colors = theme.colors;
     final code = theme.typo.code;
-    return Actions(
-      actions: {
-        PasteTextIntent: CallbackAction<PasteTextIntent>(
-          onInvoke: (_) {
-            final clipboard = SystemClipboard.instance;
-            if (clipboard != null) unawaited(_paste(clipboard.read()));
-            return null;
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: _handleFormattingShortcut,
+      child: Shortcuts(
+        shortcuts: {
+          // Flutter Web's default bindings defer these keys to the browser.
+          _shortcut(LogicalKeyboardKey.keyZ): const UndoTextIntent(SelectionChangedCause.keyboard),
+          _shortcut(LogicalKeyboardKey.keyZ, shift: true): const RedoTextIntent(SelectionChangedCause.keyboard),
+        },
+        child: Actions(
+          actions: {
+            PasteTextIntent: CallbackAction<PasteTextIntent>(
+              onInvoke: (_) {
+                final clipboard = SystemClipboard.instance;
+                if (clipboard != null) unawaited(_paste(clipboard.read()));
+                return null;
+              },
+            ),
           },
+          child: TextField(
+            key: const ValueKey('text-markdown-editor'),
+            contextMenuBuilder: null,
+            onTap: widget.onInteract,
+            onTapAlwaysCalled: true,
+            controller: widget.model.controller,
+            focusNode: widget.model.focusNode,
+            scrollController: widget.model.scrollController,
+            expands: widget.model.node.height != null,
+            maxLines: null,
+            cursorColor: colors.accent,
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.all(24),
+              hintText: 'Type something...',
+              hintStyle: theme.typo.body.copyWith(color: colors.textMuted),
+              floatingLabelBehavior: FloatingLabelBehavior.never,
+            ),
+            style: code.copyWith(color: colors.textPrimary),
+          ),
         ),
-      },
-      child: TextField(
-        key: const ValueKey('text-markdown-editor'),
-        contextMenuBuilder: null,
-        onTap: widget.onInteract,
-        onTapAlwaysCalled: true,
-        controller: widget.model.controller,
-        focusNode: widget.model.focusNode,
-        scrollController: widget.model.scrollController,
-        expands: widget.model.node.height != null,
-        maxLines: null,
-        cursorColor: colors.accent,
-        decoration: InputDecoration(
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.all(24),
-          hintText: 'Type something...',
-          hintStyle: theme.typo.body.copyWith(color: colors.textMuted),
-          floatingLabelBehavior: FloatingLabelBehavior.never,
-        ),
-        style: code.copyWith(color: colors.textPrimary),
       ),
     );
   }

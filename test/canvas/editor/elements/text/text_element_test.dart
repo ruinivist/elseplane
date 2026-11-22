@@ -212,6 +212,90 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
+  testWidgets('text formatting shortcuts wrap selections and retain direction', (tester) async {
+    await _addTextBlock(tester, const Offset(120, 200), platform: TargetPlatform.linux);
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+    await tester.enterText(find.byKey(const ValueKey('text-markdown-editor')), 'abcdef');
+
+    model.controller.selection = const TextSelection(baseOffset: 5, extentOffset: 2, isDirectional: true);
+    await _editorShortcut(tester, LogicalKeyboardKey.keyB);
+    expect(model.node.markdown, 'ab**cde**f');
+    expect(model.controller.selection.baseOffset, 7);
+    expect(model.controller.selection.extentOffset, 4);
+    expect(model.controller.selection.isDirectional, isTrue);
+
+    model.controller.text = 'abcdef';
+    model.controller.selection = const TextSelection(baseOffset: 5, extentOffset: 2, isDirectional: true);
+    await _editorShortcut(tester, LogicalKeyboardKey.keyI);
+    expect(model.node.markdown, 'ab*cde*f');
+    expect(model.controller.selection.baseOffset, 6);
+    expect(model.controller.selection.extentOffset, 3);
+    expect(model.controller.selection.isDirectional, isTrue);
+  });
+
+  testWidgets('text formatting shortcuts use Cmd on macOS', (tester) async {
+    await _addTextBlock(tester, const Offset(120, 200), platform: TargetPlatform.macOS);
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+    await tester.enterText(find.byKey(const ValueKey('text-markdown-editor')), 'abcdef');
+    model.controller.selection = const TextSelection(baseOffset: 5, extentOffset: 2, isDirectional: true);
+    await _editorShortcut(tester, LogicalKeyboardKey.keyI, platform: TargetPlatform.macOS);
+
+    expect(model.node.markdown, 'ab*cde*f');
+    expect(model.controller.selection.baseOffset, 6);
+    expect(model.controller.selection.extentOffset, 3);
+    expect(model.controller.selection.isDirectional, isTrue);
+  });
+
+  testWidgets('text formatting ignores missing selections and active composition', (tester) async {
+    await _addTextBlock(tester, const Offset(120, 200), platform: TargetPlatform.linux);
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+    await tester.enterText(find.byKey(const ValueKey('text-markdown-editor')), 'hello');
+
+    await _editorShortcut(tester, LogicalKeyboardKey.keyB);
+    expect(model.controller.text, 'hello');
+
+    for (final composing in [const TextRange(start: 0, end: 5), const TextRange.collapsed(2)]) {
+      model.controller.value = model.controller.value.copyWith(
+        selection: const TextSelection(baseOffset: 0, extentOffset: 5),
+        composing: composing,
+      );
+      await _editorShortcut(tester, LogicalKeyboardKey.keyB);
+      expect(model.controller.text, 'hello');
+      expect(model.controller.value.composing, composing);
+    }
+  });
+
+  testWidgets('text undo stays local while focused and returns to canvas history', (tester) async {
+    await _addTextBlock(tester, const Offset(120, 200), platform: TargetPlatform.linux);
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.enterText(find.byKey(const ValueKey('text-markdown-editor')), 'hello');
+    await tester.pump(const Duration(milliseconds: 600));
+    model.controller.selection = const TextSelection(baseOffset: 0, extentOffset: 5);
+    await _editorShortcut(tester, LogicalKeyboardKey.keyB);
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(model.node.markdown, '**hello**');
+
+    await _editorShortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(model.controller.text, 'hello');
+    await _editorShortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(model.controller.text, isEmpty);
+    await _editorShortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+    expect(model.controller.text, 'hello');
+    await _editorShortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+    expect(model.controller.text, '**hello**');
+
+    await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    expect(model.editing, isFalse);
+    await _editorShortcut(tester, LogicalKeyboardKey.keyZ);
+    expect(model.node.markdown, isEmpty);
+    expect(model.editing, isFalse);
+    await _editorShortcut(tester, LogicalKeyboardKey.keyZ, shift: true);
+    expect(model.node.markdown, '**hello**');
+    expect(model.editing, isFalse);
+  });
+
   testWidgets('text editor keeps native select and delete actions', (
     tester,
   ) async {
@@ -1531,6 +1615,22 @@ Future<TextEditorResources> _placeTextBlock(
   await tester.pump();
   await tester.pump();
   return tester.widget<TextElementView>(find.byType(TextElementView).last).resources;
+}
+
+Future<void> _editorShortcut(
+  WidgetTester tester,
+  LogicalKeyboardKey key, {
+  TargetPlatform platform = TargetPlatform.linux,
+  bool shift = false,
+}) async {
+  final modifier = platform == TargetPlatform.macOS ? LogicalKeyboardKey.metaLeft : LogicalKeyboardKey.controlLeft;
+  await tester.sendKeyDownEvent(modifier);
+  if (shift) await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+  await tester.sendKeyDownEvent(key);
+  await tester.sendKeyUpEvent(key);
+  if (shift) await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+  await tester.sendKeyUpEvent(modifier);
+  await tester.pump();
 }
 
 // ---------- Test doubles ----------

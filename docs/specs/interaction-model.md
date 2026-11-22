@@ -91,6 +91,8 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Single clicks retain their normal target routing and timing, including object activation. Any attached element-target pointer press cancels quick-text recognition, so object-to-empty and empty-to-object click pairs do not insert text. Gestures starting inside an already focused text, code, title, or media field retain native editing behavior. Menus, toolbars, option panels, transform controls, modifier selection, Space panning, and stylus input do not trigger insertion. Dragging, navigation, interruption, and tool or document changes cancel pending recognition.
 
 - Clicking the preview makes the block active, opens the Markdown source editor, and focuses it.
+- In the focused source editor, Cmd on macOS or Ctrl elsewhere plus B wraps a valid nonempty selection in `**`, and the same modifier plus I wraps it in `*`. The selected text and selection direction are retained; shortcuts do nothing without a valid selection or during IME composition.
+- While the source editor is focused, Cmd/Ctrl+Z and Cmd/Ctrl+Shift+Z undo and redo its typing and formatting through Flutter's local text history. When focus returns to the canvas, these shortcuts use canvas history.
 - Dragging the preview moves the block without activating it.
 - Using an option or starting a move or rotation closes the source editor but leaves the block active. Options and transform controls remain available.
 - Resizing is available whenever the block is active, including while editing.
