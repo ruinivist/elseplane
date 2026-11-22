@@ -42,6 +42,9 @@ then read the authority relevant to the work. Do not create a separate
   The [browser canvas persistence specification](specs/browser-canvas-persistence.md)
   defines local save and load behavior. The [completed plan](archive/browser-canvas-persistence.md)
   defines the architecture and worker split.
+- **Proposed:** [ADR 0008: simplify glass at overview zoom](adr/0008-simplify-glass-at-overview-zoom.md).
+  Test whether dropping live blur on zoomed-out canvas content improves panning
+  while preserving the glass look.
 - [Backlog](backlog.md) contains reported defects, proposals, and open
   verification. Entries are not accepted behavior or architecture.
 - [Plans](plans/) track active work and its checks; they do not
@@ -56,6 +59,8 @@ then read the authority relevant to the work. Do not create a separate
   including the [local GitHub App setup](playbooks/github-setup.md).
 - [Research](research/) contains time-bound investigations and source evidence;
   findings are not confirmed defects or requirements unless accepted elsewhere.
+  [Canvas pan performance](research/canvas-pan-performance.md) records the
+  low-zoom benchmarks and remaining rendering suspects.
 - [Archive](archive/) preserves superseded notes and completed work for history.
 
 ## Required reading
