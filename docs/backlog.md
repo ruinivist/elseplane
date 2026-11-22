@@ -8,6 +8,9 @@ confirmed behavior.
 
 ## Bugs
 
+- **Reported — slow GitHub imports:** Imports can take unreasonably long.
+  Reproduce with a representative repository and time preparation and saving
+  separately to identify where the delay occurs.
 - **Audit candidate — dropdown trigger focus:** The source audit reports that
   closed dropdowns lack visible keyboard-focus styling. Runtime behavior was
   not checked; reproduce with keyboard focus before changing the style.
@@ -46,6 +49,11 @@ confirmed behavior.
 
 ## Improvements
 
+- **App-wide button styling:** Define shared primary and secondary button
+  styles so paired actions align and have consistent height, padding, and
+  corner radius while keeping a visible keyboard focus indicator. Use
+  **Cancel** and **Import canvases** in the GitHub import confirmation as the
+  first example; check other dialogs and Settings before applying the styles.
 - **File switching:** More comprehensive file switching support was requested;
   identify the missing workflow before extending it.
 - **Responsive layout:** An old idea says the app is not responsive. Define
