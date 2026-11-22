@@ -70,12 +70,14 @@ Local extras and current selection remain. Import and export sizes, ZIP
 integrity, path validation, skips, and UI behavior are specified in the accepted
 transfer specification.
 
-The local library snapshot stores the selected GitHub destination and
-first-import prompt state. Each canvas can store one baseline with its account,
-repository, branch, canvas path, SHA-256 of the canonical document, and hashes
-of the referenced attachment bytes present in the transfer. A missing baseline
-represents an uncommitted canvas once a destination is selected. Portable
-transfers contain no GitHub metadata.
+The local library snapshot stores the selected GitHub destination and retains
+the legacy `githubImportPromptPending` boolean to preserve the existing metadata
+format. That field is inert: the UI and transfer workflow ignore it, and normal
+library updates preserve its stored value. Each canvas can store one baseline
+with its account, repository, branch, canvas path, SHA-256 of the canonical
+document, and hashes of the referenced attachment bytes present in the transfer.
+A missing baseline represents an uncommitted canvas once a destination is
+selected. Portable transfers contain no GitHub metadata.
 
 GitHub compares the local path and document before reading attachments and
 discards an asynchronous comparison when its canvas, destination, or bytes

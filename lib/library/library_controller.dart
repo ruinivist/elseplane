@@ -177,14 +177,8 @@ class LibraryController extends ChangeNotifier {
     await _persist(
       library.copyWith(
         githubDestination: destination,
-        githubImportPromptPending: library.githubDestination == null || library.githubImportPromptPending,
       ),
     );
-  });
-
-  Future<void> dismissGitHubImportPrompt() => _change(() async {
-    if (!library.githubImportPromptPending) return;
-    await _persist(library.copyWith(githubImportPromptPending: false));
   });
 
   Future<void> saveGitHubBaseline(String fileId, GitHubBaseline baseline) =>

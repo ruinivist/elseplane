@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:elseplane/github/github_import_dialog.dart';
 import 'package:elseplane/github/github_sync.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/select.dart';
@@ -22,13 +23,8 @@ class GitHubSyncSettings extends StatefulWidget {
 
 class _GitHubSyncSettingsState extends State<GitHubSyncSettings> {
   var _showInstallations = false;
+  var _importDialogOpen = false;
   GitHubSync get _sync => widget.sync;
-
-  @override
-  void dispose() {
-    _sync.finishOverwriteReview(overwrite: false);
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -64,7 +60,7 @@ class _GitHubSyncSettingsState extends State<GitHubSyncSettings> {
             const SizedBox(height: 12),
             _repositoryControls(context),
             const SizedBox(height: 12),
-            if (_sync.overwritePaths case final paths?) _overwriteReview(paths) else _importControls(),
+            _importControls(),
           ] else if (session.logoutNeedsRetry)
             TextButton(
               key: const ValueKey('github-logout-retry'),
@@ -80,7 +76,7 @@ class _GitHubSyncSettingsState extends State<GitHubSyncSettings> {
           if (session.error case final error?) _status(error),
           if (session.discoveryError case final error?) _status(error),
           if (_sync.message case final message? when message != session.error) _status(message),
-          if (disabled && _sync.overwritePaths == null) ...[
+          if (!_importDialogOpen && (_sync.progress != null || session.busy)) ...[
             const SizedBox(height: 8),
             _status(
               _sync.progress ?? (session.discoveryLoading ? 'Checking repository access…' : 'Checking GitHub session…'),
@@ -152,12 +148,10 @@ class _GitHubSyncSettingsState extends State<GitHubSyncSettings> {
 
   Widget _importControls() {
     final disabled = _sync.busy;
-    final firstImport = _sync.canImport && _sync.library.library.githubImportPromptPending;
     final installations = _sync.session.installations;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (firstImport) const Text('Import canvases from repo?'),
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
           spacing: 8,
@@ -166,10 +160,9 @@ class _GitHubSyncSettingsState extends State<GitHubSyncSettings> {
               key: const ValueKey('github-import'),
               onPressed: (disabled && !_sync.commitInProgress) || !_sync.canImport
                   ? null
-                  : () => _sync.importRepository(() => mounted),
-              child: const Text('Import from GitHub…'),
+                  : () => unawaited(_openImportDialog()),
+              child: const Text('Import from GitHub'),
             ),
-            if (firstImport) TextButton(onPressed: disabled ? null : _sync.skipImport, child: const Text('Skip')),
             TextButton(
               key: const ValueKey('github-manage-access'),
               onPressed: disabled
@@ -201,26 +194,17 @@ class _GitHubSyncSettingsState extends State<GitHubSyncSettings> {
     );
   }
 
-  // ---------- Import review and feedback ----------
-
-  Widget _overwriteReview(Set<String> paths) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text('Overwrite canvases?', style: BTheme.of(context).typo.label),
-      const SizedBox(height: 8),
-      const Text('The following canvas paths already exist. Shared images may also change in other canvases.'),
-      for (final path in paths.toList()..sort()) Text(path),
-      OverflowBar(
-        children: [
-          TextButton(onPressed: () => _sync.finishOverwriteReview(overwrite: false), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => _sync.finishOverwriteReview(overwrite: true),
-            child: const Text('Overwrite and import'),
-          ),
-        ],
-      ),
-    ],
-  );
+  Future<void> _openImportDialog() async {
+    final attempt = _sync.startImport();
+    if (attempt == null) return;
+    setState(() => _importDialogOpen = true);
+    try {
+      await showGitHubImportDialog(context, sync: _sync, attempt: attempt);
+    } finally {
+      _sync.closeImport(attempt);
+      if (mounted) setState(() => _importDialogOpen = false);
+    }
+  }
 
   Widget _status(String message) => Padding(
     padding: const EdgeInsets.only(top: 4),

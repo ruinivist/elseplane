@@ -17,6 +17,23 @@ import 'package:flutter/material.dart';
 
 // ---------- Workspace workflow ----------
 
+enum GitHubImportPhase { preparing, confirm, saving, result }
+
+final class GitHubImport {
+  GitHubImport._(this.destination);
+
+  final GitHubDestination destination;
+  final Completer<void> _cancelled = Completer<void>();
+  GitHubImportPhase _phase = GitHubImportPhase.preparing;
+  String? _result;
+  TransferMerge? _merge;
+
+  GitHubImportPhase get phase => _phase;
+  int get canvasCount => _merge?.candidate.canvases.length ?? 0;
+  Set<String> get overwritePaths => _merge?.overwritePaths ?? const {};
+  String? get result => _result;
+}
+
 class GitHubSync extends ChangeNotifier {
   GitHubSync({
     required GitHubApi api,
@@ -26,7 +43,8 @@ class GitHubSync extends ChangeNotifier {
     required this.beginTransfer,
     required this.endTransfer,
     required this.resumeCanvasInput,
-    required this.onImport,
+    required this.prepareImport,
+    required this.applyImport,
     required String appSlug,
     this.navigate = navigateGitHubAuthorization,
     this.consumeCompletion = consumeGitHubCompletion,
@@ -43,13 +61,13 @@ class GitHubSync extends ChangeNotifier {
   final bool Function() beginTransfer;
   final VoidCallback endTransfer;
   final VoidCallback resumeCanvasInput;
-  final Future<void> Function(
-    TransferSource source, {
-    required GitHubDestination githubDestination,
-    required Future<bool> Function(Set<String>) confirmOverwrite,
-    required ValueChanged<String> report,
-  })
-  onImport;
+  final Future<TransferMerge?> Function(TransferSource source, bool Function() isCurrent) prepareImport;
+  final Future<TransferImportResult> Function(
+    TransferMerge merge,
+    Set<String> confirmedOverwritePaths,
+    GitHubDestination destination,
+  )
+  applyImport;
   final Uri installUri;
   final void Function(Uri) navigate;
   final bool Function() consumeCompletion;
@@ -62,8 +80,7 @@ class GitHubSync extends ChangeNotifier {
   var _commitInProgress = false;
   String? _progress;
   String? message;
-  Completer<bool>? _overwriteDecision;
-  Set<String>? overwritePaths;
+  GitHubImport? _importAttempt;
   var _attachmentRevision = 0;
   ({
     GitHubBaseline? baseline,
@@ -78,7 +95,7 @@ class GitHubSync extends ChangeNotifier {
   var _checkingAttachments = false;
   bool get uncommitted => _uncommitted;
   String? get progress => _progress;
-  bool get busy => _progress != null || session.busy;
+  bool get busy => _progress != null || session.busy || _importAttempt != null;
   bool get commitInProgress => _commitInProgress;
   GitHubDestination? get destination {
     final saved = library.library.githubDestination;
@@ -206,53 +223,150 @@ class GitHubSync extends ChangeNotifier {
 
   Future<void> logout() => _run('Logging out…', session.logout);
 
-  Future<void> skipImport() => _run('Saving GitHub settings…', _dismissImportPrompt);
+  // ---------- Transfers ----------
 
-  Future<void> _dismissImportPrompt() async {
+  GitHubImport? startImport() {
+    if (rejectDuringCommit() || _disposed || busy || !canImport) return null;
+    final saved = destination;
+    final repo = _readableRepository;
+    if (saved == null || repo == null) return null;
+    final attempt = GitHubImport._(saved);
+    _importAttempt = attempt;
+    notifyListeners();
+    unawaited(_prepareImport(attempt, repo.installationId));
+    return attempt;
+  }
+
+  void confirmImport(GitHubImport attempt) {
+    if (!_isCurrentImport(attempt) || attempt.phase != GitHubImportPhase.confirm) return;
+    final merge = attempt._merge;
+    if (merge == null) return;
+    if (!beginTransfer()) {
+      _setImportResult(
+        attempt,
+        'Another workspace transfer is in progress. Wait for it to finish, then start the import again.',
+      );
+      return;
+    }
+    attempt._phase = GitHubImportPhase.saving;
+    notifyListeners();
+    unawaited(_applyImport(attempt, merge));
+  }
+
+  void closeImport(GitHubImport attempt) {
+    if (!_isCurrentImport(attempt) || attempt.phase == GitHubImportPhase.saving) return;
+    _importAttempt = null;
+    _cancelImport(attempt);
+    notifyListeners();
+  }
+
+  Future<void> _prepareImport(GitHubImport attempt, int installationId) async {
     try {
-      await library.dismissGitHubImportPrompt();
-    } on Object {
-      throw StateError('Could not save GitHub settings. Try again.');
+      final source = await session.run<TransferSource?>(() async {
+        try {
+          final source = await Future.any<TransferSource?>([
+            session.api
+                .readRepository(
+                  attempt.destination,
+                  installationId: installationId,
+                  isCurrent: () => _isCurrentImport(attempt),
+                )
+                .then<TransferSource?>((source) => source),
+            attempt._cancelled.future.then<TransferSource?>((_) => null),
+          ]);
+          if (!_isCurrentImport(attempt)) throw const _GitHubImportCancelled();
+          return source;
+        } on Object {
+          if (!_isCurrentImport(attempt)) throw const _GitHubImportCancelled();
+          rethrow;
+        }
+      });
+      if (!_isCurrentImport(attempt)) return;
+      if (source == null) {
+        _setImportResult(attempt, 'Could not prepare the GitHub import. Try again.');
+        return;
+      }
+      final merge = await prepareImport(source, () => _isCurrentImport(attempt));
+      if (!_isCurrentImport(attempt)) return;
+      if (merge == null) {
+        _setImportResult(attempt, 'Could not prepare the GitHub import. Try again.');
+        return;
+      }
+      attempt._merge = merge;
+      if (attempt.canvasCount == 0) {
+        _setImportResult(attempt, _formatEmptyImport(merge.candidate.skippedCanvases));
+      } else {
+        attempt._phase = GitHubImportPhase.confirm;
+        notifyListeners();
+      }
+    } on Object catch (error) {
+      if (!_isCurrentImport(attempt)) return;
+      if (error is GitHubDefaultBranchChanged) _refreshRequired = true;
+      _setImportResult(attempt, _errorMessage(error));
     }
   }
 
-  // ---------- Transfers ----------
-
-  Future<void> importRepository(bool Function() reviewIsVisible) async {
-    if (rejectDuringCommit()) return;
-    await _run('Preparing import…', () async {
-      await library.flush();
-      final repo = _readableRepository;
-      final saved = destination;
-      if (_disposed || !reviewIsVisible() || repo == null || saved == null) return;
-      if (library.library.githubImportPromptPending) await _dismissImportPrompt();
-      final source = await session.run(() => session.api.readRepository(saved, installationId: repo.installationId));
-      if (_disposed || !reviewIsVisible()) return;
-      await onImport(
-        source,
-        githubDestination: saved,
-        confirmOverwrite: (paths) => _reviewOverwrite(paths, reviewIsVisible),
-        report: _report,
+  Future<void> _applyImport(GitHubImport attempt, TransferMerge merge) async {
+    try {
+      if (!_isCurrentImport(attempt)) return;
+      final result = await applyImport(merge, merge.overwritePaths, attempt.destination);
+      if (!_isCurrentImport(attempt)) return;
+      _setImportResult(
+        attempt,
+        _formatImportResult(result, attempt.canvasCount),
       );
-    });
+    } on Object catch (error) {
+      if (!_isCurrentImport(attempt)) return;
+      _setImportResult(attempt, _errorMessage(error));
+    } finally {
+      endTransfer();
+    }
   }
 
-  Future<bool> _reviewOverwrite(Set<String> paths, bool Function() reviewIsVisible) async {
-    if (_disposed || !reviewIsVisible()) return false;
-    final decision = _overwriteDecision = Completer<bool>();
-    overwritePaths = paths;
+  bool _isCurrentImport(GitHubImport attempt) => !_disposed && identical(_importAttempt, attempt);
+
+  void _cancelImport(GitHubImport attempt) {
+    if (!attempt._cancelled.isCompleted) attempt._cancelled.complete();
+  }
+
+  void _setImportResult(GitHubImport attempt, String result) {
+    if (!_isCurrentImport(attempt)) return;
+    attempt
+      .._result = result
+      .._phase = GitHubImportPhase.result;
     notifyListeners();
-    return await decision.future;
   }
 
-  void finishOverwriteReview({required bool overwrite}) {
-    final decision = _overwriteDecision;
-    if (decision == null) return;
-    _overwriteDecision = null;
-    overwritePaths = null;
-    if (overwrite) _progress = 'Importing canvases…';
-    decision.complete(overwrite);
-    if (overwrite && !_disposed) notifyListeners();
+  String _formatEmptyImport(List<TransferIssue> skipped) {
+    final lines = ['No canvases to import.'];
+    _appendSkippedCanvases(lines, skipped);
+    return lines.join('\n');
+  }
+
+  String _formatImportResult(TransferImportResult result, int canvasCount) {
+    final lines = <String>[];
+    if (result.metadataSaved) {
+      lines.add('Imported $canvasCount ${canvasCount == 1 ? 'canvas' : 'canvases'}.');
+    } else if (result.failure case final failure?) {
+      if (failure.stage == TransferFailureStage.imageWrite ||
+          (failure.stage == TransferFailureStage.publication && result.writtenImagePaths.isNotEmpty)) {
+        lines.add('Images may have changed; imported canvases were not saved.');
+      }
+      lines.add('${failure.reason}${failure.path == null ? '' : ': ${failure.path}'}');
+    } else if (result.writtenImagePaths.isNotEmpty) {
+      lines.add('Images changed; the library metadata was unchanged.');
+    } else {
+      lines.add('No canvases to import.');
+    }
+    _appendSkippedCanvases(lines, result.skippedCanvases);
+    return lines.join('\n');
+  }
+
+  void _appendSkippedCanvases(List<String> lines, List<TransferIssue> skipped) {
+    if (skipped.isEmpty) return;
+    lines
+      ..add('Skipped canvases:')
+      ..addAll(skipped.map((issue) => '${issue.path}: ${issue.reason}'));
   }
 
   Future<void> commit(BuildContext context) async {
@@ -431,8 +545,14 @@ class GitHubSync extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    finishOverwriteReview(overwrite: false);
+    final attempt = _importAttempt;
+    _importAttempt = null;
+    if (attempt != null) _cancelImport(attempt);
     session.dispose();
     super.dispose();
   }
+}
+
+final class _GitHubImportCancelled implements Exception {
+  const _GitHubImportCancelled();
 }

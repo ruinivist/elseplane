@@ -21,7 +21,8 @@
 
 Settings owns section navigation and its responsive layout. Workspace supplies
 the GitHub feature's Sync content. It uses the shared searchable select and
-themed buttons, with setup feedback and overwrite review in the section.
+themed buttons, with setup feedback in the section. The GitHub feature owns
+the [import dialog](../specs/github-sync-ux.md#import) opened from Sync.
 Canvas chrome lays out the generic title indicator and action. The title keeps
 the name in place while hover or descendant focus reveals the action. It also
 provides a generic widget slot directly below the title for workspace

@@ -14,25 +14,87 @@ About   |
         | [ yourname/canvases v ] [ refresh icon ]
         | Private / Default branch: main
         |
-        | [ Import from GitHub... ]   Manage GitHub access >
+        | [ Import from GitHub ]   Manage GitHub access >
 ```
 
 - Use a searchable dropdown with **Choose repository** as its empty state. Selecting a repository explicitly confirms the choice. Save it after validation. Show its visibility and default branch as plain text below the dropdown.
 - Put an icon-only **Refresh repositories** button next to the dropdown. Use the label for its tooltip and accessible name. Show refresh progress and errors inline.
 - **Log out** ends the Elseplane session directly and returns to **Connect GitHub**. Keep the saved repository for the same account when it reconnects. Show a retry inline if logout fails.
 - **Manage GitHub access** opens GitHub in a new tab. Show installation choices inline, including the option to install on another account. Keep connection and repository setup in Sync without opening another dialog over Settings.
-- **Import from GitHub…** uses the selected repository. Import and Commit use its default branch. If the default branch changes, ask the user to refresh and reselect the repository before transferring.
+- **Import from GitHub** uses the selected repository. Selecting a repository
+  does not start an import; the user starts it with this action. Import and
+  Commit use the repository's default branch. If the default branch changes,
+  ask the user to refresh and reselect the repository before transferring.
 
-## First-time import
+## Import
 
-On the first GitHub setup, once the user selects a repository they can import from, show this prompt inline in Sync.
+**Import from GitHub** opens one dialog over Sync. Use the same dialog whether
+or not any local canvases would be replaced. Clicking outside never dismisses
+it.
 
 ```text
-Import canvases from repo?
-[ Import from GitHub... ]   [ Skip ]
+1. PREPARING — cancellable
++------------------------------------------------------+
+| Import from GitHub                              [X]  |
+| owner/canvases · main                                |
+|                                                      |
+| (spinner) Preparing import…                          |
+|                                           [ Cancel ] |
++------------------------------------------------------+
+
+2. CONFIRM — cancellable
++------------------------------------------------------+
+| Import from GitHub                              [X]  |
+| owner/canvases · main                                |
+|                                                      |
+| 3 canvases ready to import.                          |
+|                                                      |
+| Will replace 1 local canvas:                         |
+|   Untitled.canvas.json                               |
+| Shared images may also change in other canvases.     |
+|                       [ Cancel ]  [ Import canvases ]|
++------------------------------------------------------+
+
+3. SAVING — not cancellable
++------------------------------------------------------+
+| Import from GitHub                     [X disabled]  |
+| owner/canvases · main                                |
+|                                                      |
+| (spinner) Saving canvases…                           |
++------------------------------------------------------+
+
+4. RESULT — dismissible
++------------------------------------------------------+
+| Import from GitHub                              [X]  |
+|                                                      |
+| Imported 3 canvases.                                 |
+|                                             [ Done ] |
++------------------------------------------------------+
 ```
 
-**Import from GitHub…** and **Skip** both dismiss the first-time prompt. Regular import remains available. When paths collide, show their paths and the shared-image warning inline and wait for confirmation. Canceling or dismissing the review leaves local data untouched. Show the result and affected paths in Sync.
+1. **Preparing.** Show the selected repository and branch, a spinner with
+   **Preparing import…**, and **Cancel**. Cancel, Close, or Escape returns to
+   Sync immediately. Canceling stops further import reads and leaves local
+   canvases and images untouched. An in-flight request may finish, but its
+   result is ignored and must not block the workspace or affect a later import.
+2. **Confirm.** Show how many canvases are ready to import. If any local canvases
+   would be replaced, show their count and paths and warn that shared images
+   may also change in other canvases. Let long lists scroll without moving the
+   buttons. Focus **Cancel** initially. Cancel, Close, or Escape returns to Sync
+   without import writes. **Import canvases** starts saving, with or without
+   replacements.
+3. **Saving.** Keep the dialog open. Show a spinner with **Saving canvases…**,
+   remove **Cancel**, and visibly disable Close. Escape does nothing. The user
+   cannot dismiss the dialog once saving starts.
+4. **Result.** Show **Imported 1 canvas.** or **Imported N canvases.** on success,
+   without a replacement count or list. If nothing can be imported or
+   preparation fails, go straight to the result without confirmation. On
+   failure, explain what failed and warn if shared images may already have
+   changed even though canvases were not saved. **Done**, Close, or Escape
+   returns to Sync.
+
+This flow applies to GitHub import only. Local import follows the
+[canvas file interaction model](interaction-model.md).
 
 ## Uncommitted changes
 

@@ -89,7 +89,8 @@ class _WorkspaceState extends State<Workspace> {
           beginTransfer: _beginTransfer,
           endTransfer: _endTransfer,
           resumeCanvasInput: _resumeCanvasInput,
-          onImport: _importTransfer,
+          prepareImport: _prepareGitHubImport,
+          applyImport: _applyGitHubImport,
           navigate: widget.navigateGitHubAuthorization ?? navigateGitHubAuthorization,
           consumeCompletion: widget.consumeGitHubCompletion ?? consumeGitHubCompletion,
           openLink: widget.openGitHubLink ?? openGitHubLink,
@@ -278,15 +279,10 @@ class _WorkspaceState extends State<Workspace> {
     }
   }
 
-  Future<TransferImportResult> _importTransfer(
-    TransferSource source, {
-    GitHubDestination? githubDestination,
-    Future<bool> Function(Set<String>)? confirmOverwrite,
-    ValueChanged<String>? report,
-  }) async {
+  Future<TransferImportResult> _importTransfer(TransferSource source) async {
     TransferImport? candidate;
     Future<void> presentResult(TransferImportResult result, {bool cancelled = false}) async {
-      await _showTransferReport(result, candidate: candidate, cancelled: cancelled, inline: report);
+      await _showTransferReport(result, candidate: candidate, cancelled: cancelled);
     }
 
     try {
@@ -296,27 +292,16 @@ class _WorkspaceState extends State<Workspace> {
       if (!mounted) {
         return _transferResult(candidate.skippedCanvases);
       }
-      if (merge.overwritePaths.isNotEmpty &&
-          !await (confirmOverwrite ?? _confirmTransferOverwrite)(merge.overwritePaths)) {
+      if (merge.overwritePaths.isNotEmpty && !await _confirmTransferOverwrite(merge.overwritePaths)) {
         final result = _transferResult(candidate.skippedCanvases);
         await presentResult(result, cancelled: true);
         return result;
       }
       if (!mounted) return _transferResult(candidate.skippedCanvases);
 
-      final token = _library.documentToken;
-      final result = await _library.importTransfer(
+      final result = await _applyTransferImport(
         merge,
         confirmedOverwritePaths: merge.overwritePaths,
-        githubDestination: githubDestination,
-      );
-      if (result.metadataSaved && !identical(token, _library.documentToken) && mounted) _replaceEditor();
-      await presentResult(result);
-      return result;
-    } on GitHubApiException catch (error) {
-      final result = _transferResult(
-        candidate?.skippedCanvases ?? const [],
-        failure: TransferFailure(reason: error.message, stage: TransferFailureStage.preparation),
       );
       await presentResult(result);
       return result;
@@ -328,6 +313,40 @@ class _WorkspaceState extends State<Workspace> {
       await presentResult(result);
       return result;
     }
+  }
+
+  Future<TransferMerge?> _prepareGitHubImport(TransferSource source, bool Function() isCurrent) async {
+    if (!mounted || !isCurrent()) return null;
+    await _library.flush();
+    if (!mounted || !isCurrent()) return null;
+    final candidate = await decodeTransfer(source);
+    if (!mounted || !isCurrent()) return null;
+    return await _library.previewTransferImport(candidate);
+  }
+
+  Future<TransferImportResult> _applyGitHubImport(
+    TransferMerge merge,
+    Set<String> confirmedOverwritePaths,
+    GitHubDestination destination,
+  ) => _applyTransferImport(
+    merge,
+    confirmedOverwritePaths: confirmedOverwritePaths,
+    githubDestination: destination,
+  );
+
+  Future<TransferImportResult> _applyTransferImport(
+    TransferMerge merge, {
+    required Set<String> confirmedOverwritePaths,
+    GitHubDestination? githubDestination,
+  }) async {
+    final token = _library.documentToken;
+    final result = await _library.importTransfer(
+      merge,
+      confirmedOverwritePaths: confirmedOverwritePaths,
+      githubDestination: githubDestination,
+    );
+    if (result.metadataSaved && !identical(token, _library.documentToken) && mounted) _replaceEditor();
+    return result;
   }
 
   TransferImportResult _transferResult(
@@ -369,18 +388,12 @@ class _WorkspaceState extends State<Workspace> {
     TransferImportResult result, {
     TransferImport? candidate,
     bool cancelled = false,
-    ValueChanged<String>? inline,
   }) async {
     if (!mounted) return;
     final lines = <String>[
       if (cancelled) 'Import canceled.',
       if (!cancelled && result.metadataSaved)
         'Imported ${candidate?.canvases.length ?? 0} ${candidate?.canvases.length == 1 ? 'canvas' : 'canvases'}.',
-      if (inline != null && result.metadataSaved && candidate != null) ...(candidate.canvases.keys.toList()..sort()),
-      if (inline != null && result.writtenImagePaths.isNotEmpty) ...[
-        'Updated images:',
-        ...result.writtenImagePaths,
-      ],
       if (!cancelled && !result.metadataSaved && result.writtenImagePaths.isNotEmpty && result.failure == null)
         'Images changed; the library metadata was unchanged.',
       if (result.failure case final failure?) ...[
@@ -394,10 +407,6 @@ class _WorkspaceState extends State<Workspace> {
       if (!cancelled && result.failure == null && !result.metadataSaved && result.writtenImagePaths.isEmpty)
         'No changes to import.',
     ];
-    if (inline != null) {
-      inline(lines.join('\n'));
-      return;
-    }
     await showDialog<void>(
       context: context,
       builder: (context) => SurfaceConfirmationDialog(

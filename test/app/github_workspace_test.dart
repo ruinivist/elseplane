@@ -29,6 +29,7 @@ const _tree = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const _documentBlob = 'cccccccccccccccccccccccccccccccccccccccc';
 const _nextTree = 'dddddddddddddddddddddddddddddddddddddddd';
 const _nextCommit = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+const _imageBlob = 'ffffffffffffffffffffffffffffffffffffffff';
 const _destination = GitHubDestination(
   accountId: 7,
   repositoryId: 13,
@@ -47,12 +48,14 @@ void main() {
     expect(find.byKey(const ValueKey('github-connect')), findsNothing);
   });
 
-  testWidgets('returns to Sync and offers first import after an explicit selection', (tester) async {
+  testWidgets('repository selection enables manual import without importing automatically', (tester) async {
     var completionChecks = 0;
     final store = TestLibraryStore(_document('saved'));
+    final requests = <String>[];
     final api = _commitApi(
       accountId: 17,
       accountLogin: 'canvas-user',
+      requests: requests,
       github: (request) async =>
           request.url.path.endsWith('/git/ref/heads/main') ? _ref() : _json({'error': 'not found'}, status: 404),
     );
@@ -71,21 +74,29 @@ void main() {
     expect(find.text('Connected as @canvas-user'), findsOneWidget);
     expect(find.text('Choose repository'), findsOneWidget);
     expect(find.text('Import canvases from repo?'), findsNothing);
+    expect(find.text('Skip'), findsNothing);
     expect(store.library.githubDestination, isNull);
     await _selectRepository(tester, 'owner/repo');
-    await pumpUntil(tester, () => find.text('Import canvases from repo?').evaluate().isNotEmpty);
+    await _waitForEnabledButton(tester, _importButton);
     expect(find.text('Public · Default branch: main'), findsOneWidget);
     expect(store.library.githubDestination?.accountId, 17);
-    expect(store.library.githubImportPromptPending, isTrue);
-
-    await _tapVisible(tester, find.text('Skip'));
-    await _waitForEnabledButton(tester, _importButton);
-    expect(find.text('Import canvases from repo?'), findsNothing);
     expect(store.library.githubImportPromptPending, isFalse);
+    expect(find.text('Import canvases from repo?'), findsNothing);
+    expect(find.text('Skip'), findsNothing);
+    expect(find.text('Import from GitHub'), findsOneWidget);
+    expect(find.text('Import from GitHub…'), findsNothing);
+    expect(
+      requests.where(
+        (request) =>
+            request.contains('/git/commits/') || request.contains('/git/trees/') || request.contains('/git/blobs/'),
+      ),
+      isEmpty,
+    );
     await _closeSync(tester);
     expect(_marker, findsOneWidget);
     await _openSync(tester);
     expect(find.text('Import canvases from repo?'), findsNothing);
+    expect(find.text('Skip'), findsNothing);
     expect(completionChecks, 1);
     await _tapVisible(tester, find.byKey(const ValueKey('searchable-select-trigger')));
     await tester.pumpAndSettle();
@@ -117,11 +128,19 @@ void main() {
     await _waitForEnabledButton(tester, importButton);
 
     await _tapVisible(tester, importButton);
-    await pumpUntil(tester, () => find.byKey(const ValueKey('github-connect')).evaluate().isNotEmpty);
+    await _pumpUntilBusySafe(
+      tester,
+      () => _importDialog.evaluate().isNotEmpty && _importText('Reconnect GitHub to continue.').evaluate().isNotEmpty,
+      'GitHub import failure result',
+    );
 
     expect(requests, contains('GET /repos/owner/repo/git/ref/heads/main'));
+    expect(_importText('private response'), findsNothing);
+    expect(_importText('Reconnect GitHub to continue.'), findsOneWidget);
+    await _tapVisible(tester, _importClose);
+    await _waitForEnabledButton(tester, find.byKey(const ValueKey('github-connect')));
     expect(tester.widget<TextButton>(find.byKey(const ValueKey('github-connect'))).onPressed, isNotNull);
-    expect(find.textContaining('Reconnect GitHub to continue.').evaluate(), isNotEmpty);
+    expect(find.textContaining('Reconnect GitHub to continue.'), findsOneWidget);
     expect(find.textContaining('private response'), findsNothing);
     expect(store.library.githubDestination?.toJson(), _destination.toJson());
     expect(store.library.current.document?.elements.whereType<TextElementData>().single.markdown, 'saved');
@@ -238,7 +257,7 @@ void main() {
     store.failSaves = false;
   });
 
-  testWidgets('imports the whole selected repository through the workspace coordinator', (tester) async {
+  testWidgets('requires confirmation before importing without collisions', (tester) async {
     final local = _document('Local');
     final remote = _document('Remote');
     final store = TestLibraryStore(local)
@@ -254,11 +273,12 @@ void main() {
     final importButton = _importButton;
     await _waitForEnabledButton(tester, importButton);
 
+    final beforeImport = store.library;
     await _tapVisible(tester, importButton);
     await _pumpUntilBusySafe(
       tester,
-      () => find.textContaining('Imported 1 canvas.').evaluate().isNotEmpty,
-      'repository import result',
+      () => _importDialog.evaluate().isNotEmpty && _importText('1 canvas ready to import.').evaluate().isNotEmpty,
+      'GitHub import confirmation',
     );
 
     expect(requests, contains('GET /repos/owner/repo/git/blobs/$_documentBlob'));
@@ -267,7 +287,30 @@ void main() {
       greaterThanOrEqualTo(2),
     );
     expect(requests.where((request) => request.contains('/git/blobs/')), hasLength(1));
-    expect(find.textContaining('University/Physics.canvas.json'), findsOneWidget);
+    expect(_importText('Will replace'), findsNothing);
+    expect(_importText('Shared images may also change'), findsNothing);
+    expect(_importConfirm.hitTestable(), findsOneWidget);
+    expect(store.library, same(beforeImport));
+    expect(store.persisted, isNull);
+    await _tapImportBarrier(tester);
+    expect(_importDialog, findsOneWidget);
+    expect(store.library, same(beforeImport));
+
+    await _tapVisible(tester, _importConfirm);
+    await _pumpUntilBusySafe(
+      tester,
+      () => _importDialog.evaluate().isNotEmpty && _importText('Imported 1 canvas.').evaluate().isNotEmpty,
+      'repository import result',
+    );
+
+    expect(_importText('University/Physics.canvas.json'), findsNothing);
+    expect(_importText('Will replace'), findsNothing);
+    await _tapImportBarrier(tester);
+    expect(_importDialog, findsOneWidget);
+    await _tapVisible(tester, _importText('Done'));
+    await _waitForImportDialogClosed(tester);
+    expect(_importButton.hitTestable(), findsOneWidget);
+
     expect(store.library.currentId, 'local');
     expect(store.library.current.document?.elements.whereType<TextElementData>().single.markdown, 'Local');
     final folder = store.library.files.singleWhere((file) => file.name == 'University' && file.isFolder);
@@ -279,46 +322,319 @@ void main() {
     expect(store.library.current.githubBaseline, isNull);
   });
 
-  testWidgets('first import dismisses the prompt and reviews overwrites inline', (tester) async {
-    final store = _savedStore();
-    store.library = CanvasLibrary(files: store.library.files, currentId: store.library.currentId);
-    final remote = _document('Remote');
-    final api = _importApi('Physics.canvas.json', remote);
-    await _pumpWorkspace(tester, store, api, navigate: (_) {});
+  testWidgets('cancels collisions without writes and imports only after confirmation', (tester) async {
+    const imagePath = 'attachments/00000000-0000-4000-8000-000000000000.png';
+    final originalImage = Uint8List.fromList(onePixelPngBytes);
+    final importedImage = Uint8List.fromList(
+      base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC'),
+    );
+    final local = _document('Local').copyWith(
+      elements: [
+        ..._document('Local').elements,
+        MediaElementData(id: 'image', position: const Offset(100, 100), width: 160, url: imagePath),
+      ],
+    );
+    final remote = _document('Remote').copyWith(
+      elements: [
+        ..._document('Remote').elements,
+        MediaElementData(id: 'image', position: const Offset(100, 100), width: 160, url: imagePath),
+      ],
+    );
+    final store = TestLibraryStore(local)
+      ..library = CanvasLibrary(
+        files: [CanvasFile(id: 'local', name: 'Physics', document: local)],
+        currentId: 'local',
+        githubDestination: _destination,
+      );
+    final attachments = TestAttachmentStore({imagePath: originalImage});
+    store.library = store.library.copyWith(githubImportPromptPending: true);
+    final api = _importApi(
+      'Physics.canvas.json',
+      remote,
+      attachmentPath: imagePath,
+      attachmentBytes: importedImage,
+    );
+    await _pumpWorkspace(tester, store, api, navigate: (_) {}, attachments: attachments);
     await _openSync(tester);
-    await _selectRepository(tester, 'owner/repo');
     await _waitForEnabledButton(tester, _importButton);
-    expect(find.text('Import canvases from repo?'), findsOneWidget);
 
-    final review = find.text('Overwrite canvases?');
-    await _tapVisible(tester, _importButton);
-    await pumpUntil(tester, () => review.evaluate().isNotEmpty);
-    expect(find.textContaining('Shared images may also change'), findsOneWidget);
-    expect(find.text('Physics.canvas.json'), findsOneWidget);
-    expect(store.library.githubImportPromptPending, isFalse);
-    expect(store.library.current.githubBaseline, isNull);
-    final beforeReview = store.library;
-    await _tapVisible(tester, find.text('Cancel'));
-    await pumpUntil(tester, () => find.text('Import canceled.').evaluate().isNotEmpty);
-    expect(store.library, same(beforeReview));
-    expect(find.text('Import canvases from repo?'), findsNothing);
+    final beforeImport = store.library;
+    for (final cancelBy in ['button', 'close', 'escape']) {
+      await _tapVisible(tester, _importButton);
+      await _pumpUntilBusySafe(
+        tester,
+        () => _importDialog.evaluate().isNotEmpty && _importText('1 canvas ready to import.').evaluate().isNotEmpty,
+        'collision confirmation',
+      );
+      expect(_importText('Will replace 1 local canvas:').hitTestable(), findsOneWidget);
+      expect(_importText('Physics.canvas.json').hitTestable(), findsOneWidget);
+      expect(_importText('Shared images may also change in other canvases.').hitTestable(), findsOneWidget);
+      await _tapImportBarrier(tester);
+      expect(_importDialog, findsOneWidget);
+      expect(store.library, same(beforeImport));
+      expect(attachments.files[imagePath], orderedEquals(originalImage));
+      expect(store.persisted, isNull);
+
+      switch (cancelBy) {
+        case 'button':
+          await _tapVisible(tester, _importText('Cancel'));
+        case 'close':
+          await _tapVisible(tester, _importClose);
+        case 'escape':
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pump();
+      }
+      await _waitForImportDialogClosed(tester);
+      expect(_importButton.hitTestable(), findsOneWidget);
+      expect(find.text('Import canceled.'), findsNothing);
+      expect(store.library, same(beforeImport));
+      expect(attachments.files[imagePath], orderedEquals(originalImage));
+    }
 
     await _tapVisible(tester, _importButton);
-    await pumpUntil(tester, () => review.evaluate().isNotEmpty);
-    await _closeSync(tester);
-    await _waitForEnabledButton(tester, _commitAction);
-    expect(store.library, same(beforeReview));
+    await _pumpUntilBusySafe(
+      tester,
+      () => _importDialog.evaluate().isNotEmpty && _importText('1 canvas ready to import.').evaluate().isNotEmpty,
+      'collision confirmation before import',
+    );
+    await _tapVisible(tester, _importConfirm);
+    await _pumpUntilBusySafe(
+      tester,
+      () => _importDialog.evaluate().isNotEmpty && _importText('Imported 1 canvas.').evaluate().isNotEmpty,
+      'confirmed collision import result',
+    );
+    expect(_importText('Physics.canvas.json'), findsNothing);
+    expect(_importText('Will replace'), findsNothing);
+    expect(store.library.githubImportPromptPending, isTrue);
+    expect(attachments.files[imagePath], orderedEquals(importedImage));
+    await _tapVisible(tester, _importText('Done'));
+    await _waitForImportDialogClosed(tester);
 
-    await _openSync(tester);
-    await _tapVisible(tester, _importButton);
-    await pumpUntil(tester, () => review.evaluate().isNotEmpty);
-    await _tapVisible(tester, find.text('Overwrite and import'));
-    await pumpUntil(tester, () => find.textContaining('Imported 1 canvas.').evaluate().isNotEmpty);
     expect(store.library.current.document, remote);
     expect(store.library.current.githubBaseline?.isFor(_destination), isTrue);
+    expect(store.library.githubImportPromptPending, isTrue);
+  });
+
+  testWidgets('a canceled lazy read cannot rate-limit a newer import attempt', (tester) async {
+    final store = _savedStore();
+    final firstBlob = Completer<http.Response>();
+    final secondBlob = Completer<http.Response>();
+    final firstBlobStarted = Completer<void>();
+    final secondBlobStarted = Completer<void>();
+    final remoteBytes = utf8.encode(jsonEncode(_document('Remote').toJson()));
+    var blobReads = 0;
+    final api = _commitApi(
+      github: (request) async {
+        final path = request.url.path;
+        if (path.endsWith('/git/ref/heads/main')) return _ref();
+        if (path.endsWith('/git/commits/$_head')) {
+          return _json({
+            'tree': {'sha': _tree},
+          });
+        }
+        if (path.endsWith('/git/trees/$_tree')) {
+          return _json({
+            'truncated': false,
+            'tree': [
+              _treeEntry('New.canvas.json', _documentBlob, remoteBytes.length),
+              _treeEntry('Other.canvas.json', _nextCommit, remoteBytes.length),
+            ],
+          });
+        }
+        if (path.endsWith('/git/blobs/$_documentBlob')) {
+          blobReads++;
+          if (blobReads == 1) {
+            firstBlobStarted.complete();
+            return await firstBlob.future;
+          }
+          if (blobReads == 2) {
+            secondBlobStarted.complete();
+            return await secondBlob.future;
+          }
+          fail('Canceled import performed an unexpected additional blob read');
+        }
+        if (path.endsWith('/git/blobs/$_nextCommit')) {
+          blobReads++;
+          return _json({
+            'sha': _nextCommit,
+            'size': remoteBytes.length,
+            'encoding': 'base64',
+            'content': base64Encode(remoteBytes),
+          });
+        }
+        return _json({'error': 'not found'}, status: 404);
+      },
+    );
+    await _pumpWorkspace(tester, store, api, navigate: (_) {});
+    await _openSync(tester);
+    await _waitForEnabledButton(tester, _importButton);
+    await _tapVisible(tester, _importButton);
+    await _pumpUntilBusySafe(
+      tester,
+      () =>
+          firstBlobStarted.isCompleted &&
+          _importDialog.evaluate().isNotEmpty &&
+          _importText('Preparing import…').evaluate().isNotEmpty,
+      'first lazy GitHub blob read',
+    );
+    await _tapImportBarrier(tester);
+    expect(_importDialog, findsOneWidget);
+    await _tapVisible(tester, _importText('Cancel'));
+    await _waitForImportDialogClosed(tester);
+    expect(_importButton.hitTestable(), findsOneWidget);
+    expect(tester.widget<CanvasPage>(find.byType(CanvasPage)).blocked, isFalse);
+    expect(store.library.current.document?.elements.whereType<TextElementData>().single.markdown, 'saved');
+
     await _closeSync(tester);
-    expect(_marker, findsNothing);
-    expect(tester.widget<TextElementView>(find.byType(TextElementView)).resources.node.markdown, 'Remote');
+    final textView = find.byType(TextElementView);
+    expect(textView, findsOneWidget);
+    tester.widget<TextElementView>(textView).resources.insertPastedText(' usable');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    expect(tester.widget<TextElementView>(textView).resources.node.markdown, 'saved usable');
+
+    await _openSync(tester);
+    await _waitForEnabledButton(tester, _importButton);
+    await _tapVisible(tester, _importButton);
+    await _pumpUntilBusySafe(
+      tester,
+      () =>
+          secondBlobStarted.isCompleted &&
+          _importDialog.evaluate().isNotEmpty &&
+          _importText('Preparing import…').evaluate().isNotEmpty,
+      'retry lazy GitHub blob read',
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    final cancelButton = find.byKey(const ValueKey('github-import-cancel'));
+    expect(tester.widget<TextButton>(cancelButton).focusNode?.hasFocus, isFalse);
+    final localAfterEdit = store.library;
+
+    firstBlob.complete(http.Response('{}', 429, headers: {'retry-after': '60'}));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+    expect(_importDialog, findsOneWidget);
+    expect(_importText('Preparing import…'), findsOneWidget);
+    expect(_importText('Imported 1 canvas.'), findsNothing);
+    expect(store.library, same(localAfterEdit));
+    expect(blobReads, 2);
+
+    secondBlob.complete(
+      _json({
+        'sha': _documentBlob,
+        'size': remoteBytes.length,
+        'encoding': 'base64',
+        'content': base64Encode(remoteBytes),
+      }),
+    );
+    await _pumpUntilBusySafe(
+      tester,
+      () => _importDialog.evaluate().isNotEmpty && _importText('2 canvases ready to import.').evaluate().isNotEmpty,
+      'new import confirmation',
+    );
+    expect(tester.widget<TextButton>(cancelButton).focusNode?.hasFocus, isTrue);
+    expect(store.library, same(localAfterEdit));
+    expect(blobReads, 3);
+    await _tapVisible(tester, _importConfirm);
+    await _pumpUntilBusySafe(
+      tester,
+      () => _importDialog.evaluate().isNotEmpty && _importText('Imported 2 canvases.').evaluate().isNotEmpty,
+      'new import result',
+    );
+    expect(store.library.files.any((file) => file.name == 'New'), isTrue);
+    expect(blobReads, 3);
+    await _tapVisible(tester, _importText('Done'));
+    await _waitForImportDialogClosed(tester);
+  });
+
+  testWidgets('keeps the import dialog open while saving and ignores dismissal', (tester) async {
+    final local = _document('Local');
+    final store = _DelayedLibraryStore(local)
+      ..library = CanvasLibrary(
+        files: [CanvasFile(id: 'local', name: 'Local', document: local)],
+        currentId: 'local',
+        githubDestination: _destination,
+      );
+    addTearDown(() {
+      if (!store.releaseSave.isCompleted) store.releaseSave.complete();
+    });
+    final api = _importApi('New.canvas.json', _document('Remote'));
+    await _pumpWorkspace(tester, store, api, navigate: (_) {});
+    await _openSync(tester);
+    await _waitForEnabledButton(tester, _importButton);
+    await _tapVisible(tester, _importButton);
+    await _pumpUntilBusySafe(
+      tester,
+      () => _importDialog.evaluate().isNotEmpty && _importText('1 canvas ready to import.').evaluate().isNotEmpty,
+      'import confirmation before delayed publication',
+    );
+    final beforeSave = store.library;
+    expect(store.saveStarted.isCompleted, isFalse);
+    await _tapVisible(tester, _importConfirm);
+    await _pumpUntilBusySafe(tester, () => store.saveStarted.isCompleted, 'local import publication');
+    await tester.pump();
+
+    expect(_importText('Saving canvases…'), findsOneWidget);
+    expect(_importText('Cancel'), findsNothing);
+    expect(tester.widget<IconButton>(_importClose).onPressed, isNull);
+    expect(tester.widget<CanvasPage>(find.byType(CanvasPage)).blocked, isTrue);
+    expect(store.library, same(beforeSave));
+    await _tapImportBarrier(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(_importDialog, findsOneWidget);
+    expect(_importText('Saving canvases…'), findsOneWidget);
+    expect(store.library, same(beforeSave));
+
+    store.releaseSave.complete();
+    await _pumpUntilBusySafe(
+      tester,
+      () => _importDialog.evaluate().isNotEmpty && _importText('Imported 1 canvas.').evaluate().isNotEmpty,
+      'successful import after delayed publication',
+    );
+    expect(tester.widget<IconButton>(_importClose).onPressed, isNotNull);
+    expect(tester.widget<CanvasPage>(find.byType(CanvasPage)).blocked, isFalse);
+    await _tapVisible(tester, _importText('Done'));
+    await _waitForImportDialogClosed(tester);
+  });
+
+  testWidgets('an empty GitHub repository shows a result without confirmation', (tester) async {
+    final store = _savedStore();
+    final api = _commitApi(
+      github: (request) async {
+        final path = request.url.path;
+        if (path.endsWith('/git/ref/heads/main')) return _ref();
+        if (path.endsWith('/git/commits/$_head')) {
+          return _json({
+            'tree': {'sha': _tree},
+          });
+        }
+        if (path.endsWith('/git/trees/$_tree')) {
+          return _json({
+            'truncated': false,
+            'tree': [_treeEntry('README.md', _nextCommit, 7)],
+          });
+        }
+        fail('An empty import must not fetch blobs');
+      },
+    );
+    await _pumpWorkspace(tester, store, api, navigate: (_) {});
+    await _openSync(tester);
+    await _waitForEnabledButton(tester, _importButton);
+    final beforeImport = store.library;
+    await _tapVisible(tester, _importButton);
+    await _pumpUntilBusySafe(
+      tester,
+      () => _importDialog.evaluate().isNotEmpty && _importText('Done').evaluate().isNotEmpty,
+      'empty import result',
+    );
+    expect(_importConfirm, findsNothing);
+    expect(_importText('1 canvas ready to import.'), findsNothing);
+    expect(_importText('No canvases to import.'), findsOneWidget);
+    expect(store.library, same(beforeImport));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await _waitForImportDialogClosed(tester);
+    expect(_importButton.hitTestable(), findsOneWidget);
   });
 
   testWidgets('logout retries inline and the saved destination is reused after reconnect', (tester) async {
@@ -361,11 +677,18 @@ void main() {
     await _waitForEnabledButton(tester, _importButton);
     repositories[0] = _repositoryJson(defaultBranch: 'next');
     await _tapVisible(tester, _importButton);
-    await pumpUntil(tester, () => find.textContaining('Refresh and reselect').evaluate().isNotEmpty);
+    await _pumpUntilBusySafe(
+      tester,
+      () => _importDialog.evaluate().isNotEmpty && _importTextContaining('Refresh and reselect').evaluate().isNotEmpty,
+      'default-branch import failure result',
+    );
+    expect(_importTextContaining('Refresh and reselect').hitTestable(), findsOneWidget);
     expect(tester.widget<TextButton>(_importButton).onPressed, isNull);
     expect(tester.widget<SearchableSelect<int?>>(_repositoryPicker).onChanged, isNull);
     expect(store.library.githubDestination?.branch, 'main');
 
+    await _tapVisible(tester, _importText('Done'));
+    await _waitForImportDialogClosed(tester);
     await _tapVisible(tester, find.byTooltip('Refresh repositories'));
     await _waitForRepositoryPicker(tester);
     expect(find.textContaining('Default branch changed from main to next'), findsOneWidget);
@@ -962,6 +1285,12 @@ void main() {
 
 final Finder _repositoryPicker = find.byKey(const ValueKey('github-repository-select'));
 final Finder _importButton = find.byKey(const ValueKey('github-import'));
+final Finder _importDialog = find.byKey(const ValueKey('github-import-dialog'));
+final Finder _importClose = find.byKey(const ValueKey('github-import-close'));
+final Finder _importConfirm = find.descendant(
+  of: _importDialog,
+  matching: find.text('Import canvases'),
+);
 final Finder _marker = find.text('*');
 const String _commitBlockedNotice = 'Wait for the current commit to finish, then try again.';
 final Finder _commitAction = find.byKey(const ValueKey('canvas-title-action'));
@@ -982,6 +1311,21 @@ Future<void> _closeSync(WidgetTester tester) async {
   await _tapVisible(tester, find.byKey(const ValueKey('settings-close')));
   await tester.pumpAndSettle();
 }
+
+Finder _importText(String text) => find.descendant(of: _importDialog, matching: find.text(text));
+
+Finder _importTextContaining(String text) => find.descendant(of: _importDialog, matching: find.textContaining(text));
+
+Future<void> _tapImportBarrier(WidgetTester tester) async {
+  await tester.tapAt(const Offset(1, 1));
+  await tester.pump();
+}
+
+Future<void> _waitForImportDialogClosed(WidgetTester tester) => _pumpUntilBusySafe(
+  tester,
+  () => _importDialog.evaluate().isEmpty,
+  'GitHub import dialog dismissal',
+);
 
 Future<void> _waitForRepositoryPicker(WidgetTester tester) => pumpUntil(
   tester,
@@ -1022,7 +1366,15 @@ Future<void> _pumpUntilBusySafe(WidgetTester tester, bool Function() done, Strin
       await tester.pump(const Duration(milliseconds: 50));
     }
   });
-  if (!done()) fail('Did not reach $description.');
+  if (!done()) {
+    final visibleText = find
+        .byType(Text)
+        .evaluate()
+        .map((element) => (element.widget as Text).data)
+        .whereType<String>()
+        .join(' | ');
+    fail('Did not reach $description. Import dialog: ${_importDialog.evaluate().isNotEmpty}; text: $visibleText');
+  }
 }
 
 Future<void> _waitForEnabledButton(WidgetTester tester, Finder finder) async {
@@ -1140,7 +1492,13 @@ GitHubApi _commitApi({
   );
 }
 
-GitHubApi _importApi(String path, CanvasDocument document, {List<String>? requests}) {
+GitHubApi _importApi(
+  String path,
+  CanvasDocument document, {
+  List<String>? requests,
+  String? attachmentPath,
+  Uint8List? attachmentBytes,
+}) {
   final bytes = utf8.encode(jsonEncode(document.toJson()));
   return _commitApi(
     requests: requests,
@@ -1155,7 +1513,11 @@ GitHubApi _importApi(String path, CanvasDocument document, {List<String>? reques
       if (pathRequested.endsWith('/git/trees/$_tree')) {
         return _json({
           'truncated': false,
-          'tree': [_treeEntry(path, _documentBlob, bytes.length), _treeEntry('README.md', _nextCommit, 7)],
+          'tree': [
+            _treeEntry(path, _documentBlob, bytes.length),
+            if (attachmentPath != null) _treeEntry(attachmentPath, _imageBlob, attachmentBytes!.length),
+            _treeEntry('README.md', _nextCommit, 7),
+          ],
         });
       }
       if (pathRequested.endsWith('/git/blobs/$_documentBlob')) {
@@ -1164,6 +1526,14 @@ GitHubApi _importApi(String path, CanvasDocument document, {List<String>? reques
           'size': bytes.length,
           'encoding': 'base64',
           'content': base64Encode(bytes),
+        });
+      }
+      if (pathRequested.endsWith('/git/blobs/$_imageBlob')) {
+        return _json({
+          'sha': _imageBlob,
+          'size': attachmentBytes!.length,
+          'encoding': 'base64',
+          'content': base64Encode(attachmentBytes),
         });
       }
       return _json({'error': 'not found'}, status: 404);
@@ -1247,6 +1617,24 @@ class _FailingLibraryStore extends TestLibraryStore {
   @override
   Future<void> save(CanvasLibrary snapshot, {required CanvasLibrary? previous}) async {
     if (failSaves) throw StateError('storage unavailable');
+    await super.save(snapshot, previous: previous);
+  }
+}
+
+class _DelayedLibraryStore extends TestLibraryStore {
+  _DelayedLibraryStore(super.initial);
+
+  final saveStarted = Completer<void>();
+  final releaseSave = Completer<void>();
+  var _holdNextSave = true;
+
+  @override
+  Future<void> save(CanvasLibrary snapshot, {required CanvasLibrary? previous}) async {
+    if (_holdNextSave) {
+      _holdNextSave = false;
+      saveStarted.complete();
+      await releaseSave.future;
+    }
     await super.save(snapshot, previous: previous);
   }
 }

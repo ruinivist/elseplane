@@ -241,8 +241,9 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - The searchable dropdown filters authorized repositories. Choosing an entry
   validates and saves it for both Import and Commit. An invalid choice leaves
   the saved destination in place. Sync displays repository visibility and the
-  default branch and offers an explicit refresh. The first valid choice offers
-  import or Skip. Regular import remains available after either choice.
+  default branch and offers an explicit refresh. After a valid choice, Sync
+  offers the **Import from GitHub** action. Selecting a repository never starts
+  an import automatically.
 - **Manage GitHub access** shows installation choices inline when applicable.
   The validated install or management URL opens in a separate tab. Finish
   interactions and save completed edits before opening the link. Refresh
@@ -254,11 +255,13 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
   Import. Commit requires verified Contents write and push access and an active
   repository. GitHub enforces current permissions and branch rules.
 - Import reads the whole repository from the latest default branch and uses
-  the shared additive merge. Overwrite review and results appear in Sync.
-  Review lists the existing paths and warns that shared images may change.
-  Canceling or dismissing the review leaves local data untouched. A successful
-  import records baselines for the imported canvases. A truncated tree cannot
-  be imported.
+  the shared additive merge. One [GitHub import dialog](github-sync-ux.md#import)
+  handles preparation, confirmation, saving, and the result. Confirmation is
+  required even without collisions; if any paths collide, list them and warn
+  that shared images may change. Canceling before saving leaves local data
+  untouched and does not leave the workspace locked. Keep the dialog open and
+  hold the transfer interlock while saving. A successful import records
+  baselines for the imported canvases. A truncated tree cannot be imported.
 - The signed-in account's selected destination gives the current canvas an
   uncommitted-changes marker when its canvas path, canonical document, or
   referenced bytes differ from its local baseline, or when it has no baseline

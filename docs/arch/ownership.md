@@ -111,8 +111,8 @@ GitHub feature owns session restoration, repository discovery and validation,
 baseline comparison, and GitHub transport and browser navigation. Workspace
 supplies the transfer interlock and shared import coordinator, connects
 document and attachment changes to baseline comparison, and replaces the
-editor after a durable overwrite. The library queue publishes destinations,
-first-import dismissal, and baselines. Installation IDs and credentials
+editor after a durable overwrite. The library queue publishes destinations and
+baselines. Installation IDs and credentials
 remain in memory. CanvasPage and Settings accept generic title actions and
 Sync content without importing the GitHub feature.
 

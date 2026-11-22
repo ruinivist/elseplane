@@ -48,7 +48,7 @@ and mediator state stay in local ignored configuration.
 
    Start the app with both public values configured and connect through the
    **Settings → Sync**. The installation flow grants repository access. The
-   searchable dropdown saves a destination for both **Import from GitHub…** in
+   searchable dropdown saves a destination for both **Import from GitHub** in
    Sync and **Commit…** beside the canvas title.
 5. To add or remove repository access, use **Manage GitHub access** in Sync
    and then select **Refresh repositories** in Elseplane. Choose a repository with a

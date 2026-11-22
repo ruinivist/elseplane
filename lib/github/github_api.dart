@@ -263,15 +263,20 @@ final class GitHubApi {
 
   /// Captures one latest-default-branch tree and reads supported files lazily by
   /// their immutable blob SHAs.
-  Future<TransferSource> readRepository(GitHubDestination destination, {required int installationId}) async {
-    final token = await _currentToken();
-    await _verifyTransferDestination(destination, installationId, token);
-    final snapshot = await _snapshot(destination, token);
+  Future<TransferSource> readRepository(
+    GitHubDestination destination, {
+    required int installationId,
+    bool Function()? isCurrent,
+  }) async {
+    final token = await _currentToken(isCurrent: isCurrent);
+    await _verifyTransferDestination(destination, installationId, token, isCurrent: isCurrent);
+    final snapshot = await _snapshot(destination, token, isCurrent: isCurrent);
     final entries = _transferEntries(snapshot);
     final byPath = {for (final entry in snapshot.entries.values) entry.path: entry};
     return _GitHubTransferSource(
       entries,
-      (path) => _readTransferBlob(destination, token, byPath, path),
+      (path) => _readTransferBlob(destination, token, byPath, path, isCurrent),
+      () => _checkImportCurrent(isCurrent),
     );
   }
 
@@ -351,12 +356,17 @@ final class GitHubApi {
     return GitHubCommitResult(commitSha: commitSha, url: commitUrl);
   }
 
-  Future<GitHubSnapshot> _snapshot(GitHubDestination destination, String token) async {
-    final commitSha = await _branchHead(destination, token);
+  Future<GitHubSnapshot> _snapshot(
+    GitHubDestination destination,
+    String token, {
+    bool Function()? isCurrent,
+  }) async {
+    final commitSha = await _branchHead(destination, token, isCurrent: isCurrent);
     final commitResponse = await _githubRequest(
       'GET',
       _repoUri(destination, ['git', 'commits', commitSha]),
       token: token,
+      isCurrent: isCurrent,
     );
     final commit = _decodeObject(commitResponse.bodyBytes, 'Invalid GitHub commit response');
     final treeObject = commit['tree'];
@@ -367,6 +377,7 @@ final class GitHubApi {
       _repoUri(destination, ['git', 'trees', treeSha]),
       token: token,
       query: {'recursive': '1'},
+      isCurrent: isCurrent,
     );
     final tree = _decodeObject(treeResponse.bodyBytes, 'Invalid GitHub tree response');
     if (tree['truncated'] is! bool) _invalid('Invalid GitHub tree response');
@@ -402,6 +413,7 @@ final class GitHubApi {
     GitHubTreeEntry entry, {
     required int maximumBytes,
     int? maximumResponseBytes,
+    bool Function()? isCurrent,
   }) async {
     if (!entry.isRegularBlob) _invalid('Unsupported Git object: ${entry.path}');
     final declaredSize = entry.size;
@@ -413,6 +425,7 @@ final class GitHubApi {
       _repoUri(destination, ['git', 'blobs', entry.sha]),
       token: token,
       maximumResponseBytes: responseLimit,
+      isCurrent: isCurrent,
     );
     final blob = _decodeObject(
       response.bodyBytes,
@@ -541,7 +554,12 @@ final class GitHubApi {
     return result;
   }
 
-  Future<GitHubRepository?> _findInstallationRepository(int installationId, int repositoryId, String token) async {
+  Future<GitHubRepository?> _findInstallationRepository(
+    int installationId,
+    int repositoryId,
+    String token, {
+    bool Function()? isCurrent,
+  }) async {
     if (installationId <= 0 || repositoryId <= 0) _invalid('Invalid GitHub repository selection');
     var pageNumber = 1;
     var totalCount = -1;
@@ -554,6 +572,7 @@ final class GitHubApi {
         _installationRepositoriesUri(installationId),
         token: token,
         query: {'per_page': '$_pageSize', 'page': '$pageNumber'},
+        isCurrent: isCurrent,
       );
       final page = _decodePage(response, 'repositories', 'Invalid GitHub repositories response');
       if (totalCount < 0) {
@@ -774,8 +793,15 @@ final class GitHubApi {
       left.archived == right.archived &&
       left.disabled == right.disabled;
 
-  Future<String> _currentToken({_DiscoveryDeadline? deadline}) async {
-    final response = await _mediatorPost('/oauth/github/token', deadline: deadline);
+  Future<String> _currentToken({
+    _DiscoveryDeadline? deadline,
+    bool Function()? isCurrent,
+  }) async {
+    final response = await _mediatorPost(
+      '/oauth/github/token',
+      deadline: deadline,
+      isCurrent: isCurrent,
+    );
     final object = _decodeObject(response.bodyBytes, 'Invalid session response');
     final value = object['access_token'];
     final tokenType = object['token_type'];
@@ -791,8 +817,18 @@ final class GitHubApi {
     return value;
   }
 
-  Future<GitHubAccount> _accountWithToken(String token, {_DiscoveryDeadline? deadline}) async {
-    final response = await _githubRequest('GET', _apiUri(['user']), token: token, deadline: deadline);
+  Future<GitHubAccount> _accountWithToken(
+    String token, {
+    _DiscoveryDeadline? deadline,
+    bool Function()? isCurrent,
+  }) async {
+    final response = await _githubRequest(
+      'GET',
+      _apiUri(['user']),
+      token: token,
+      deadline: deadline,
+      isCurrent: isCurrent,
+    );
     final object = _decodeObject(response.bodyBytes, 'Invalid GitHub account response');
     final id = object['id'];
     final login = object['login'];
@@ -805,17 +841,23 @@ final class GitHubApi {
     int installationId,
     String token, {
     bool forCommit = false,
+    bool Function()? isCurrent,
   }) async {
     _validateDestination(destination);
     if (installationId <= 0) _invalid('Invalid GitHub repository selection');
-    final account = await _accountWithToken(token);
+    final account = await _accountWithToken(token, isCurrent: isCurrent);
     if (account.id != destination.accountId) {
       throw const GitHubApiException(
         'Reconnect the GitHub account used for this repository.',
         kind: GitHubErrorKind.reconnect,
       );
     }
-    final repository = await _findInstallationRepository(installationId, destination.repositoryId, token);
+    final repository = await _findInstallationRepository(
+      installationId,
+      destination.repositoryId,
+      token,
+      isCurrent: isCurrent,
+    );
     if (repository == null) _membershipDenied();
     if (repository.owner != destination.owner || repository.name != destination.repository) {
       throw const GitHubApiException(
@@ -871,8 +913,19 @@ final class GitHubApi {
     kind: GitHubErrorKind.permissionDenied,
   );
 
-  Future<String> _branchHead(GitHubDestination destination, String token) async {
-    final response = await _githubRequest('GET', _refUri(destination), token: token, checkResponse: false);
+  Future<String> _branchHead(
+    GitHubDestination destination,
+    String token, {
+    bool Function()? isCurrent,
+  }) async {
+    final response = await _githubRequest(
+      'GET',
+      _refUri(destination),
+      token: token,
+      checkResponse: false,
+      isCurrent: isCurrent,
+    );
+    _checkImportCurrent(isCurrent);
     if (response.statusCode == 404 || response.statusCode == 409) {
       final branches = await _githubRequest(
         'GET',
@@ -880,7 +933,9 @@ final class GitHubApi {
         token: token,
         query: {'per_page': '1'},
         checkResponse: false,
+        isCurrent: isCurrent,
       );
+      _checkImportCurrent(isCurrent);
       if (branches.statusCode < 200 || branches.statusCode >= 300) _throwResponse(branches);
       final values = _decodeList(branches.bodyBytes, 'Invalid GitHub branches response');
       if (values.length > 1 || values.any((value) => value is! Map)) _invalid('Invalid GitHub branches response');
@@ -947,7 +1002,9 @@ final class GitHubApi {
     String token,
     Map<String, GitHubTreeEntry> entries,
     String path,
+    bool Function()? isCurrent,
   ) async {
+    _checkImportCurrent(isCurrent);
     final entry = entries[path];
     final isImage = _isTransferAttachmentPath(path);
     if (entry == null || !entry.isRegularBlob || (!isImage && !_isTransferDocumentPath(path))) {
@@ -961,6 +1018,7 @@ final class GitHubApi {
       maximumResponseBytes: _maximumBase64JsonBytes(
         entry.size ?? (isImage ? attachmentMaximumBytes : _maximumGitHubBlobBytes),
       ),
+      isCurrent: isCurrent,
     );
     return Uint8List.fromList(bytes).asUnmodifiableView();
   }
@@ -1039,7 +1097,12 @@ final class GitHubApi {
     }
   }
 
-  Future<http.Response> _mediatorPost(String path, {_DiscoveryDeadline? deadline}) async {
+  Future<http.Response> _mediatorPost(
+    String path, {
+    _DiscoveryDeadline? deadline,
+    bool Function()? isCurrent,
+  }) async {
+    _checkImportCurrent(isCurrent);
     deadline?.check();
     _checkRateLimit();
     final uri = _mediatorUrl.replace(path: path);
@@ -1062,6 +1125,7 @@ final class GitHubApi {
     } on Object {
       throw const GitHubApiException('The GitHub session service could not be reached.', kind: GitHubErrorKind.network);
     }
+    _checkImportCurrent(isCurrent);
     if (response.statusCode < 200 || response.statusCode >= 300) _throwResponse(response, mediator: true);
     return response;
   }
@@ -1075,7 +1139,9 @@ final class GitHubApi {
     bool checkResponse = true,
     int maximumResponseBytes = _maximumJsonResponseBytes,
     _DiscoveryDeadline? deadline,
+    bool Function()? isCurrent,
   }) async {
+    _checkImportCurrent(isCurrent);
     deadline?.check();
     _checkRateLimit();
     final target = query == null ? uri : uri.replace(queryParameters: query);
@@ -1107,6 +1173,7 @@ final class GitHubApi {
         kind: GitHubErrorKind.network,
       );
     }
+    _checkImportCurrent(isCurrent);
     if (checkResponse && (response.statusCode < 200 || response.statusCode >= 300)) _throwResponse(response);
     return response;
   }
@@ -1374,6 +1441,10 @@ final class GitHubApi {
 
   bool _isSha(String value) => RegExp(r'^[0-9a-f]{40}$', caseSensitive: false).hasMatch(value);
 
+  void _checkImportCurrent(bool Function()? isCurrent) {
+    if (isCurrent != null && !isCurrent()) throw const _GitHubImportCancelled();
+  }
+
   Never _invalid(String message) => throw GitHubApiException(message, kind: GitHubErrorKind.invalidData);
 
   Never _conflict(String message, [String? path]) => throw GitHubConflict(message, path: path);
@@ -1398,6 +1469,10 @@ final class _DiscoveryDeadlineExceeded implements Exception {
   const _DiscoveryDeadlineExceeded();
 }
 
+final class _GitHubImportCancelled implements Exception {
+  const _GitHubImportCancelled();
+}
+
 final class _DiscoveryDeadline {
   _DiscoveryDeadline() : _watch = Stopwatch()..start();
 
@@ -1419,13 +1494,17 @@ final class _GitHubPage {
 }
 
 final class _GitHubTransferSource implements TransferSource {
-  _GitHubTransferSource(List<TransferEntry> entries, this._read) : _entries = List.unmodifiable(entries);
+  _GitHubTransferSource(List<TransferEntry> entries, this._read, this._check) : _entries = List.unmodifiable(entries);
 
   final List<TransferEntry> _entries;
   final Future<Uint8List> Function(String path) _read;
+  final void Function() _check;
 
   @override
-  Future<List<TransferEntry>> entries() async => _entries;
+  Future<List<TransferEntry>> entries() async {
+    _check();
+    return _entries;
+  }
 
   @override
   Future<Uint8List> read(String path) => _read(path);
