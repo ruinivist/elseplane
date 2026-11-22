@@ -39,9 +39,9 @@ class TestLibraryStore implements LibraryStore {
   Future<CanvasLibrary?> load() async => library;
 
   @override
-  Future<void> save(CanvasLibrary snapshot) async {
-    library = snapshot;
-    persisted = snapshot.current.document;
+  Future<void> save(CanvasLibrary next, {required CanvasLibrary? previous}) async {
+    library = next;
+    persisted = next.current.document;
   }
 }
 
@@ -132,13 +132,15 @@ Future<void> pumpElseplaneApp(
   await tester.pumpWidget(
     ElseplaneApp(
       attachmentStore: attachmentStore,
-      libraryStore: libraryStore,
+      libraryStore: libraryStore ?? TestLibraryStore(),
       projectFiles: projectFiles,
     ),
   );
   await tester.pump();
   await tester.pump();
 }
+
+ElseplaneApp testElseplaneApp() => ElseplaneApp(libraryStore: TestLibraryStore());
 
 Future<void> placeCodeBlock(WidgetTester tester, Offset position) async {
   await tester.tap(find.byKey(const ValueKey('toolbar-code')));

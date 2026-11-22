@@ -1,29 +1,21 @@
 // Verifies erasing overlapping elements and saving completed edits.
 
-import 'dart:convert';
-
-import 'package:elseplane/app/app.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
-import 'package:elseplane/library/canvas_library.dart';
-import 'package:elseplane/library/library_store.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
+import '../test_helpers.dart';
+
 void main() {
-  setUp(() async {
-    SharedPreferencesAsyncWeb.registerWith(null);
-    final preferences = SharedPreferencesAsync();
-    await preferences.remove(PreferencesLibraryStore.libraryKey);
-  });
+  setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
   testWidgets('eraser scrubs every overlapping element and saves', (
     tester,
@@ -88,13 +80,8 @@ void main() {
         stroke('pen-safe', const Offset(100, 450)),
       ],
     );
-    await SharedPreferencesAsync().setString(
-      PreferencesLibraryStore.libraryKey,
-      jsonEncode(CanvasLibrary.initial(document).toJson()),
-    );
-    await tester.pumpWidget(const ElseplaneApp());
-    await tester.pump();
-    await tester.pump();
+    final store = TestLibraryStore(document);
+    await pumpCanvas(tester, store);
 
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
     await tester.tap(find.byKey(const ValueKey('toolbar-erase')));
@@ -132,7 +119,7 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 320));
     await tester.pump();
-    final saved = (await PreferencesLibraryStore().load())!.current.document!;
+    final saved = store.persisted!;
     expect(saved.elements.map((element) => element.id), ['pen-safe']);
   });
 }

@@ -11,7 +11,6 @@ import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_markdown_preview.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
-import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/starless.dart';
@@ -27,7 +26,6 @@ import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts_lite.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 import 'package:url_launcher_platform_interface/link.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
@@ -38,11 +36,9 @@ void main() {
   late UrlLauncherPlatform originalLauncher;
   late _FakeUrlLauncher launcher;
 
-  setUp(() async {
+  setUp(() {
     GoogleFontsLite.config.allowRuntimeFetching = false;
     SharedPreferencesAsyncWeb.registerWith(null);
-    final preferences = SharedPreferencesAsync();
-    await preferences.remove(PreferencesLibraryStore.libraryKey);
     originalLauncher = UrlLauncherPlatform.instance;
     launcher = _FakeUrlLauncher();
     UrlLauncherPlatform.instance = launcher;
@@ -219,7 +215,7 @@ void main() {
   testWidgets('text editor keeps native select and delete actions', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await tester.pump();
     await placeCodeBlock(tester, const Offset(300, 200));
@@ -1345,7 +1341,7 @@ x+y
   testWidgets('editing a second text rebinds top-right settings', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
 
     final first = await _placeTextBlock(tester, const Offset(120, 200));
@@ -1393,7 +1389,8 @@ x+y
   });
 
   testWidgets('text nodes restore from the saved document', (tester) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    final store = TestLibraryStore();
+    await tester.pumpWidget(ElseplaneApp(libraryStore: store));
     await tester.pump();
     await tester.pump();
 
@@ -1447,7 +1444,7 @@ x+y
     await tester.pump();
     await pumpPastSave(tester);
 
-    final savedDocument = (await PreferencesLibraryStore().load())!.current.document!;
+    final savedDocument = store.persisted!;
     final savedNodes = savedDocument.elements.whereType<TextElementData>().toList();
     expect(savedNodes, hasLength(2));
     final savedSecond = savedNodes.first;
@@ -1465,7 +1462,7 @@ x+y
     expect(canvas.childOrder, [second.node.id, first.node.id]);
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(ElseplaneApp(libraryStore: store));
     await tester.pump();
     await tester.pump();
 
@@ -1516,7 +1513,7 @@ Future<void> _addTextBlock(
   } else {
     await pumpCanvas(
       tester,
-      PreferencesLibraryStore(),
+      TestLibraryStore(),
       attachmentStore: attachmentStore,
       platform: platform,
     );

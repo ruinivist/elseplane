@@ -8,6 +8,7 @@ import 'package:elseplane/attachments/attachment_store_web.dart';
 import 'package:elseplane/github/github_api.dart';
 import 'package:elseplane/github/github_browser.dart';
 import 'package:elseplane/library/library_store.dart';
+import 'package:elseplane/library/library_store_web.dart';
 import 'package:elseplane/library/transfer/canvas_project_files.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/theme/theme.dart';
@@ -80,7 +81,7 @@ class _ElseplaneAppState extends State<ElseplaneApp> {
       : SurfaceStyle.glass;
   late final SharedPreferencesAsync _preferences = widget.preferences ?? SharedPreferencesAsync();
   Future<void> _saveQueue = Future<void>.value();
-  late final LibraryStore _libraryStore = widget.libraryStore ?? PreferencesLibraryStore();
+  late final LibraryStore _libraryStore = widget.libraryStore ?? IndexedDbLibraryStore();
   late final AttachmentStore _attachmentStore = widget.attachmentStore ?? PlatformAttachmentStore();
   late final CanvasProjectFiles _projectFiles = widget.projectFiles ?? createCanvasProjectFiles();
   late final GitHubApi? _githubApi = widget.githubApi ?? _createConfiguredGitHubApi();

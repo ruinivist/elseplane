@@ -1,17 +1,14 @@
 // Verifies persisted pen interaction, options, and ink selection.
 
-import 'package:elseplane/app/app.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
-import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../../../test_helpers.dart';
@@ -19,12 +16,10 @@ import '../../../test_helpers.dart';
 void main() {
   setUp(() async {
     SharedPreferencesAsyncWeb.registerWith(null);
-    final preferences = SharedPreferencesAsync();
-    await preferences.remove(PreferencesLibraryStore.libraryKey);
   });
 
   testWidgets('pen commits inactive strokes and stays enabled', (tester) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
@@ -44,7 +39,7 @@ void main() {
   });
 
   testWidgets('inactive pen does not draw', (tester) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
 
     expect(find.byKey(const ValueKey('draw-settings-panel')), findsNothing);
@@ -59,7 +54,7 @@ void main() {
   testWidgets('draw settings persist and affect only future strokes', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
@@ -157,7 +152,7 @@ void main() {
   });
 
   testWidgets('ctrl-click selects only near stroke ink', (tester) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));

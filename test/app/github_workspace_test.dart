@@ -612,7 +612,6 @@ void main() {
     expect(find.text('Canvas committed to GitHub.'), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
-    store.library = CanvasLibrary.fromJson(store.library.toJson());
     await _pumpWorkspace(tester, store, api, navigate: (_) {}, consumeCompletion: () => true);
     await _waitForEnabledButton(tester, _importButton);
     await _closeSync(tester);
@@ -1246,9 +1245,9 @@ class _FailingLibraryStore extends TestLibraryStore {
   bool failSaves = false;
 
   @override
-  Future<void> save(CanvasLibrary snapshot) async {
+  Future<void> save(CanvasLibrary snapshot, {required CanvasLibrary? previous}) async {
     if (failSaves) throw StateError('storage unavailable');
-    await super.save(snapshot);
+    await super.save(snapshot, previous: previous);
   }
 }
 

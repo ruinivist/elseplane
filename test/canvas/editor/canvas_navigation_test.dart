@@ -1,29 +1,22 @@
 // Verifies mouse and keyboard canvas navigation.
 
-import 'package:elseplane/app/app.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
-import 'package:elseplane/library/library_store.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../test_helpers.dart';
 
 void main() {
   group('pointer navigation', () {
-    setUp(() async {
-      SharedPreferencesAsyncWeb.registerWith(null);
-      final preferences = SharedPreferencesAsync();
-      await preferences.remove(PreferencesLibraryStore.libraryKey);
-    });
+    setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
     testWidgets('right and middle drag pan over block controls', (tester) async {
-      await tester.pumpWidget(const ElseplaneApp());
+      await tester.pumpWidget(testElseplaneApp());
       await tester.pump();
       await placeCodeBlock(tester, const Offset(120, 140));
 
@@ -71,7 +64,7 @@ void main() {
     testWidgets('right drag pans instead of drawing in Draw mode', (
       tester,
     ) async {
-      await tester.pumpWidget(const ElseplaneApp());
+      await tester.pumpWidget(testElseplaneApp());
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
       await tester.pump();
@@ -93,7 +86,7 @@ void main() {
     testWidgets('space temporarily hands dragging back to the canvas', (
       tester,
     ) async {
-      await tester.pumpWidget(const ElseplaneApp());
+      await tester.pumpWidget(testElseplaneApp());
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
       await tester.pump();

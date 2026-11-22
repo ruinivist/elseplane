@@ -1,10 +1,8 @@
 // Verifies object Arrange menus, shortcuts, persistence, and history.
 // Exercises ordering through the canvas rather than reproducing the library algorithm.
 
-import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:elseplane/app/app.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/element_resources.dart';
 import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
@@ -15,8 +13,6 @@ import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
-import 'package:elseplane/library/canvas_library.dart';
-import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
 import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/theme/theme.dart';
@@ -29,7 +25,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../test_helpers.dart';
@@ -1753,7 +1748,6 @@ void main() {
   testWidgets('pen and arrow interactions preserve stacking order', (
     tester,
   ) async {
-    await SharedPreferencesAsync().remove(PreferencesLibraryStore.libraryKey);
     final document = CanvasDocument(
       background: CanvasBackgroundKind.plain,
       elements: [
@@ -1782,13 +1776,8 @@ void main() {
         ),
       ],
     );
-    await SharedPreferencesAsync().setString(
-      PreferencesLibraryStore.libraryKey,
-      jsonEncode(CanvasLibrary.initial(document).toJson()),
-    );
-    await tester.pumpWidget(const ElseplaneApp());
-    await tester.pump();
-    await tester.pump();
+    final store = TestLibraryStore(document);
+    await pumpCanvas(tester, store);
 
     final penFinder = find.byType(PenElementView);
     final arrowFinder = find.byType(ArrowElementView);
@@ -1848,7 +1837,7 @@ void main() {
     expect(arrow.selected, isFalse);
 
     await tester.pump(const Duration(milliseconds: 320));
-    final saved = (await PreferencesLibraryStore().load())!.current.document!;
+    final saved = store.persisted!;
     expect(saved.elements.map((element) => element.id), ['pen', 'arrow']);
   });
 }

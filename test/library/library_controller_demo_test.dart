@@ -97,8 +97,8 @@ class _Store implements LibraryStore {
   Future<CanvasLibrary?> load() async => null;
 
   @override
-  Future<void> save(CanvasLibrary snapshot) async {
-    writes.add(snapshot);
+  Future<void> save(CanvasLibrary next, {required CanvasLibrary? previous}) async {
+    writes.add(next);
     if (fail) throw StateError('save failed');
   }
 }

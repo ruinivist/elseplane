@@ -37,6 +37,11 @@ then read the authority relevant to the work. Do not create a separate
   specification](specs/attachment-paths.md) and [ADR 0006](adr/0006-path-aware-attachment-store.md).
   These remain the byte-store contract; parent-aware caller adoption and import
   publication are accepted by ADR 0005 and implemented.
+- **Implemented:** [ADR 0007: store canvases
+  individually in IndexedDB](adr/0007-store-canvases-individually-in-indexeddb.md).
+  The [browser canvas persistence specification](specs/browser-canvas-persistence.md)
+  defines local save and load behavior. The [completed plan](archive/browser-canvas-persistence.md)
+  defines the architecture and worker split.
 - [Backlog](backlog.md) contains reported defects, proposals, and open
   verification. Entries are not accepted behavior or architecture.
 - [Plans](plans/) track active work and its checks; they do not

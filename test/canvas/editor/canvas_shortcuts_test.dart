@@ -1,29 +1,24 @@
 // Verifies tool shortcuts and editing handoff.
 
-import 'package:elseplane/app/app.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
-import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
+import '../test_helpers.dart';
+
 void main() {
-  setUp(() async {
-    SharedPreferencesAsyncWeb.registerWith(null);
-    final preferences = SharedPreferencesAsync();
-    await preferences.remove(PreferencesLibraryStore.libraryKey);
-  });
+  setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
   testWidgets('keyboard shortcuts toggle tools and escape disables them', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await tester.pump();
 
@@ -81,7 +76,7 @@ void main() {
   });
 
   testWidgets('enabling pen stops text editing', (tester) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();

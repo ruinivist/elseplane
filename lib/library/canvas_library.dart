@@ -18,16 +18,6 @@ class CanvasFile {
     this.githubBaseline,
   });
 
-  factory CanvasFile.fromJson(Map<String, dynamic> json) {
-    return CanvasFile(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      parentId: json['parentId'] as String?,
-      document: json['document'] == null ? null : CanvasDocument.fromJson(json['document']),
-      githubBaseline: json['githubBaseline'] == null ? null : GitHubBaseline.fromJson(json['githubBaseline']),
-    );
-  }
-
   final String id;
   final String name;
   final String? parentId;
@@ -43,14 +33,6 @@ class CanvasFile {
     document: document ?? this.document,
     githubBaseline: githubBaseline ?? this.githubBaseline,
   );
-
-  Map<String, Object?> toJson() => {
-    'id': id,
-    'name': name,
-    'parentId': parentId,
-    'document': document?.toJson(),
-    if (githubBaseline != null) 'githubBaseline': githubBaseline!.toJson(),
-  };
 }
 
 // ---------- Library ----------
@@ -68,37 +50,29 @@ class CanvasLibrary {
     return CanvasLibrary(files: [file], currentId: file.id);
   }
 
-  factory CanvasLibrary.fromJson(Object? source) {
-    if (source is! Map<String, dynamic> || source['version'] != 1 || source['files'] is! List) {
-      throw const FormatException('Invalid canvas library');
-    }
-    final library = CanvasLibrary(
-      files: (source['files'] as List<dynamic>)
-          .map((file) => CanvasFile.fromJson(file as Map<String, dynamic>))
-          .toList(),
-      currentId: source['currentId'] as String,
-      githubDestination: source['githubDestination'] == null
-          ? null
-          : GitHubDestination.fromJson(source['githubDestination']),
-      githubImportPromptPending: source['githubImportPromptPending'] as bool? ?? false,
-    );
+  /// Validates the library structure read from or written to local storage.
+  void validate() {
+    final filesById = <String, CanvasFile>{};
     final ids = <String>{};
-    for (final file in library.files) {
+    for (final file in files) {
       if (file.id.isEmpty || file.name.trim().isEmpty || !ids.add(file.id)) {
         throw const FormatException('Invalid file name or id');
       }
       if (file.isFolder && file.githubBaseline != null) throw const FormatException('Folder has a GitHub baseline');
+      filesById[file.id] = file;
+    }
+    for (final file in files) {
       final ancestors = <String>{file.id};
       var parent = file.parentId;
       while (parent != null) {
         if (!ancestors.add(parent)) throw const FormatException('Folder cycle');
-        final folder = library.file(parent);
-        if (!folder.isFolder) throw const FormatException('Invalid parent folder');
+        final folder = filesById[parent];
+        if (folder == null || !folder.isFolder) throw const FormatException('Invalid parent folder');
         parent = folder.parentId;
       }
     }
-    if (library.current.isFolder) throw const FormatException('Current file must be a canvas');
-    return library;
+    final current = filesById[currentId];
+    if (current == null || current.isFolder) throw const FormatException('Current file must be a canvas');
   }
 
   static final emptyDocument = CanvasDocument(background: CanvasBackgroundKind.dotGrid, elements: []);
@@ -259,12 +233,4 @@ class CanvasLibrary {
       return error.message;
     }
   }
-
-  Map<String, Object?> toJson() => {
-    'version': 1,
-    'currentId': currentId,
-    'githubDestination': githubDestination?.toJson(),
-    if (githubImportPromptPending) 'githubImportPromptPending': true,
-    'files': files.map((file) => file.toJson()).toList(),
-  };
 }

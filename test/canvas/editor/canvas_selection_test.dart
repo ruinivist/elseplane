@@ -9,13 +9,11 @@ import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
-import 'package:elseplane/library/library_store.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../test_helpers.dart';
@@ -23,14 +21,13 @@ import '../test_helpers.dart';
 void main() {
   setUp(() async {
     SharedPreferencesAsyncWeb.registerWith(null);
-    final preferences = SharedPreferencesAsync();
-    await preferences.remove(PreferencesLibraryStore.libraryKey);
   });
 
   testWidgets('primary+A selects and deletes offscreen mixed children', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    final store = TestLibraryStore();
+    await tester.pumpWidget(ElseplaneApp(libraryStore: store));
     await tester.pump();
     await tester.pump();
 
@@ -87,7 +84,7 @@ void main() {
     }
     await tester.pump(const Duration(milliseconds: 320));
     await tester.pump();
-    final savedNodes = (await PreferencesLibraryStore().load())!.current.document!.elements;
+    final savedNodes = store.persisted!.elements;
     expect(savedNodes, hasLength(0));
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.delete);
@@ -98,7 +95,7 @@ void main() {
   testWidgets('ctrl-click multi-selects without activating blocks', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
@@ -228,7 +225,7 @@ void main() {
   testWidgets('dragging a selected mixed group moves once under zoom', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
@@ -311,7 +308,7 @@ void main() {
   testWidgets('resizing a selected widget clears the rest of the selection', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
@@ -363,7 +360,7 @@ void main() {
   testWidgets('dragging an unselected child clears selection and moves alone', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
@@ -414,7 +411,7 @@ void main() {
   testWidgets('drag marquee selects overlaps and ctrl toggles hits', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
@@ -502,7 +499,7 @@ void main() {
   testWidgets('marquee uses rotated bounds after pointer drag threshold', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await placeCodeBlock(tester, const Offset(200, 200));
 
@@ -546,7 +543,7 @@ void main() {
   testWidgets('deleting code keeps unrelated text editing open', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await tester.pump();
     await placeCodeBlock(tester, const Offset(300, 200));

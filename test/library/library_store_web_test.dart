@@ -1,183 +1,284 @@
-// Verifies atomic library snapshot persistence without controller-owned state.
-// Exercises the preferences adapter in the browser.
+// Verifies IndexedDB library records and transaction failure boundaries.
 
 @TestOn('browser')
 library;
 
+import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:js_interop';
 
-import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/library/canvas_library.dart';
-import 'package:elseplane/library/github_metadata.dart';
-import 'package:elseplane/library/library_store.dart';
-import 'package:elseplane/library/transfer/canvas_transfer.dart';
-import 'package:elseplane/library/transfer/canvas_transfer_zip.dart';
+import 'package:elseplane/library/library_store_codec.dart';
+import 'package:elseplane/library/library_store_web.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:shared_preferences_web/shared_preferences_web.dart';
-
-// ---------- Tests ----------
+import 'package:uuid/uuid.dart';
+import 'package:web/web.dart';
 
 void main() {
-  setUp(() async {
-    SharedPreferencesAsyncWeb.registerWith(null);
-    await SharedPreferencesAsync().remove(PreferencesLibraryStore.libraryKey);
+  final databaseNames = <String>[];
+
+  setUp(databaseNames.clear);
+  tearDown(() async {
+    for (final name in databaseNames) {
+      await _deleteDatabase(name);
+    }
   });
 
-  test('starts an empty library when browser storage has no saved library', () async {
-    final store = PreferencesLibraryStore();
-
+  test('loads absent storage and reopens a saved library', () async {
+    final name = _newDatabaseName(databaseNames);
+    final store = IndexedDbLibraryStore(databaseName: name);
     expect(await store.load(), isNull);
-  });
 
-  test('persists the current canvas document in browser storage', () async {
-    final document = CanvasDocument(
-      background: CanvasBackgroundKind.plain,
-      elements: [],
-    );
-    final store = PreferencesLibraryStore();
-
-    await store.save(CanvasLibrary.initial(document));
-
-    expect((await store.load())?.current.document?.toJson(), document.toJson());
-  });
-
-  test('retains existing canvas and restores folders and the selected file', () async {
-    final original = CanvasDocument(background: CanvasBackgroundKind.plain, elements: []);
-    await SharedPreferencesAsync().setString(
-      PreferencesLibraryStore.libraryKey,
-      jsonEncode(CanvasLibrary.initial(original).toJson()),
-    );
-    final store = PreferencesLibraryStore();
-    final loaded = (await store.load())!;
-    final originalId = loaded.currentId;
-    final next = CanvasLibrary(
-      currentId: 'second',
-      files: [
-        loaded.current,
-        const CanvasFile(id: 'folder', name: 'Notes'),
-        CanvasFile(id: 'second', name: 'Ideas', parentId: 'folder', document: CanvasLibrary.emptyDocument),
-      ],
-    );
-    await store.save(next);
-    final restored = PreferencesLibraryStore();
-    final restoredLibrary = (await restored.load())!;
-    expect(restoredLibrary.current.document!.background, CanvasBackgroundKind.dotGrid);
-    expect(restoredLibrary.path('second').map((file) => file.name), ['Notes', 'Ideas']);
-    expect(restoredLibrary.file(originalId).document!.toJson(), original.toJson());
-    expect(restoredLibrary.currentId, 'second');
-    expect(
-      () => CanvasLibrary.fromJson({
-        ...next.toJson(),
-        'files': [const CanvasFile(id: 'folder', name: 'Cycle', parentId: 'folder').toJson()],
-      }),
-      throwsFormatException,
-    );
-  });
-
-  test('persists sibling order and folder moves without changing canvas contents', () async {
     final library = CanvasLibrary(
       currentId: 'a',
       files: [
-        CanvasFile(id: 'a', name: 'A', document: CanvasLibrary.emptyDocument),
-        CanvasFile(id: 'b', name: 'B', document: CanvasLibrary.emptyDocument),
+        CanvasFile(id: 'a', name: 'A', document: _document(CanvasBackgroundKind.dotGrid)),
         const CanvasFile(id: 'folder', name: 'Folder'),
-        const CanvasFile(id: 'nested', name: 'Nested', parentId: 'folder'),
-        CanvasFile(id: 'child', name: 'Child', parentId: 'nested', document: CanvasLibrary.emptyDocument),
-        CanvasFile(id: 'duplicate', name: 'A', parentId: 'folder', document: CanvasLibrary.emptyDocument),
+        CanvasFile(
+          id: 'b',
+          name: 'B',
+          parentId: 'folder',
+          document: _document(CanvasBackgroundKind.plain),
+        ),
       ],
     );
+    await store.save(library, previous: null);
 
-    final reordered = library.move('b', parentId: null, beforeId: 'a');
-    expect(reordered.files.where((file) => file.parentId == null).map((file) => file.id), ['b', 'a', 'folder']);
-    final nested = reordered.move('b', parentId: 'nested');
-    expect(nested.file('b').parentId, 'nested');
-    final outdented = nested.move('b', parentId: null);
-    expect(outdented.files.where((file) => file.parentId == null).map((file) => file.id), ['a', 'folder', 'b']);
-    expect(outdented.currentId, 'a');
-    expect(outdented.file('child').parentId, 'nested');
-    final movedFolder = outdented.move('nested', parentId: null);
-    expect(movedFolder.path('child').map((file) => file.id), ['nested', 'child']);
-    expect(() => outdented.move('folder', parentId: 'nested'), throwsFormatException);
-    expect(() => outdented.move('a', parentId: 'folder'), throwsFormatException);
-    expect(identical(outdented.move('b', parentId: null), outdented), isTrue);
-
-    final store = PreferencesLibraryStore();
-    await store.save(outdented);
-    final restored = PreferencesLibraryStore();
-    final restoredLibrary = (await restored.load())!;
-    expect(restoredLibrary.files.map((file) => file.id), outdented.files.map((file) => file.id));
-    expect(restoredLibrary.file('b').parentId, isNull);
-    expect(restoredLibrary.current.document!.toJson(), library.current.document!.toJson());
+    final restored = (await IndexedDbLibraryStore(databaseName: name).load())!;
+    expect(restored.currentId, 'a');
+    expect(restored.path('b').map((file) => file.id), ['folder', 'b']);
+    expect(restored.file('a').document!.toJson(), library.file('a').document!.toJson());
+    expect(restored.file('b').document!.toJson(), library.file('b').document!.toJson());
   });
 
-  test('persists the GitHub destination without per-canvas tracking', () async {
-    final library = CanvasLibrary(
-      currentId: 'canvas',
-      githubDestination: const GitHubDestination(
-        accountId: 1,
-        repositoryId: 2,
-        owner: 'owner',
-        repository: 'repo',
-        branch: 'main',
-      ),
-      files: [CanvasFile(id: 'canvas', name: 'Notes', document: CanvasLibrary.emptyDocument)],
+  test('a document-only save preserves a newer sibling record', () async {
+    final name = _newDatabaseName(databaseNames);
+    final store = IndexedDbLibraryStore(databaseName: name);
+    await store.save(_library(), previous: null);
+    final loaded = (await store.load())!;
+    final newerSibling = _document(CanvasBackgroundKind.plain);
+    await _writeRecords(name, documents: {'b': _encodeDocument(newerSibling)});
+    final edited = loaded.replace(CanvasFile(id: 'a', name: 'A', document: _document(CanvasBackgroundKind.plain)));
+
+    await store.save(edited, previous: loaded);
+
+    final restored = (await store.load())!;
+    expect(restored.file('a').document!.toJson(), edited.file('a').document!.toJson());
+    expect(restored.file('b').document!.toJson(), newerSibling.toJson());
+  });
+
+  test('stale structural and document writes cannot create or revive records', () async {
+    final name = _newDatabaseName(databaseNames);
+    final store = IndexedDbLibraryStore(databaseName: name);
+    final previous = _library();
+    await store.save(previous, previous: null);
+    final loaded = (await store.load())!;
+
+    await _writeRecords(name, metadata: LibraryStoreCodec.encodeMetadata(loaded.select('b')));
+    final editedDocument = _document(CanvasBackgroundKind.plain);
+    final withNewCanvas = CanvasLibrary(
+      currentId: loaded.currentId,
+      files: [
+        loaded.file('a').copyWith(document: editedDocument),
+        loaded.file('b'),
+        CanvasFile(id: 'c', name: 'C', document: _document(CanvasBackgroundKind.plain)),
+      ],
     );
+    await expectLater(store.save(withNewCanvas, previous: loaded), throwsA(anything));
+    final afterStructuralFailure = (await store.load())!;
+    expect(afterStructuralFailure.currentId, 'b');
+    expect(afterStructuralFailure.files.map((file) => file.id), ['a', 'b']);
+    expect(afterStructuralFailure.file('a').document!.toJson(), loaded.file('a').document!.toJson());
+    expect(await _readRecord(name, 'documents', 'c'), isNull);
 
-    await PreferencesLibraryStore().save(library);
-
-    final restored = (await PreferencesLibraryStore().load())!;
-    expect(restored.githubDestination?.toJson(), library.githubDestination!.toJson());
-    expect(restored.current.document?.toJson(), library.current.document?.toJson());
-    expect(restored.current.toJson().keys, isNot(contains('githubTracking')));
-    expect(restored.current.toJson().keys, isNot(contains('githubPendingTracking')));
-
-    final portable = await encodeTransfer(library, _EmptyAttachments(), TransferScope.wholeLibrary);
-    final decoded = await decodeTransfer(ZipTransferSource(encodeTransferZip(portable)));
-    expect(decoded.canvases.keys, {'Notes.canvas.json'});
-    expect(decoded.canvases['Notes.canvas.json']?.toJson(), library.current.document?.toJson());
+    await _writeRecords(name, deleteDocuments: ['a']);
+    final edited = loaded.replace(CanvasFile(id: 'a', name: 'A', document: _document(CanvasBackgroundKind.plain)));
+    await expectLater(store.save(edited, previous: loaded), throwsA(anything));
+    expect(await _readRecord(name, 'documents', 'a'), isNull);
   });
 
-  test('ignores malformed obsolete per-canvas tracking fields without losing library data', () {
-    final initial = CanvasLibrary.initial();
-    final library = initial.toJson()
-      ..['githubDestination'] = const GitHubDestination(
-        accountId: 1,
-        repositoryId: 2,
-        owner: 'owner',
-        repository: 'repo',
-        branch: 'main',
-      ).toJson();
-    final file = initial.current.toJson()
-      ..['githubTracking'] = <String, Object?>{'bad': 3}
-      ..['githubPendingTracking'] = 'obsolete malformed data';
-    library['files'] = [file];
+  test('rejects malformed documents and missing records on load', () async {
+    final name = _newDatabaseName(databaseNames);
+    final store = IndexedDbLibraryStore(databaseName: name);
+    await store.save(_library(), previous: null);
+    await _writeRecords(name, documents: {'a': 'not JSON'});
+    await expectLater(store.load(), throwsFormatException);
 
-    final restored = CanvasLibrary.fromJson(library);
-    expect(restored.files, hasLength(1));
-    expect(restored.current.document?.toJson(), initial.current.document?.toJson());
-    expect(restored.githubDestination?.owner, 'owner');
+    await _writeRecords(name, metadata: 'not JSON', documents: {'a': _encodeDocument(_library().file('a').document!)});
+    await expectLater(store.load(), throwsFormatException);
+
+    await _writeRecords(
+      name,
+      metadata: LibraryStoreCodec.encodeMetadata(_library()),
+      documents: {'a': _encodeDocument(_library().file('a').document!)},
+      deleteDocuments: ['b'],
+    );
+    await expectLater(store.load(), throwsFormatException);
+
+    await _writeRecords(name, deleteMetadata: true);
+    await expectLater(store.load(), throwsFormatException);
   });
 
-  test('loads library snapshots written before GitHub metadata existed', () {
-    final library = CanvasLibrary.initial().toJson()..remove('githubDestination');
-    final restored = CanvasLibrary.fromJson(library);
-    expect(restored.githubDestination, isNull);
+  test('rejects unexpected metadata records on load', () async {
+    final unexpectedOnly = _newDatabaseName(databaseNames);
+    final store = IndexedDbLibraryStore(databaseName: unexpectedOnly);
+    await _writeRecords(unexpectedOnly, metadataRecords: {'unexpected': 'not library metadata'});
+    await expectLater(store.load(), throwsFormatException);
+
+    final alongsideExpected = _newDatabaseName(databaseNames);
+    await _writeRecords(
+      alongsideExpected,
+      metadata: LibraryStoreCodec.encodeMetadata(_library()),
+      metadataRecords: {'unexpected': 'not library metadata'},
+      documents: LibraryStoreCodec.calculateWrites(null, _library()).documentPuts,
+    );
+    await expectLater(IndexedDbLibraryStore(databaseName: alongsideExpected).load(), throwsFormatException);
+  });
+
+  test('first save refuses occupied stores without mutating them', () async {
+    final unexpectedMetadata = _newDatabaseName(databaseNames);
+    await _writeRecords(unexpectedMetadata, metadataRecords: {'unexpected': 'preserve me'});
+    final metadataStore = IndexedDbLibraryStore(databaseName: unexpectedMetadata);
+    await expectLater(metadataStore.save(_library(), previous: null), throwsA(anything));
+    expect(await _readRecord(unexpectedMetadata, 'metadata', 'unexpected'), 'preserve me');
+    expect(await _readRecord(unexpectedMetadata, 'metadata', 'library'), isNull);
+    expect(await _readRecord(unexpectedMetadata, 'documents', 'a'), isNull);
+    expect(await _readRecord(unexpectedMetadata, 'documents', 'b'), isNull);
+
+    final orphanDocument = _newDatabaseName(databaseNames);
+    await _writeRecords(orphanDocument, documents: {'orphan': 'preserve me'});
+    final documentStore = IndexedDbLibraryStore(databaseName: orphanDocument);
+    await expectLater(documentStore.save(_library(), previous: null), throwsA(anything));
+    expect(await _readRecord(orphanDocument, 'metadata', 'library'), isNull);
+    expect(await _readRecord(orphanDocument, 'documents', 'orphan'), 'preserve me');
+    expect(await _readRecord(orphanDocument, 'documents', 'a'), isNull);
+    expect(await _readRecord(orphanDocument, 'documents', 'b'), isNull);
+  });
+
+  test('aborted initialization rolls back its earlier metadata put', () async {
+    final name = _newDatabaseName(databaseNames);
+    await _createDatabase(name, inlineDocumentKey: true);
+    final store = IndexedDbLibraryStore(databaseName: name);
+
+    await expectLater(store.save(_library(), previous: null), throwsA(anything));
+
+    expect(await _readRecord(name, 'metadata', 'library'), isNull);
   });
 }
 
-class _EmptyAttachments implements AttachmentStore {
-  @override
-  Future<void> delete(String path) async => throw UnimplementedError();
+String _newDatabaseName(List<String> names) {
+  final name = 'elseplane-test-${const Uuid().v4()}';
+  names.add(name);
+  return name;
+}
 
-  @override
-  Future<Uint8List> read(String path) async => throw UnimplementedError();
+CanvasLibrary _library() => CanvasLibrary(
+  currentId: 'a',
+  files: [
+    CanvasFile(id: 'a', name: 'A', document: _document(CanvasBackgroundKind.dotGrid)),
+    CanvasFile(id: 'b', name: 'B', document: _document(CanvasBackgroundKind.dotGrid)),
+  ],
+);
 
-  @override
-  Future<Uint8List?> readIfExists(String path) async => null;
+CanvasDocument _document(CanvasBackgroundKind background) => CanvasDocument(background: background, elements: []);
 
-  @override
-  Future<void> write(String path, Uint8List bytes) async => throw UnimplementedError();
+String _encodeDocument(CanvasDocument document) => jsonEncode(document.toJson());
+
+Future<IDBDatabase> _openDatabase(String name, {bool inlineDocumentKey = false}) {
+  final request = window.indexedDB.open(name, 1);
+  final result = Completer<IDBDatabase>();
+  request.onupgradeneeded = ((Event _) {
+    final database = request.result! as IDBDatabase..createObjectStore('metadata');
+    if (inlineDocumentKey) {
+      // This forces a document put to fail after the metadata put is queued.
+      database.createObjectStore('documents', IDBObjectStoreParameters(keyPath: 'id'.toJS));
+    } else {
+      database.createObjectStore('documents');
+    }
+  }).toJS;
+  request.onsuccess = ((Event _) {
+    if (!result.isCompleted) result.complete(request.result! as IDBDatabase);
+  }).toJS;
+  request.onerror = ((Event _) {
+    if (!result.isCompleted) result.completeError(request.error ?? StateError('Could not open test database'));
+  }).toJS;
+  return result.future;
+}
+
+Future<void> _writeRecords(
+  String name, {
+  String? metadata,
+  bool deleteMetadata = false,
+  Map<String, String> metadataRecords = const {},
+  Map<String, String> documents = const {},
+  List<String> deleteDocuments = const [],
+}) async {
+  final database = await _openDatabase(name);
+  try {
+    final transaction = database.transaction(
+      <JSAny?>['metadata'.toJS, 'documents'.toJS].toJS,
+      'readwrite',
+    );
+    final completed = _completed(transaction);
+    final metadataStore = transaction.objectStore('metadata');
+    if (metadata != null) metadataStore.put(metadata.toJS, 'library'.toJS);
+    if (deleteMetadata) metadataStore.delete('library'.toJS);
+    for (final entry in metadataRecords.entries) {
+      metadataStore.put(entry.value.toJS, entry.key.toJS);
+    }
+    final documentStore = transaction.objectStore('documents');
+    for (final entry in documents.entries) {
+      documentStore.put(entry.value.toJS, entry.key.toJS);
+    }
+    for (final id in deleteDocuments) {
+      documentStore.delete(id.toJS);
+    }
+    await completed;
+  } finally {
+    database.close();
+  }
+}
+
+Future<Object?> _readRecord(String name, String storeName, String key) async {
+  final database = await _openDatabase(name);
+  try {
+    final transaction = database.transaction(storeName.toJS, 'readonly');
+    final completed = _completed(transaction);
+    final request = transaction.objectStore(storeName).get(key.toJS);
+    final value = Completer<Object?>();
+    request.onsuccess = ((Event _) => value.complete(request.result.dartify())).toJS;
+    request.onerror = ((Event _) => value.completeError(
+      request.error ?? StateError('Could not read test record'),
+    )).toJS;
+    final result = await value.future;
+    await completed;
+    return result;
+  } finally {
+    database.close();
+  }
+}
+
+Future<void> _createDatabase(String name, {bool inlineDocumentKey = false}) async {
+  final database = await _openDatabase(name, inlineDocumentKey: inlineDocumentKey);
+  database.close();
+}
+
+Future<void> _deleteDatabase(String name) {
+  final request = window.indexedDB.deleteDatabase(name);
+  final result = Completer<void>();
+  request.onsuccess = ((Event _) => result.complete()).toJS;
+  request.onerror = ((Event _) => result.completeError(
+    request.error ?? StateError('Could not delete test database'),
+  )).toJS;
+  return result.future;
+}
+
+Future<void> _completed(IDBTransaction transaction) {
+  final result = Completer<void>();
+  transaction.oncomplete = ((Event _) => result.complete()).toJS;
+  transaction.onabort = ((Event _) => result.completeError(
+    transaction.error ?? StateError('Test transaction aborted'),
+  )).toJS;
+  return result.future;
 }

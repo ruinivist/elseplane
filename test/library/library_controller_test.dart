@@ -48,12 +48,14 @@ void main() {
     final saving = controller.flush();
     await store.started.future;
     controller.updateDocument(id, second);
-    expect(store.writes.single.current.document, same(first));
+    expect(store.writes.single.next.current.document, same(first));
+    expect(store.writes.single.previous, isNull);
     expect(controller.isDirty, isTrue);
     expect(controller.snapshot.current.document, same(second));
     gate.complete();
     await saving;
-    expect(store.writes.map((library) => library.current.document), [first, second]);
+    expect(store.writes.map((write) => write.next.current.document), [first, second]);
+    expect(store.writes.last.previous, same(store.writes.first.next));
     expect(controller.library.current.document, same(second));
     expect(controller.isDirty, isFalse);
   });
@@ -72,6 +74,7 @@ void main() {
     expect(controller.snapshot.current.document, same(document));
     store.fail = false;
     await controller.flush();
+    expect(store.writes.map((write) => write.previous), [null, null]);
     expect(controller.library.current.document, same(document));
     expect(controller.isDirty, isFalse);
     expect(controller.saveError, isNull);
@@ -118,6 +121,48 @@ void main() {
 
     expect(controller.library.githubDestination?.toJson(), _destination().toJson());
     expect(controller.library.file(id).document, isNotNull);
+  });
+
+  test('the first metadata save sends a full library with no previous snapshot', () async {
+    final initial = controller.library;
+
+    await controller.setGitHubDestination(_destination());
+
+    expect(store.writes, hasLength(1));
+    expect(store.writes.single.previous, isNull);
+    expect(store.writes.single.next.current.document, same(initial.current.document));
+    expect(store.writes.single.next.githubDestination?.toJson(), _destination().toJson());
+  });
+
+  test('the first write after load uses the loaded library as previous', () async {
+    controller.dispose();
+    final saved = CanvasLibrary.initial();
+    store = _Store(saved);
+    controller = LibraryController(store: store, attachments: attachments, files: _Files());
+    await controller.load();
+
+    await controller.rename(saved.currentId, 'Loaded');
+
+    expect(store.writes.single.previous, same(saved));
+    expect(store.writes.single.next.current.name, 'Loaded');
+  });
+
+  test('GitHub baseline saves compare against the published library', () async {
+    final id = controller.library.currentId;
+    await controller.setGitHubDestination(_destination());
+    final previous = controller.library;
+    final baseline = GitHubBaseline.capture(
+      _destination(),
+      '${previous.current.name}.canvas.json',
+      previous.current.document!,
+      const {},
+    );
+
+    await controller.saveGitHubBaseline(id, baseline);
+
+    expect(store.writes.last.previous, same(previous));
+    expect(store.writes.last.next.file(id).githubBaseline, same(baseline));
+    expect(store.writes.last.next.file(id).document, same(previous.file(id).document));
   });
 
   test('library names compare case-sensitively and reject exact duplicates', () async {
@@ -221,6 +266,8 @@ void main() {
     merge = await controller.previewTransferImport(candidate);
     final result = await controller.importTransfer(merge, confirmedOverwritePaths: merge.overwritePaths);
     expect(result.metadataSaved, isTrue);
+    expect(store.writes.last.previous?.file(id).document?.background, CanvasBackgroundKind.plain);
+    expect(store.writes.last.next.file(id).document?.background, CanvasBackgroundKind.dotGrid);
     expect(controller.documentToken, isNot(same(originalToken)));
     final replacedToken = controller.documentToken;
     await controller.create(CanvasFile(id: 'other', name: 'Other', document: CanvasLibrary.emptyDocument));
@@ -274,17 +321,20 @@ CanvasDocument _document(CanvasBackgroundKind background) => CanvasDocument(back
 // ---------- Storage doubles ----------
 
 class _Store implements LibraryStore {
-  final writes = <CanvasLibrary>[];
+  _Store([this.initial]);
+
+  final CanvasLibrary? initial;
+  final writes = <({CanvasLibrary? previous, CanvasLibrary next})>[];
   final started = Completer<void>();
   Completer<void>? gate;
   bool fail = false;
 
   @override
-  Future<CanvasLibrary?> load() async => null;
+  Future<CanvasLibrary?> load() async => initial;
 
   @override
-  Future<void> save(CanvasLibrary snapshot) async {
-    writes.add(snapshot);
+  Future<void> save(CanvasLibrary next, {required CanvasLibrary? previous}) async {
+    writes.add((previous: previous, next: next));
     final pending = gate;
     gate = null;
     if (pending != null) {

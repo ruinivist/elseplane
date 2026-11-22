@@ -10,6 +10,8 @@ editor interactions are best effort; full touchscreen canvas editing is not a
 supported workflow.
 
 The [notification spec](notifications.md) governs workspace feedback cards.
+The [browser canvas persistence spec](browser-canvas-persistence.md) governs
+local browser saves.
 
 ## Acceptance criteria
 

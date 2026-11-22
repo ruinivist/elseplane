@@ -1,24 +1,19 @@
 // Verifies canvas toolbar actions and responsive placement.
 
-import 'package:elseplane/app/app.dart';
-import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
+import '../../test_helpers.dart';
+
 void main() {
-  setUp(() async {
-    SharedPreferencesAsyncWeb.registerWith(null);
-    final preferences = SharedPreferencesAsync();
-    await preferences.remove(PreferencesLibraryStore.libraryKey);
-  });
+  setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
   testWidgets('toolbar displays tool icons', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await tester.pump();
 
@@ -39,7 +34,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
     await tester.pump();

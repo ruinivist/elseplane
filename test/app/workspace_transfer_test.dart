@@ -505,10 +505,10 @@ class _FakeLibraryStore extends TestLibraryStore {
   int saveCalls = 0;
 
   @override
-  Future<void> save(CanvasLibrary snapshot) async {
+  Future<void> save(CanvasLibrary snapshot, {required CanvasLibrary? previous}) async {
     saveCalls++;
     if (failSaves) throw Exception('save failed');
-    await super.save(snapshot);
+    await super.save(snapshot, previous: previous);
   }
 }
 

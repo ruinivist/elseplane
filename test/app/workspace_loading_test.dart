@@ -13,20 +13,18 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../canvas/test_helpers.dart';
 
 void main() {
-  setUp(() async {
+  setUp(() {
     SharedPreferencesAsyncWeb.registerWith(null);
-    final preferences = SharedPreferencesAsync();
-    await preferences.remove(PreferencesLibraryStore.libraryKey);
   });
 
   testWidgets('all element types restore in document order', (tester) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    final store = TestLibraryStore();
+    await tester.pumpWidget(ElseplaneApp(libraryStore: store));
     await tester.pump();
     await tester.pump();
 
@@ -92,7 +90,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 320));
     await tester.pump();
 
-    final document = (await PreferencesLibraryStore().load())!.current.document!;
+    final document = (await store.load())!.current.document!;
     final ids = document.elements.map((element) => element.id).toList();
     expect(document.background, CanvasBackgroundKind.plain);
     expect(document.elements, hasLength(4));
@@ -127,11 +125,11 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(ElseplaneApp(libraryStore: store));
     await tester.pump();
     await tester.pump();
 
-    final restored = (await PreferencesLibraryStore().load())!.current.document!;
+    final restored = (await store.load())!.current.document!;
     expect(restored.elements.map((element) => element.id), ids);
     expect(find.byType(TextElementView), findsOneWidget);
     expect(find.byType(CodeElementView), findsOneWidget);
@@ -174,28 +172,24 @@ void main() {
     expect(restoredArrow.geometry.end, arrowGeometry.end);
   });
 
-  testWidgets('malformed saved libraries are preserved and reported', (
+  testWidgets('unreadable saved libraries are reported without replacement', (
     tester,
   ) async {
-    const invalid = '{"version":99,"currentId":"invalid","files":[]}';
-    final preferences = SharedPreferencesAsync();
-    await preferences.setString(PreferencesLibraryStore.libraryKey, invalid);
+    final store = _UnreadableWorkspaceStore();
 
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(ElseplaneApp(libraryStore: store));
     await tester.pump();
     await tester.pump();
 
     expect(find.byType(TextElementView), findsNothing);
     expect(find.text('Could not load saved canvas'), findsOneWidget);
     expect(find.byType(SnackBar), findsNothing);
-    expect(await preferences.getString(PreferencesLibraryStore.libraryKey), invalid);
-
     await tester.tap(find.byKey(const ValueKey('toolbar-text')));
     await tester.pump();
     await tester.tapAt(const Offset(120, 200), kind: PointerDeviceKind.mouse);
     await pumpPastSave(tester);
     expect(find.byType(TextElementView), findsNothing);
-    expect(await preferences.getString(PreferencesLibraryStore.libraryKey), invalid);
+    expect(store.saveCalls, 0);
   });
 
   testWidgets('workspace save failures appear as notification cards', (tester) async {
@@ -241,8 +235,20 @@ class _FailingWorkspaceStore extends TestLibraryStore {
   bool failSaves = false;
 
   @override
-  Future<void> save(CanvasLibrary snapshot) async {
+  Future<void> save(CanvasLibrary snapshot, {required CanvasLibrary? previous}) async {
     if (failSaves) throw _error;
-    await super.save(snapshot);
+    await super.save(snapshot, previous: previous);
+  }
+}
+
+class _UnreadableWorkspaceStore implements LibraryStore {
+  int saveCalls = 0;
+
+  @override
+  Future<CanvasLibrary?> load() async => throw const FormatException('Invalid saved library');
+
+  @override
+  Future<void> save(CanvasLibrary next, {required CanvasLibrary? previous}) async {
+    saveCalls++;
   }
 }

@@ -50,6 +50,7 @@ class LibraryController extends ChangeNotifier {
   Timer? _saveTimer;
   var _revision = 0;
   var _changeRevision = 0;
+  var _hasDurableLibrary = false;
   var _disposed = false;
   Object? _saveError;
   Object _documentToken = Object();
@@ -71,7 +72,9 @@ class LibraryController extends ChangeNotifier {
   // ---------- Loading and document saves ----------
 
   Future<void> load() async {
-    _library = await _store.load() ?? CanvasLibrary.initial();
+    final saved = await _store.load();
+    _library = saved ?? CanvasLibrary.initial();
+    _hasDurableLibrary = saved != null;
     _changeRevision++;
     _notify();
   }
@@ -545,9 +548,10 @@ class LibraryController extends ChangeNotifier {
   }
 
   Future<void> _persist(CanvasLibrary next, {bool replaceDocument = false}) async {
-    await _store.save(next);
+    await _store.save(next, previous: _hasDurableLibrary ? library : null);
     if (replaceDocument || next.currentId != library.currentId) _documentToken = Object();
     _library = next;
+    _hasDurableLibrary = true;
     _changeRevision++;
     _saveError = null;
   }

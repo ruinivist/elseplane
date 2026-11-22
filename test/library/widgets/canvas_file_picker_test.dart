@@ -473,8 +473,8 @@ class _FailingLibraryStore extends TestLibraryStore {
   bool fail = false;
 
   @override
-  Future<void> save(CanvasLibrary next) async {
+  Future<void> save(CanvasLibrary next, {required CanvasLibrary? previous}) async {
     if (fail) throw StateError('Storage full');
-    await super.save(next);
+    await super.save(next, previous: previous);
   }
 }

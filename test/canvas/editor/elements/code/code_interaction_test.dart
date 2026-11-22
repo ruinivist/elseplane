@@ -2,28 +2,21 @@
 
 import 'dart:math' as math;
 
-import 'package:elseplane/app/app.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
-import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/ui/common/labeled_switch.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../../../test_helpers.dart';
 
 void main() {
-  setUp(() async {
-    SharedPreferencesAsyncWeb.registerWith(null);
-    final preferences = SharedPreferencesAsync();
-    await preferences.remove(PreferencesLibraryStore.libraryKey);
-  });
+  setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
 
   test('code source edits update durable data', () {
     final model = testCodeModel(
@@ -49,7 +42,7 @@ void main() {
   testWidgets('code places once, returns to select, and focuses editor', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await tester.pump();
 
@@ -82,7 +75,7 @@ void main() {
   testWidgets('code controls follow editing and persisted display settings', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await placeCodeBlock(tester, const Offset(120, 140));
     await tester.pump();
@@ -176,7 +169,7 @@ void main() {
   testWidgets('active code blocks move and rotate from floating controls', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await placeCodeBlock(tester, const Offset(120, 140));
     await tester.pump();
@@ -223,7 +216,7 @@ void main() {
   testWidgets('code title grows and drags in screen coordinates under rotation and zoom', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await placeCodeBlock(tester, const Offset(120, 140));
     await tester.pump();
@@ -265,7 +258,7 @@ void main() {
   testWidgets('delete removes an active unselected code block', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await placeCodeBlock(tester, const Offset(120, 140));
 
@@ -284,7 +277,7 @@ void main() {
   testWidgets('code blocks resize from the bottom-right handle', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
 
     await placeCodeBlock(tester, const Offset(40, 120));
@@ -331,7 +324,7 @@ void main() {
   });
 
   testWidgets('code scroll boundary does not pan canvas', (tester) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await placeCodeBlock(tester, const Offset(120, 140));
 
@@ -368,7 +361,7 @@ void main() {
   testWidgets('inactive code blocks move from the surface without selecting', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
 
     await placeCodeBlock(tester, const Offset(120, 140));
@@ -400,7 +393,7 @@ void main() {
   testWidgets('code editor keeps native select and delete actions', (
     tester,
   ) async {
-    await tester.pumpWidget(const ElseplaneApp());
+    await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await tester.pump();
     await placeCodeBlock(tester, const Offset(300, 200));

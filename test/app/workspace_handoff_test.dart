@@ -385,9 +385,9 @@ class _Store extends TestLibraryStore {
   bool fail = false;
 
   @override
-  Future<void> save(CanvasLibrary snapshot) async {
+  Future<void> save(CanvasLibrary snapshot, {required CanvasLibrary? previous}) async {
     if (fail) throw StateError('save failed');
-    await super.save(snapshot);
+    await super.save(snapshot, previous: previous);
   }
 }
 

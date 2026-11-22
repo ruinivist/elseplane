@@ -31,6 +31,13 @@ are tracked in the [active plan](../plans/folder-based-canvas-transfers.md).
 
 ## Saving
 
+The browser store uses IndexedDB: one document record per canvas, separate
+library metadata, and canvas-only autosaves that write only changed documents.
+Library operations that change both records and metadata commit them in one
+transaction. [ADR 0007](../adr/0007-store-canvases-individually-in-indexeddb.md)
+records the decision, and the [browser canvas persistence specification](../specs/browser-canvas-persistence.md)
+defines save and load behavior. Old `localStorage` libraries are not migrated.
+
 - Every queued write captures file identity, revision, and snapshot. Failed
   writes retain unsaved state; a late write cannot mark newer content saved.
 - Failed loading must not silently overwrite unreadable saved data with an
