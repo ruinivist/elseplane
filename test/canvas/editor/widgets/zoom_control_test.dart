@@ -13,7 +13,7 @@ import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 
 void main() {
   testWidgets('reveals controls and changes or resets zoom', (tester) async {
-    final controller = LazyCanvasController(minScale: 0.5, maxScale: 2);
+    final controller = LazyCanvasController(minScale: 0.1, maxScale: 2);
     addTearDown(controller.dispose);
     final semantics = tester.ensureSemantics();
 
@@ -80,22 +80,23 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('zoom-in')));
     expect(controller.scale, 2);
 
-    controller.updateScalebyDelta(-1.49);
+    controller.updateScalebyDelta(-1.85);
     await tester.tap(find.byKey(const ValueKey('zoom-out')));
     await tester.tap(find.byKey(const ValueKey('zoom-out')));
-    expect(controller.scale, 0.5);
+    await tester.pump();
+    expect(controller.scale, 0.1);
+    expect(find.text('10%'), findsOneWidget);
 
     controller.updateScalebyDelta(10);
     expect(controller.scale, 2);
     controller.updateScalebyDelta(-10);
-    expect(controller.scale, 0.5);
+    expect(controller.scale, 0.1);
 
     await mouse.moveTo(Offset.zero);
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('zoom-in')).hitTestable(), findsNothing);
 
-    controller.updateScalebyDelta(0.95);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('zoom-in')).hitTestable(), findsOneWidget);

@@ -89,7 +89,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   // ---------- Constants ----------
 
   final _canvasController = LazyCanvasController(
-    minScale: 0.5,
+    minScale: 0.1,
     maxScale: 2,
     buildExtentMultiplier: 3.4,
     useIdsFromArgs: true,
