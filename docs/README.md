@@ -61,6 +61,9 @@ then read the authority relevant to the work. Do not create a separate
   findings are not confirmed defects or requirements unless accepted elsewhere.
   [Canvas pan performance](research/canvas-pan-performance.md) records the
   low-zoom benchmarks and remaining rendering suspects.
+  [Button styling](research/button-styling.md) records the Settings, explorer,
+  and GitHub visual comparisons and the selected changes.
+- [Artifacts](artifacts/) holds screenshot boards linked from research entries.
 - [Archive](archive/) preserves superseded notes and completed work for history.
 
 ## Required reading
@@ -80,9 +83,9 @@ them. Update the authority when an accepted contract changes.
 
 Use lowercase kebab-case filenames, except `README.md` and `AGENTS.md`. Keep
 links and local asset references relative to their owning document. Keep
-images, HTML comparisons, and launchers beside their research and update every
-reference when names or locations change. Create a file or folder only when it
-has content and a current purpose.
+supporting files beside their research or group screenshot boards by topic
+under `artifacts/`. Update references when names or locations change. Create a
+file or folder only when it has content and a current purpose.
 
 Move ideas to the backlog for triage. Promote accepted behavior or ownership
 rules to a specification or architecture document, recording consequential
