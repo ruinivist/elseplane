@@ -45,6 +45,10 @@ then read the authority relevant to the work. Do not create a separate
 - **Proposed:** [ADR 0008: simplify glass at overview zoom](adr/0008-simplify-glass-at-overview-zoom.md).
   Test whether dropping live blur on zoomed-out canvas content improves panning
   while preserving the glass look.
+- **Proposed:** [ADR 0009: speed up GitHub canvas transfers](adr/0009-speed-up-github-canvas-transfers.md),
+  with a [draft specification](specs/github-transfer-performance.md), a
+  [commit blob reuse plan](plans/github-commit-blob-reuse.md), and a
+  [repository archive import plan](plans/github-repository-archive-import.md).
 - [Backlog](backlog.md) contains reported defects, proposals, and open
   verification. Entries are not accepted behavior or architecture.
 - [Plans](plans/) track active work and its checks; they do not
