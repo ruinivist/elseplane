@@ -136,7 +136,6 @@ class CanvasInput extends ChangeNotifier {
     pen = PenTool(session: () => session, onStroke: onStroke);
     arrow = ArrowTool(session: () => session, onArrow: onArrow);
     shape = ShapeTool(session: () => session, onShape: onShape);
-    pen.addListener(notifyListeners);
     arrow.addListener(notifyListeners);
     shape.addListener(notifyListeners);
     modifierPressed.addListener(_modifierChanged);
@@ -583,7 +582,6 @@ class CanvasInput extends ChangeNotifier {
     _disposed = true;
     _generation++;
     session.removeListener(_sessionChanged);
-    pen.removeListener(notifyListeners);
     arrow.removeListener(notifyListeners);
     shape.removeListener(notifyListeners);
     pen.dispose();

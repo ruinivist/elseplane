@@ -9,6 +9,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../../../test_helpers.dart';
@@ -16,6 +17,30 @@ import '../../../test_helpers.dart';
 void main() {
   setUp(() async {
     SharedPreferencesAsyncWeb.registerWith(null);
+  });
+
+  testWidgets('pen hover moves the cursor without rebuilding the canvas', (tester) async {
+    await tester.pumpWidget(testElseplaneApp());
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('toolbar-draw')));
+    await tester.pumpAndSettle();
+
+    final canvas = find.byType(LazyCanvas);
+    final preview = find.byKey(const ValueKey('pen-preview'));
+    final originalCanvas = tester.widget<LazyCanvas>(canvas);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(100, 200));
+    addTearDown(mouse.removePointer);
+
+    for (final position in [const Offset(120, 220), const Offset(180, 260)]) {
+      await mouse.moveTo(position);
+      await tester.pump();
+
+      final local = position - tester.getTopLeft(preview);
+      expect(preview, paints..circle(x: local.dx, y: local.dy));
+      expect(tester.widget<LazyCanvas>(canvas), same(originalCanvas));
+    }
+    expect(find.byType(PenElementView), findsNothing);
   });
 
   testWidgets('pen commits inactive strokes and stays enabled', (tester) async {
