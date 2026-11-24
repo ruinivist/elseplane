@@ -555,85 +555,100 @@ void main() {
   });
 
   group('GitHub transfer commit', () {
-    test('preflights then uploads, creates one tree and commit, and updates once without force', () async {
-      final requestOrder = <String>[];
-      final blobBodies = <Map<String, dynamic>>[];
-      final message = '  Release: Save MixedCase Canvas\n${List.filled(80, 'x').join()}  ';
-      late Map<String, dynamic> treeBody;
-      late Map<String, dynamic> commitBody;
-      late Map<String, dynamic> refBody;
-      final api = _api((request) async {
-        requestOrder.add('${request.method} ${request.url.path}');
-        if (request.url.path == '/user') return _user();
-        if (request.url.path == '/user/installations/10/repositories') return _membership();
-        if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
-        if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
-        if (request.url.path.endsWith('/git/trees/$_treeSha')) {
-          return _json({
-            'truncated': false,
-            'tree': _entries([
-              (path: 'README.md', sha: _commitSha, type: 'blob', mode: '100644', size: 12),
-              (path: 'Folder', sha: _treeSha, type: 'tree', mode: '040000', size: null),
-              (path: 'Folder/attachments', sha: _nextTreeSha, type: 'tree', mode: '040000', size: null),
-              (path: 'Folder/Map.canvas.json', sha: _documentSha, type: 'blob', mode: '100644', size: 10),
-              (path: _imagePath, sha: _imageSha, type: 'blob', mode: '100644', size: 1),
-            ]),
-          });
-        }
-        if (request.method == 'POST' && request.url.path.endsWith('/git/blobs')) {
-          blobBodies.add(jsonDecode(request.body) as Map<String, dynamic>);
-          return _json({'sha': blobBodies.length == 1 ? _documentSha : _imageSha});
-        }
-        if (request.method == 'POST' && request.url.path.endsWith('/git/trees')) {
-          treeBody = jsonDecode(request.body) as Map<String, dynamic>;
-          return _json({'sha': _nextTreeSha});
-        }
-        if (request.method == 'POST' && request.url.path.endsWith('/git/commits')) {
-          commitBody = jsonDecode(request.body) as Map<String, dynamic>;
-          return _json({'sha': _commitSha, 'html_url': 'https://github.com/owner/repo/commit/$_commitSha'});
-        }
-        if (request.method == 'PATCH') {
-          refBody = jsonDecode(request.body) as Map<String, dynamic>;
-          return _json({'ref': 'refs/heads/main'});
-        }
-        if (request.url.path.contains('/git/blobs/')) {
-          fail('Commit must not read existing blob content');
-        }
-        return _json({'error': 'unexpected request'}, status: 404);
+    const documentBlobId = 'aed2973e4b8a7ff1b30ff5c4751e5a2b38989e74';
+    const imageBlobId = '1ccd5817b2e1e7c3adefd77769a761a207e1bc91';
+
+    for (final exactCopy in [false, true]) {
+      test('publishes ${exactCopy ? 'an exact copy without uploads' : 'an edit with one upload'}', () async {
+        final requestOrder = <String>[];
+        final blobBodies = <Map<String, dynamic>>[];
+        final message = '  Release: Save MixedCase Canvas\n${List.filled(80, 'x').join()}  ';
+        late Map<String, dynamic> treeBody;
+        late Map<String, dynamic> commitBody;
+        late Map<String, dynamic> refBody;
+        final api = _api((request) async {
+          requestOrder.add('${request.method} ${request.url.path}');
+          if (request.url.path == '/user') return _user();
+          if (request.url.path == '/user/installations/10/repositories') return _membership();
+          if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
+          if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
+          if (request.url.path.endsWith('/git/trees/$_treeSha')) {
+            return _json({
+              'truncated': false,
+              'tree': _entries([
+                (path: 'README.md', sha: _commitSha, type: 'blob', mode: '100644', size: 12),
+                (path: 'Folder', sha: _treeSha, type: 'tree', mode: '040000', size: null),
+                (path: 'Folder/attachments', sha: _nextTreeSha, type: 'tree', mode: '040000', size: null),
+                (
+                  path: exactCopy ? 'Original.canvas.json' : 'Folder/Map.canvas.json',
+                  sha: exactCopy ? documentBlobId : _documentSha,
+                  type: 'blob',
+                  mode: '100644',
+                  size: 3,
+                ),
+                (path: _imagePath, sha: imageBlobId.toUpperCase(), type: 'blob', mode: '100644', size: 2),
+              ]),
+            });
+          }
+          if (request.method == 'POST' && request.url.path.endsWith('/git/blobs')) {
+            blobBodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+            return _json({'sha': documentBlobId});
+          }
+          if (request.method == 'POST' && request.url.path.endsWith('/git/trees')) {
+            treeBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return _json({'sha': _nextTreeSha});
+          }
+          if (request.method == 'POST' && request.url.path.endsWith('/git/commits')) {
+            commitBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return _json({'sha': _commitSha, 'html_url': 'https://github.com/owner/repo/commit/$_commitSha'});
+          }
+          if (request.method == 'PATCH') {
+            refBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return _json({'ref': 'refs/heads/main'});
+          }
+          if (request.url.path.contains('/git/blobs/')) {
+            fail('Commit must not read existing blob content');
+          }
+          return _json({'error': 'unexpected request'}, status: 404);
+        });
+
+        final result = await api.commitTransfer(
+          _destination(),
+          _tree(),
+          installationId: 10,
+          message: message,
+        );
+
+        expect(result.commitSha, _commitSha);
+        expect(result.url, 'https://github.com/owner/repo/commit/$_commitSha');
+        expect(blobBodies, [
+          if (!exactCopy)
+            {
+              'content': base64.encode([1, 2, 3]),
+              'encoding': 'base64',
+            },
+        ]);
+        expect(treeBody['base_tree'], _treeSha);
+        expect(treeBody['tree'], [
+          {'path': 'Folder/Map.canvas.json', 'mode': '100644', 'type': 'blob', 'sha': documentBlobId},
+          {'path': _imagePath, 'mode': '100644', 'type': 'blob', 'sha': imageBlobId},
+        ]);
+        expect(commitBody['message'], message);
+        expect(commitBody['parents'], [_headSha]);
+        expect(refBody, {'sha': _commitSha, 'force': false});
+        expect(requestOrder, [
+          'GET /user',
+          'GET /user/installations/10/repositories',
+          'GET /repos/owner/repo/git/ref/heads/main',
+          'GET /repos/owner/repo/git/commits/$_headSha',
+          'GET /repos/owner/repo/git/trees/$_treeSha',
+          if (!exactCopy) 'POST /repos/owner/repo/git/blobs',
+          'POST /repos/owner/repo/git/trees',
+          'POST /repos/owner/repo/git/commits',
+          'PATCH /repos/owner/repo/git/refs/heads/main',
+        ]);
       });
-
-      final result = await api.commitTransfer(
-        _destination(),
-        _tree(),
-        installationId: 10,
-        message: message,
-      );
-
-      expect(result.commitSha, _commitSha);
-      expect(result.url, 'https://github.com/owner/repo/commit/$_commitSha');
-      expect(blobBodies, [
-        {
-          'content': base64.encode([1, 2, 3]),
-          'encoding': 'base64',
-        },
-        {
-          'content': base64.encode([4, 5]),
-          'encoding': 'base64',
-        },
-      ]);
-      expect(treeBody['base_tree'], _treeSha);
-      expect((treeBody['tree'] as List).cast<Map<String, dynamic>>().map((entry) => entry['path']), [
-        'Folder/Map.canvas.json',
-        _imagePath,
-      ]);
-      expect((treeBody['tree'] as List).cast<Map<String, dynamic>>().every((entry) => entry['sha'] != null), isTrue);
-      expect(commitBody['message'], message);
-      expect(commitBody['parents'], [_headSha]);
-      expect(refBody, {'sha': _commitSha, 'force': false});
-      expect(requestOrder.where((request) => request.startsWith('PATCH ')), hasLength(1));
-      expect(requestOrder.where((request) => request.contains('/git/blobs/')), isEmpty);
-      expect(requestOrder.where((request) => request.contains('/git/blobs')), hasLength(2));
-    });
+    }
 
     test('rejects blank messages before making network requests', () async {
       var mediatorRequests = 0;

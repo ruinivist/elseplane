@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/library/github_metadata.dart';
 import 'package:elseplane/library/transfer/canvas_transfer.dart';
@@ -281,7 +282,7 @@ final class GitHubApi {
   }
 
   /// Publishes a prepared transfer tree in one commit on a freshly captured
-  /// default-branch head, without content tracking or remote blob comparisons.
+  /// default-branch head, reusing matching regular blobs from that tree.
   Future<GitHubCommitResult> commitTransfer(
     GitHubDestination destination,
     TransferTree tree, {
@@ -298,9 +299,15 @@ final class GitHubApi {
     final current = await _snapshot(destination, token);
     _validateTransferOutput(current, tree);
 
+    final existingBlobs = {
+      for (final entry in current.entries.values)
+        if (entry.isRegularBlob) entry.sha.toLowerCase(),
+    };
     final changes = <Map<String, Object?>>[];
     for (final path in tree.files.keys.toList()..sort()) {
-      final sha = await _createBlob(destination, token, tree.files[path]!);
+      final bytes = tree.files[path]!;
+      final blobId = _gitBlobId(bytes);
+      final sha = existingBlobs.contains(blobId) ? blobId : await _createBlob(destination, token, bytes);
       changes.add(_treeBlob(path, sha));
     }
 
@@ -447,6 +454,19 @@ final class GitHubApi {
       _invalid('GitHub blob size does not match its tree entry');
     }
     return bytes;
+  }
+
+  String _gitBlobId(Uint8List bytes) {
+    late final Digest digest;
+    sha1.startChunkedConversion(
+        ChunkedConversionSink<Digest>.withCallback((values) {
+          digest = values.single;
+        }),
+      )
+      ..add(ascii.encode('blob ${bytes.length}\x00'))
+      ..add(bytes)
+      ..close();
+    return digest.toString();
   }
 
   Future<String> _createBlob(GitHubDestination destination, String token, Uint8List bytes) async {
