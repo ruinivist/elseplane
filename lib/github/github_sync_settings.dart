@@ -6,8 +6,10 @@ import 'dart:async';
 import 'package:elseplane/github/github_import_dialog.dart';
 import 'package:elseplane/github/github_sync.dart';
 import 'package:elseplane/theme/theme.dart';
+import 'package:elseplane/ui/common/menu_surface.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 // ---------- Sync settings ----------
@@ -22,9 +24,15 @@ class GitHubSyncSettings extends StatefulWidget {
 }
 
 class _GitHubSyncSettingsState extends State<GitHubSyncSettings> {
-  var _showInstallations = false;
+  final _manageAccessFocus = FocusNode(debugLabel: 'Manage GitHub access');
   var _importDialogOpen = false;
   GitHubSync get _sync => widget.sync;
+
+  @override
+  void dispose() {
+    _manageAccessFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -60,7 +68,7 @@ class _GitHubSyncSettingsState extends State<GitHubSyncSettings> {
             const SizedBox(height: 12),
             _repositoryControls(context),
             const SizedBox(height: 12),
-            _importControls(),
+            _importControls(context),
           ] else if (session.logoutNeedsRetry)
             TextButton(
               key: const ValueKey('github-logout-retry'),
@@ -146,51 +154,96 @@ class _GitHubSyncSettingsState extends State<GitHubSyncSettings> {
     );
   }
 
-  Widget _importControls() {
+  Widget _importControls(BuildContext context) {
+    final disabled = _sync.busy;
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      children: [
+        FilledButton(
+          key: const ValueKey('github-import'),
+          onPressed: (disabled && !_sync.commitInProgress) || !_sync.canImport
+              ? null
+              : () => unawaited(_openImportDialog()),
+          child: const Text('Import from GitHub'),
+        ),
+        if (_sync.session.installations.isEmpty)
+          TextButton(
+            key: const ValueKey('github-manage-access'),
+            onPressed: disabled ? null : () => _sync.manageAccess(_sync.installUri),
+            child: const Text('Manage GitHub access'),
+          )
+        else
+          _manageAccessMenu(context),
+      ],
+    );
+  }
+
+  Widget _manageAccessMenu(BuildContext context) {
     final disabled = _sync.busy;
     final installations = _sync.session.installations;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 8,
+    final theme = BTheme.of(context);
+    final itemStyle = menuItemStyle(theme, destructive: false).copyWith(
+      foregroundColor: WidgetStatePropertyAll(
+        disabled ? theme.colors.textMuted : theme.colors.textPrimary,
+      ),
+    );
+    return MenuAnchor(
+      childFocusNode: _manageAccessFocus,
+      alignmentOffset: const Offset(0, 4),
+      crossAxisUnconstrained: false,
+      style: menuShellStyle(
+        width: () => 260,
+        alignment: AlignmentDirectional.bottomStart,
+      ),
+      menuChildren: [
+        MenuSurface(
           children: [
-            FilledButton(
-              key: const ValueKey('github-import'),
-              onPressed: (disabled && !_sync.commitInProgress) || !_sync.canImport
-                  ? null
-                  : () => unawaited(_openImportDialog()),
-              child: const Text('Import from GitHub'),
-            ),
-            TextButton(
-              key: const ValueKey('github-manage-access'),
-              onPressed: disabled
-                  ? null
-                  : installations.isEmpty
-                  ? () => _sync.manageAccess(_sync.installUri)
-                  : () => setState(() => _showInstallations = !_showInstallations),
-              child: const Text('Manage GitHub access'),
+            for (final (index, installation) in installations.indexed)
+              MenuItemButton(
+                key: ValueKey('github-manage-installation-${installation.id}'),
+                autofocus: index == 0,
+                onPressed: disabled ? null : () => _sync.manageAccess(installation.managementUri),
+                style: itemStyle,
+                trailingIcon: const Icon(Icons.open_in_new, size: 16),
+                child: Text('Manage ${installation.accountLogin}'),
+              ),
+            const Divider(height: 8),
+            MenuItemButton(
+              onPressed: disabled ? null : () => _sync.manageAccess(_sync.installUri),
+              style: itemStyle,
+              trailingIcon: const Icon(Icons.open_in_new, size: 16),
+              child: const Text('Install on another account'),
             ),
           ],
         ),
-        if (_showInstallations && installations.isNotEmpty)
-          Wrap(
-            spacing: 8,
-            children: [
-              for (final installation in installations)
-                TextButton(
-                  key: ValueKey('github-manage-installation-${installation.id}'),
-                  onPressed: disabled ? null : () => _sync.manageAccess(installation.managementUri),
-                  child: Text('Manage ${installation.accountLogin}'),
-                ),
-              TextButton(
-                onPressed: disabled ? null : () => _sync.manageAccess(_sync.installUri),
-                child: const Text('Install another account'),
-              ),
-            ],
-          ),
       ],
+      builder: (context, controller, _) {
+        void openMenu() {
+          if (!disabled && !controller.isOpen) controller.open();
+        }
+
+        return Semantics(
+          expanded: controller.isOpen,
+          child: CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.arrowDown): openMenu,
+              const SingleActivator(LogicalKeyboardKey.arrowUp): openMenu,
+            },
+            child: TextButton.icon(
+              key: const ValueKey('github-manage-access'),
+              focusNode: _manageAccessFocus,
+              onPressed: disabled ? null : () => controller.isOpen ? controller.close() : controller.open(),
+              style: controller.isOpen && !disabled
+                  ? TextButton.styleFrom(backgroundColor: theme.colors.surfacePressed)
+                  : null,
+              iconAlignment: IconAlignment.end,
+              icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+              label: const Text('Manage GitHub access'),
+            ),
+          ),
+        );
+      },
     );
   }
 

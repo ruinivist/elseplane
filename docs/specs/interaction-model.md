@@ -246,7 +246,8 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
   default branch and offers an explicit refresh. After a valid choice, Sync
   offers the **Import from GitHub** action. Selecting a repository never starts
   an import automatically.
-- **Manage GitHub access** shows installation choices inline when applicable.
+- **Manage GitHub access** shows installation choices in an
+  [anchored menu](github-sync-ux.md#sync-settings) when applicable.
   The validated install or management URL opens in a separate tab. Finish
   interactions and save completed edits before opening the link. Refresh
   discovery after changing access on GitHub.

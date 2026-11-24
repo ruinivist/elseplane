@@ -17,13 +17,19 @@ About   |
         | [ yourname/canvases v ] [ refresh icon ]
         | Private / Default branch: main
         |
-        | [ Import from GitHub ]   Manage GitHub access >
+        | [ Import from GitHub ]   Manage GitHub access ▾
 ```
 
 - Use a searchable dropdown with **Choose repository** as its empty state. Selecting a repository explicitly confirms the choice. Save it after validation. Show its visibility and default branch as plain text below the dropdown.
 - Put an icon-only **Refresh repositories** button next to the dropdown. Use the label for its tooltip and accessible name. Show refresh progress and errors inline.
 - **Log out** ends the Elseplane session directly and returns to **Connect GitHub**. Keep the saved repository for the same account when it reconnects. Show a retry inline if logout fails.
-- **Manage GitHub access** opens GitHub in a new tab. Show installation choices inline, including the option to install on another account. Keep connection and repository setup in Sync without opening another dialog over Settings.
+- With existing installations, **Manage GitHub access** opens a themed menu
+  below the button when it fits. Keep the button highlighted while the menu
+  is open. List one **Manage \<account>** action per installation, then a
+  divider and **Install on another account**. Both actions close the menu and
+  open GitHub in a new tab. Escape or clicking outside dismisses the menu
+  without opening GitHub. With no installations, the button opens the GitHub
+  install page directly, without a dropdown.
 - **Import from GitHub** uses the selected repository. Selecting a repository
   does not start an import; the user starts it with this action. Import and
   Commit use the repository's default branch. If the default branch changes,

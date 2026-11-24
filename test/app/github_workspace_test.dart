@@ -808,18 +808,18 @@ void main() {
     expect(store.library.githubDestination?.branch, 'next');
   });
 
-  testWidgets('Sync remains usable in a short dark viewport and shows installation choices inline', (tester) async {
+  testWidgets('Sync dropdown stays usable in a short dark viewport', (tester) async {
     tester.view.physicalSize = const Size(360, 340);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    Uri? opened;
+    final opened = <Uri>[];
     await _pumpWorkspace(
       tester,
       _savedStore(),
       _commitApi(github: (_) async => _json({'error': 'not found'}, status: 404)),
       navigate: (_) {},
-      open: (url) => opened = Uri.parse(url),
+      open: (url) => opened.add(Uri.parse(url)),
       theme: starlessDarkThemeData,
     );
     await _openSync(tester);
@@ -829,11 +829,45 @@ void main() {
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    await _tapVisible(tester, find.text('Manage GitHub access'));
-    await tester.pump();
-    await _tapVisible(tester, find.text('Manage owner'));
-    await pumpUntil(tester, () => opened != null);
-    expect(opened, Uri.parse('https://github.com/settings/installations/23'));
+    final manageAccess = find.byKey(const ValueKey('github-manage-access'));
+    final manageOwner = find.text('Manage owner');
+    final installAnother = find.text('Install on another account');
+    expect(manageOwner, findsNothing);
+    await _tapVisible(tester, manageAccess);
+    await tester.pumpAndSettle();
+    expect(manageOwner.hitTestable(), findsOneWidget);
+    expect(installAnother.hitTestable(), findsOneWidget);
+    expect(opened, isEmpty);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(manageOwner, findsNothing);
+    expect(opened, isEmpty);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(manageOwner.hitTestable(), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await pumpUntil(tester, () => opened.isNotEmpty);
+    expect(opened.single, Uri.parse('https://github.com/apps/test-app/installations/new'));
+    await tester.pumpAndSettle();
+    expect(installAnother, findsNothing);
+
+    await _tapVisible(tester, manageAccess);
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(100, 26));
+    await tester.pumpAndSettle();
+    expect(manageOwner, findsNothing);
+    expect(opened, hasLength(1));
+
+    await _tapVisible(tester, manageAccess);
+    await tester.pumpAndSettle();
+    await _tapVisible(tester, manageOwner);
+    await pumpUntil(tester, () => opened.length == 2);
+    expect(opened.last, Uri.parse('https://github.com/settings/installations/23'));
+    await tester.pumpAndSettle();
+    expect(manageOwner, findsNothing);
     expect(tester.takeException(), isNull);
   });
 
