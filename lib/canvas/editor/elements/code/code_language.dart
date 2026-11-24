@@ -2,7 +2,6 @@
 // Used by code blocks, Markdown rendering, and language selection controls.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/painting.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/languages/bash.dart';

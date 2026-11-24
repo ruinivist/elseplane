@@ -619,7 +619,7 @@ class CanvasInputTarget {
       .._observeDown(event)
       .._resolveQuickTextTarget(this, event, control: control);
     if (!input.canHandle(event) || !attached) return;
-    if (input._gesture case _ObjectGesture(pointer: final pointer, id: final target)
+    if (input._gesture case _ObjectGesture(:final pointer, id: final target)
         when pointer == event.pointer && target == id) {
       _sequence = input._gesture;
       return;

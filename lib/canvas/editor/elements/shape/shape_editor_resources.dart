@@ -5,7 +5,7 @@ import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/element_resources.dart';
 import 'package:elseplane/ui/common/retained_scroll_controller.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 // ---------- Resources ----------
 

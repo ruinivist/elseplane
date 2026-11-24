@@ -3,7 +3,7 @@
 
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/glass_surface.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // ---------- Widgets ----------
 

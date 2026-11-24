@@ -5,8 +5,8 @@ import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/widgets/file_tree_popup.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/previews/theme_preview.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
+import 'package:flutter/widgets.dart';
 
 // ---------- Preview ----------
 

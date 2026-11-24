@@ -1,10 +1,10 @@
 // Verifies arrow creation drafts, handles, and cancellation.
 
+import 'dart:ui';
+
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/tools/arrow_tool.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../test_helpers.dart';

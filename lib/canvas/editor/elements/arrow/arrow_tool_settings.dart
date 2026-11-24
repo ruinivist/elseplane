@@ -5,7 +5,7 @@ import 'package:elseplane/canvas/editor/elements/arrow/arrow_stroke_style_icon.d
 import 'package:elseplane/canvas/editor/widgets/stroke_settings.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/theme/theme.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class ArrowToolSettings extends StatelessWidget {
   const ArrowToolSettings({

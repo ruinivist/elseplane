@@ -1,10 +1,11 @@
 // Verifies mouse and keyboard canvas navigation.
 
+
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';

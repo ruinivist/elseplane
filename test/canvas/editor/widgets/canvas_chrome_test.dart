@@ -11,10 +11,10 @@ import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:elseplane/ui/common/surface_icon_button.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 // ---------- Tests ----------
 

@@ -12,10 +12,10 @@ import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/glass_surface.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 

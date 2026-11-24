@@ -1,12 +1,13 @@
 // Verifies language-picker pointer ownership beyond code block bounds.
 // Exercises search, selection, and dismissal through the full canvas.
 
+
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../../../test_helpers.dart';

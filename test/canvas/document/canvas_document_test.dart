@@ -3,9 +3,9 @@
 
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // ---------- Tests ----------

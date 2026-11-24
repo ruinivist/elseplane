@@ -1,7 +1,7 @@
 // Defines the semantic color, typography, geometry, and theme contracts.
 // Used by reusable foundation widgets and concrete application themes.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 export 'package:elseplane/theme/sizes.dart';
 

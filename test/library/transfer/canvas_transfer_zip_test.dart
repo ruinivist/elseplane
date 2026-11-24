@@ -32,7 +32,7 @@ void main() {
     expect(() => transferSourceFromFile(name: 'document.json', bytes: Uint8List(0)), throwsFormatException);
   });
 
-  for (final compression in CompressionType.values) {
+  for (final compression in [CompressionType.none, CompressionType.deflate, CompressionType.bzip2]) {
     test('ZIP input verifies supported $compression compression and CRC', () async {
       final bytes = _zip({
         'README': Uint8List.fromList([1, 2, 3, 4]),
@@ -40,6 +40,22 @@ void main() {
       final entries = await ZipTransferSource(bytes).entries();
       expect(entries.single.path, 'README');
       expect(entries.single.size, 4);
+    });
+  }
+
+  for (final compression in [ZipFile.zipCompressionZstd, ZipFile.zipCompressionLzma, ZipFile.zipCompressionXz]) {
+    test('ZIP input rejects unsupported $compression compression', () async {
+      final bytes = _zip({
+        'README': Uint8List.fromList([1, 2, 3]),
+      });
+      _writeUint16(bytes, _localHeaderOffset(bytes) + 8, compression);
+      _writeUint16(bytes, _centralHeaderOffset(bytes) + 10, compression);
+      await expectLater(
+        ZipTransferSource(bytes).entries(),
+        throwsA(
+          isA<FormatException>().having((error) => error.message, 'message', 'Unsupported ZIP compression: README'),
+        ),
+      );
     });
   }
 

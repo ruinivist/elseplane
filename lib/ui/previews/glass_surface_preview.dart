@@ -8,8 +8,8 @@ import 'package:elseplane/ui/common/pointer_scroll_boundary.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:elseplane/ui/previews/theme_preview.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
+import 'package:material_ui/material_ui.dart';
 
 // ---------- Annotated previews ----------
 

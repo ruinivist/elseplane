@@ -8,8 +8,8 @@ import 'package:elseplane/attachments/image_import.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
 import 'package:elseplane/theme/theme.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:uuid/uuid.dart';
 

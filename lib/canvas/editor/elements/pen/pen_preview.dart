@@ -3,7 +3,7 @@
 
 import 'package:elseplane/canvas/editor/tools/pen_tool.dart';
 import 'package:elseplane/canvas/geometry/pen_geometry.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 // ---------- Preview ----------
 

@@ -3,8 +3,8 @@
 import 'package:elseplane/canvas/editor/elements/media/media_link_card.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_link_preview.dart';
 import 'package:elseplane/ui/previews/theme_preview.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
+import 'package:material_ui/material_ui.dart';
 
 const _youtubeUrl = 'https://www.youtube.com/watch?v=M7lc1UVf-VE';
 

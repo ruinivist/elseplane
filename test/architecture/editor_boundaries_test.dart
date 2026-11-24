@@ -52,6 +52,7 @@ void main() {
               dependency.contains('/theme/') ||
               dependency.contains('/ui/') ||
               dependency.contains('infinite_lazy_grid') ||
+              dependency.contains('package:material_ui/material_ui.dart') ||
               dependency.contains('package:flutter/material.dart') ||
               dependency.contains('package:flutter/rendering.dart'),
           isFalse,

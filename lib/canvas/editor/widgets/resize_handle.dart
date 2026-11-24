@@ -3,7 +3,7 @@
 
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/resize_icon.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 // ---------- Widgets ----------
 

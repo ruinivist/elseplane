@@ -11,9 +11,9 @@ import 'package:elseplane/ui/common/select.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:elseplane/ui/common/surface_icon_button.dart';
 import 'package:elseplane/ui/previews/theme_preview.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widget_previews.dart';
+import 'package:material_ui/material_ui.dart';
 
 @Preview(
   name: 'Surface',

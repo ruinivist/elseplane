@@ -10,9 +10,9 @@ import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../canvas/test_helpers.dart';

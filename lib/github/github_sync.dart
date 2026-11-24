@@ -13,7 +13,7 @@ import 'package:elseplane/library/github_metadata.dart';
 import 'package:elseplane/library/library_controller.dart';
 import 'package:elseplane/library/transfer/canvas_transfer.dart';
 import 'package:elseplane/ui/common/notifications.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 // ---------- Workspace workflow ----------
 

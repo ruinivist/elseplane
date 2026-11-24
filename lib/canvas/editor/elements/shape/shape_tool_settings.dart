@@ -6,8 +6,8 @@ import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
 import 'package:elseplane/ui/common/discrete_slider.dart';
-import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:material_ui/material_ui.dart';
 
 class ShapeToolSettings extends StatelessWidget {
   const ShapeToolSettings({

@@ -1,7 +1,7 @@
 // Provides the named color presets offered by editing controls.
 // Used by text and drawing tool settings.
 
-import 'package:flutter/material.dart';
+import 'dart:ui';
 
 // ---------- Presets ----------
 // TODO(plane): Fixed white defaults have poor contrast in Light mode; revisit before enabling it.

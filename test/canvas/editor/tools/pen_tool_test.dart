@@ -1,10 +1,11 @@
 // Verifies pen creation samples, cancellation, and queued defaults.
 
+import 'dart:ui';
+
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/tools/pen_tool.dart';
 import 'package:elseplane/canvas/geometry/pen_geometry.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../test_helpers.dart';
@@ -107,7 +108,7 @@ void main() {
     final strokes = <RawPenStroke>[];
     final tool = PenTool(session: testSessionProvider(), onStroke: strokes.add)
       ..onPointerDown(const PointerDownEvent(pointer: 1, kind: PointerDeviceKind.stylus))
-      ..setColor(Colors.red)
+      ..setColor(const Color(0xfff44336))
       ..setStrokeWidth(8)
       ..setStreamline(1)
       ..cancel()
@@ -115,7 +116,7 @@ void main() {
       ..onPointerDown(const PointerDownEvent(pointer: 2, kind: PointerDeviceKind.stylus))
       ..onPointerUp(const PointerUpEvent(pointer: 2, kind: PointerDeviceKind.stylus));
     expect(strokes, hasLength(1));
-    expect(strokes.single.color, Colors.red);
+    expect(strokes.single.color, const Color(0xfff44336));
     expect(strokes.single.width, 8);
     expect(strokes.single.streamline, 1);
     tool.dispose();

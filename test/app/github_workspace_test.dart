@@ -16,12 +16,12 @@ import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../canvas/test_helpers.dart';
 

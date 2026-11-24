@@ -7,7 +7,7 @@ environment:
   sdk: ^3.13.0
 
 dependencies:
-  archive: ^4.3.0
+  archive: ^4.7.1
   crypto: ^3.0.7
   cupertino_icons: ^2.0.0
   file_selector: ^1.1.0
@@ -16,14 +16,14 @@ dependencies:
   flutter_markdown_plus:
     git:
       url: https://github.com/ruinivist/flutter_markdown_plus.git
-      ref: main
+      ref: e5089a731a1d97898e3b2899b57d76b84f23c116
   flutter_svg: ^2.3.0
   google_fonts: ^9.0.0
   http: ^1.6.0
   infinite_lazy_grid:
     git:
       url: https://github.com/ruinivist/infinite_lazy_grid.git
-      ref: main
+      ref: 3a5b4cd6b4fdd821e172ada014c36c922ee42b65
   json_annotation: ^4.12.0
   lucide_icons_flutter: ^4.0.1
   markdown:
@@ -31,6 +31,7 @@ dependencies:
       url: https://github.com/ruinivist/dart-tools.git
       ref: main
       path: pkgs/markdown
+  material_ui: ^1.11.1
   perfect_freehand: ^2.5.2+1
   re_editor: ^0.10.0
   re_highlight: ^0.0.3

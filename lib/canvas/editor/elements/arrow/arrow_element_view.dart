@@ -9,7 +9,7 @@ import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 // ---------- Rendering ----------
 

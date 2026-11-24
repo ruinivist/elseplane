@@ -1,10 +1,11 @@
 // Retains cached pen geometry for accepted stroke values.
 // Used by stroke views while the session owns movement and selection.
 
+import 'dart:ui';
+
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/element_resources.dart';
 import 'package:elseplane/canvas/geometry/pen_geometry.dart';
-import 'package:flutter/material.dart';
 
 // ---------- Resources ----------
 

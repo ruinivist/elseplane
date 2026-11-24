@@ -13,10 +13,11 @@ import 'package:elseplane/library/transfer/canvas_transfer_zip.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
 import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/ui/common/select.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../canvas/test_helpers.dart';

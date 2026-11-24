@@ -3,9 +3,9 @@
 import 'package:elseplane/github/github_sync.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:material_ui/material_ui.dart';
 
 Future<void> showGitHubImportDialog(
   BuildContext context, {

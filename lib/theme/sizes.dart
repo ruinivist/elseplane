@@ -1,7 +1,7 @@
 // Defines reusable layout dimensions and component sizes.
 // Used across application themes and reusable UI components.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 abstract final class BSizes {
   static const colorButtonSize = Size.square(32);

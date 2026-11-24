@@ -4,9 +4,9 @@
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/surface.dart';
-import 'package:flutter/material.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:material_ui/material_ui.dart';
 
 // ---------- Zoom control ----------
 

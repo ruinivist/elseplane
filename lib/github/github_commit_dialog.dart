@@ -3,7 +3,7 @@
 
 import 'package:elseplane/github/github_api.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // ---------- Commit dialog ----------
 

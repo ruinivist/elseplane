@@ -6,7 +6,7 @@ import 'package:elseplane/canvas/editor/elements/pen/pen_resources.dart';
 import 'package:elseplane/canvas/geometry/pen_geometry.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 // ---------- Rendering ----------
 

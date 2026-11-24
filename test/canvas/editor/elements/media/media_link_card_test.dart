@@ -3,8 +3,8 @@
 import 'package:elseplane/canvas/editor/elements/media/media_link_card.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_link_preview.dart';
 import 'package:elseplane/theme/starless.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../test_helpers.dart';
 

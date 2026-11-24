@@ -1,9 +1,9 @@
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/ui/common/notifications.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('fast completion shows only the result', (tester) async {

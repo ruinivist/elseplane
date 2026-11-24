@@ -1,7 +1,7 @@
 // Maps saved shape kinds to presentation labels and icons.
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Maps persisted shape kinds to concise user-facing labels.

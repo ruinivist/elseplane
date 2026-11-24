@@ -4,7 +4,7 @@ import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/widgets/stroke_settings.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/discrete_slider.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 class PenToolSettings extends StatelessWidget {
   const PenToolSettings({

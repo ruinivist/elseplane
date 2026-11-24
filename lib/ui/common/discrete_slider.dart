@@ -2,7 +2,7 @@
 // Used by canvas tool settings that edit stepped values.
 
 import 'package:elseplane/theme/theme.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // ---------- Geometry ----------
 

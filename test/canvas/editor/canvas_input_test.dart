@@ -1,7 +1,6 @@
 // Verifies pointer ownership, cancellation, and tool routing over canvas objects.
 // Uses a measured viewport substitute and focused canvas integration.
 
-import 'dart:ui';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_input.dart';
@@ -12,7 +11,7 @@ import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';

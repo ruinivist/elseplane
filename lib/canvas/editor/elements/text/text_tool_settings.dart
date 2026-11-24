@@ -7,7 +7,7 @@ import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
 import 'package:elseplane/ui/common/select.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // ---------- Font options ----------
 

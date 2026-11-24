@@ -6,9 +6,9 @@ import 'package:elseplane/canvas/editor/canvas_page.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../test_helpers.dart';
 

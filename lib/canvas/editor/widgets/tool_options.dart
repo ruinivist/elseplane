@@ -3,7 +3,7 @@
 
 import 'package:elseplane/ui/common/pointer_scroll_boundary.dart';
 import 'package:elseplane/ui/common/surface.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:scroll_animator/scroll_animator.dart';
 
 // ---------- Widgets ----------

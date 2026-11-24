@@ -1,8 +1,8 @@
 // Verifies canvas toolbar actions and responsive placement.
 
 import 'package:elseplane/library/widgets/canvas_title.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 
 import '../../test_helpers.dart';

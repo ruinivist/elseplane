@@ -9,7 +9,7 @@ import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/element_resources.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_markdown_images.dart';
 import 'package:elseplane/ui/common/retained_scroll_controller.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 // ---------- Resources ----------
 

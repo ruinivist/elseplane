@@ -2,7 +2,7 @@
 // Used by canvas controls that expose a click action.
 
 import 'package:elseplane/ui/common/surface.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // ---------- Widgets ----------
 

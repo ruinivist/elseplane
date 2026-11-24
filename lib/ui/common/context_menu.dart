@@ -4,7 +4,7 @@
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/labeled_switch.dart';
 import 'package:elseplane/ui/common/menu_surface.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // ---------- Models ----------
 

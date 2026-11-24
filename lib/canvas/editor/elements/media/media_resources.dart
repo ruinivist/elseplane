@@ -11,7 +11,7 @@ import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/element_resources.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_link_preview.dart';
 import 'package:elseplane/canvas/editor/media_source.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 
 // ---------- Resources ----------

@@ -14,8 +14,8 @@ import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/ui/previews/theme_preview.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
+import 'package:material_ui/material_ui.dart';
 
 @Preview(name: 'PenToolSettings', size: Size(320, 620), theme: previewTheme)
 Widget penToolSettingsPreview() => const _SettingsPreview(_SettingsKind.pen);

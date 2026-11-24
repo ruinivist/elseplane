@@ -1,12 +1,13 @@
 // Verifies tool shortcuts and editing handoff.
 
+
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences_web/shared_preferences_web.dart';
 

@@ -2,9 +2,9 @@
 
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/ui/common/surface_icon_button.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('raised icon actions retain focus, keyboard activation, and disabled semantics', (tester) async {

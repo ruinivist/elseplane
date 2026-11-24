@@ -8,10 +8,10 @@ import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:re_editor/re_editor.dart';
 
 import '../../../test_helpers.dart';

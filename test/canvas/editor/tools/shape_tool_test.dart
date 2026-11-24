@@ -1,10 +1,9 @@
 // Verifies shape creation bounds and minimum size.
 
+import 'dart:ui';
+
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/tools/shape_tool.dart';
-import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../test_helpers.dart';

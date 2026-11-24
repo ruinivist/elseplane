@@ -3,7 +3,7 @@
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
 import 'package:elseplane/ui/common/discrete_slider.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 class StrokeSettings extends StatelessWidget {
   const StrokeSettings({

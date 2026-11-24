@@ -5,7 +5,7 @@ import 'dart:math' as math;
 
 import 'package:elseplane/canvas/editor/widgets/tool_options.dart';
 import 'package:elseplane/library/widgets/canvas_title.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 // ---------- Canvas chrome ----------
 

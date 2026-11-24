@@ -10,8 +10,8 @@ import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/icon_drag.dart';
 import 'package:elseplane/ui/common/pointer_scroll_boundary.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 // ---------- Rendering ----------
 

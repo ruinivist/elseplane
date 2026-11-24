@@ -6,7 +6,7 @@ import 'dart:math' as math;
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/theme/sizes.dart';
 import 'package:elseplane/ui/common/surface.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 // ---------- Canvas toolbar ----------
 

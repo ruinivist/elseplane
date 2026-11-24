@@ -4,8 +4,8 @@ import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/notifications.dart';
 import 'package:elseplane/ui/previews/theme_preview.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
+import 'package:flutter/widgets.dart';
 
 @Preview(
   name: 'Workspace notifications',

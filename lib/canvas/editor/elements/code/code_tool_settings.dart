@@ -5,7 +5,7 @@ import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/labeled_switch.dart';
 import 'package:elseplane/ui/common/select.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Presents line-number and background settings for the active code block.
 class CodeToolSettings extends StatelessWidget {

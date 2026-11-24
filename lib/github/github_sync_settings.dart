@@ -8,9 +8,9 @@ import 'package:elseplane/github/github_sync.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/menu_surface.dart';
 import 'package:elseplane/ui/common/select.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:material_ui/material_ui.dart';
 
 // ---------- Sync settings ----------
 

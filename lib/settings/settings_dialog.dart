@@ -8,9 +8,9 @@ import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // ---------- Dialog ----------

@@ -2,8 +2,8 @@
 // Exercises the controller through Flutter scrollable attachment and remounting.
 
 import 'package:elseplane/ui/common/retained_scroll_controller.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('retains each axis across removal and clamps shorter content', (tester) async {

@@ -10,7 +10,7 @@ import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_markdown_editor.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 

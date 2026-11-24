@@ -22,7 +22,7 @@ import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/notifications.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:web/web.dart' as web;
 
 // ---------- Workspace ----------

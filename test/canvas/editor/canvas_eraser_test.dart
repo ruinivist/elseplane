@@ -1,12 +1,13 @@
 // Verifies erasing overlapping elements and saving completed edits.
 
+import 'dart:ui';
+
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
-import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';

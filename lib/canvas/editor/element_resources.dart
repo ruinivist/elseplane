@@ -1,9 +1,11 @@
 // Synchronizes retained rendering resources with accepted editor snapshots.
 // Owned by CanvasView outside lazily culled element widgets.
 
+import 'dart:ui';
+
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 // ---------- Presentation adapter ----------
 

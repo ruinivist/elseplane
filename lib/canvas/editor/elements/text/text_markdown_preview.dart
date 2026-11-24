@@ -10,8 +10,8 @@ import 'package:elseplane/canvas/editor/elements/text/text_markdown_images.dart'
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:url_launcher/url_launcher.dart';
