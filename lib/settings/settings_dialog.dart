@@ -10,6 +10,7 @@ import 'package:elseplane/ui/common/select.dart';
 import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // ---------- Dialog ----------
@@ -151,7 +152,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
     key: const ValueKey('settings-close'),
     tooltip: 'Close',
     onPressed: () => Navigator.of(context).pop(),
-    icon: const Icon(Icons.close),
+    icon: const Icon(LucideIcons.x),
+    style: BSizes.compactIconButtonStyle,
   );
 
   Widget _wideBody(BuildContext context) {
@@ -348,7 +350,6 @@ class _SettingsDialogState extends State<SettingsDialog> {
               SelectOption(value: SurfaceStyle.solid, label: 'Solid'),
               SelectOption(value: SurfaceStyle.glass, label: 'Glass'),
             ],
-            showBorder: false,
             onChanged: _changeSurfaceStyle,
           ),
         ],
@@ -363,7 +364,6 @@ class _SettingsDialogState extends State<SettingsDialog> {
               SelectOption(value: ThemeMode.light, label: 'Light'),
               SelectOption(value: ThemeMode.dark, label: 'Dark'),
             ],
-            showBorder: false,
             onChanged: _changeTheme,
           ),
         ],
@@ -408,14 +408,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
     return TextButton(
       style: TextButton.styleFrom(
         minimumSize: const Size(0, 36),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         foregroundColor: muted ? theme.colors.textSecondary : null,
-        overlayColor: Colors.transparent,
       ),
       onPressed: () => _openAboutLink(url),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label),
+          Text(label, style: const TextStyle(decoration: TextDecoration.underline)),
           const SizedBox(width: 8),
           const Icon(Icons.north_east, size: BSizes.defaultIconSize),
         ],
@@ -455,7 +455,6 @@ class _SettingsDialogState extends State<SettingsDialog> {
             ),
             SelectOption(value: CanvasBackgroundKind.plain, label: 'Plain'),
           ],
-          showBorder: false,
           onChanged: (kind) {
             setState(() => _canvasBackgroundKind = kind);
             widget.onCanvasBackgroundChanged?.call(kind);
@@ -471,19 +470,19 @@ class _SettingsDialogState extends State<SettingsDialog> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            TextButton(
+            OutlinedButton(
               key: const ValueKey('canvas-import-button'),
               onPressed: _transferActive || widget.onImport == null ? null : () => _closeAfterTransfer(widget.onImport),
               child: const Text('Import'),
             ),
-            TextButton(
+            OutlinedButton(
               key: const ValueKey('canvas-export-button'),
               onPressed: _transferActive || widget.onExportCanvas == null
                   ? null
                   : () => _runTransfer(widget.onExportCanvas),
               child: const Text('Export current canvas'),
             ),
-            TextButton(
+            OutlinedButton(
               key: const ValueKey('library-export-button'),
               onPressed: _transferActive || widget.onExportLibrary == null
                   ? null

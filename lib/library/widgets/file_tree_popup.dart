@@ -81,7 +81,6 @@ class _FileTreePopupState extends State<FileTreePopup> {
   static const _rowHeight = 30.0;
   static const _indent = 18.0;
   static const _iconSize = 16.0;
-  static const _controlSize = 28.0;
 
   // ---------- Keyboard focus ----------
 
@@ -237,7 +236,7 @@ class _FileTreePopupState extends State<FileTreePopup> {
           child: Stack(
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 38),
+                padding: const EdgeInsets.only(top: 44),
                 // Keep scrolling rows together so their moving bounds cannot
                 // reorder Tab traversal around the fixed header controls.
                 child: FocusTraversalGroup(
@@ -425,11 +424,7 @@ class _FileTreePopupState extends State<FileTreePopup> {
     tooltip: tooltip,
     onPressed: onPressed,
     icon: Icon(icon),
-    iconSize: _iconSize,
-    style: const ButtonStyle(
-      minimumSize: WidgetStatePropertyAll(Size.zero),
-      fixedSize: WidgetStatePropertyAll(Size.square(_controlSize)),
-    ),
+    style: BSizes.compactIconButtonStyle,
   );
 }
 

@@ -66,7 +66,7 @@ Future<String?> showGitHubCommitDialog(
                 alignment: MainAxisAlignment.end,
                 children: [
                   TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                  TextButton(onPressed: () => submit(context), child: const Text('Commit')),
+                  FilledButton(onPressed: () => submit(context), child: const Text('Commit')),
                 ],
               ),
             ),

@@ -163,9 +163,31 @@ void main() {
     expect(importCalls, 2);
     expect(find.byType(SettingsDialog), findsOneWidget);
   });
+
+  testWidgets('Data actions stay reachable in narrow dark Settings', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var exports = 0;
+    await _openCanvasSettings(
+      tester,
+      theme: starlessDarkThemeData,
+      onImport: () async => false,
+      onExport: () async => exports++,
+    );
+
+    expect(find.byKey(const ValueKey('canvas-import-button')).hitTestable(), findsOneWidget);
+    expect(find.byKey(const ValueKey('canvas-export-button')).hitTestable(), findsOneWidget);
+    final exportLibrary = find.byKey(const ValueKey('library-export-button'));
+    expect(exportLibrary.hitTestable(), findsOneWidget);
+    await tester.tap(exportLibrary);
+    await tester.pumpAndSettle();
+
+    expect(exports, 1);
+    expect(tester.takeException(), isNull);
+  });
 }
 
-TextButton _button(WidgetTester tester, String key) => tester.widget<TextButton>(find.byKey(ValueKey(key)));
+ButtonStyleButton _button(WidgetTester tester, String key) => tester.widget(find.byKey(ValueKey(key)));
 
 // ---------- Test helpers ----------
 
@@ -173,12 +195,13 @@ Future<void> _openCanvasSettings(
   WidgetTester tester, {
   required Future<bool> Function() onImport,
   required Future<void> Function() onExport,
+  ThemeData? theme,
   Future<void> Function(ThemeMode)? onThemeModeChanged,
   Future<void> Function(SurfaceStyle)? onSurfaceStyleChanged,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
-      theme: starlessLightThemeData,
+      theme: theme ?? starlessLightThemeData,
       home: Builder(
         builder: (context) => Scaffold(
           body: TextButton(

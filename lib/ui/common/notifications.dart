@@ -437,7 +437,7 @@ class _NotificationCard extends StatelessWidget {
             onEnd: () => controller._finishExit(item.id),
             child: Surface(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

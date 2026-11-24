@@ -139,7 +139,7 @@ void main() {
     expect(_importText('Reconnect GitHub to continue.'), findsOneWidget);
     await _tapVisible(tester, _importClose);
     await _waitForEnabledButton(tester, find.byKey(const ValueKey('github-connect')));
-    expect(tester.widget<TextButton>(find.byKey(const ValueKey('github-connect'))).onPressed, isNotNull);
+    expect(tester.widget<ButtonStyleButton>(find.byKey(const ValueKey('github-connect'))).onPressed, isNotNull);
     expect(find.textContaining('Reconnect GitHub to continue.'), findsOneWidget);
     expect(find.textContaining('private response'), findsNothing);
     expect(store.library.githubDestination?.toJson(), _destination.toJson());
@@ -164,7 +164,7 @@ void main() {
     expect(find.text('Connected as @owner'), findsOneWidget);
     expect(find.text('owner/repo'), findsOneWidget);
     expect(find.textContaining('temporarily unavailable'), findsOneWidget);
-    expect(tester.widget<TextButton>(_importButton).onPressed, isNull);
+    expect(tester.widget<ButtonStyleButton>(_importButton).onPressed, isNull);
     expect(tester.widget<SearchableSelect<int?>>(_repositoryPicker).onChanged, isNull);
     expect(store.library.githubDestination?.toJson(), _destination.toJson());
 
@@ -193,7 +193,7 @@ void main() {
     final importButton = _importButton;
     await _waitForEnabledButton(tester, importButton);
 
-    expect(tester.widget<TextButton>(importButton).onPressed, isNotNull);
+    expect(tester.widget<ButtonStyleButton>(importButton).onPressed, isNotNull);
     expect(find.textContaining('read-only'), findsOneWidget);
     await _closeSync(tester);
     expect(_marker, findsOneWidget);
@@ -477,9 +477,17 @@ void main() {
           _importText('Preparing import…').evaluate().isNotEmpty,
       'first lazy GitHub blob read',
     );
+    expect(_hasFocusInsideGitHubImportDialog(), isFalse);
     await _tapImportBarrier(tester);
     expect(_importDialog, findsOneWidget);
-    await _tapVisible(tester, _importText('Cancel'));
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(_hasFocusInsideGitHubImportDialog(), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(_hasFocusInsideGitHubImportDialog(), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
     await _waitForImportDialogClosed(tester);
     expect(_importButton.hitTestable(), findsOneWidget);
     expect(tester.widget<CanvasPage>(find.byType(CanvasPage)).blocked, isFalse);
@@ -504,10 +512,7 @@ void main() {
           _importText('Preparing import…').evaluate().isNotEmpty,
       'retry lazy GitHub blob read',
     );
-    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-    await tester.pump();
-    final cancelButton = find.byKey(const ValueKey('github-import-cancel'));
-    expect(tester.widget<TextButton>(cancelButton).focusNode?.hasFocus, isFalse);
+    expect(_hasFocusInsideGitHubImportDialog(), isFalse);
     final localAfterEdit = store.library;
 
     firstBlob.complete(http.Response('{}', 429, headers: {'retry-after': '60'}));
@@ -532,18 +537,31 @@ void main() {
       () => _importDialog.evaluate().isNotEmpty && _importText('2 canvases ready to import.').evaluate().isNotEmpty,
       'new import confirmation',
     );
-    expect(tester.widget<TextButton>(cancelButton).focusNode?.hasFocus, isTrue);
+    expect(_hasFocusInsideGitHubImportDialog(), isFalse);
     expect(store.library, same(localAfterEdit));
     expect(blobReads, 3);
-    await _tapVisible(tester, _importConfirm);
+    for (var tab = 0; tab < 3; tab++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+    }
+    expect(_hasFocusInsideGitHubImportDialog(), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
     await _pumpUntilBusySafe(
       tester,
       () => _importDialog.evaluate().isNotEmpty && _importText('Imported 2 canvases.').evaluate().isNotEmpty,
       'new import result',
     );
+    expect(_hasFocusInsideGitHubImportDialog(), isFalse);
     expect(store.library.files.any((file) => file.name == 'New'), isTrue);
     expect(blobReads, 3);
-    await _tapVisible(tester, _importText('Done'));
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(_hasFocusInsideGitHubImportDialog(), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
     await _waitForImportDialogClosed(tester);
   });
 
@@ -653,7 +671,7 @@ void main() {
     expect(find.textContaining('temporarily unavailable'), findsOneWidget);
     expect(store.library.githubDestination?.toJson(), _destination.toJson());
     await _tapVisible(tester, retry);
-    await _waitForEnabledButton(tester, find.widgetWithText(TextButton, 'Connect GitHub'));
+    await _waitForEnabledButton(tester, find.widgetWithText(FilledButton, 'Connect GitHub'));
     expect(attempts, 2);
     expect(store.library.githubDestination?.toJson(), _destination.toJson());
 
@@ -683,7 +701,7 @@ void main() {
       'default-branch import failure result',
     );
     expect(_importTextContaining('Refresh and reselect').hitTestable(), findsOneWidget);
-    expect(tester.widget<TextButton>(_importButton).onPressed, isNull);
+    expect(tester.widget<ButtonStyleButton>(_importButton).onPressed, isNull);
     expect(tester.widget<SearchableSelect<int?>>(_repositoryPicker).onChanged, isNull);
     expect(store.library.githubDestination?.branch, 'main');
 
@@ -692,7 +710,7 @@ void main() {
     await _tapVisible(tester, find.byTooltip('Refresh repositories'));
     await _waitForRepositoryPicker(tester);
     expect(find.textContaining('Default branch changed from main to next'), findsOneWidget);
-    expect(tester.widget<TextButton>(_importButton).onPressed, isNull);
+    expect(tester.widget<ButtonStyleButton>(_importButton).onPressed, isNull);
     expect(store.library.githubDestination?.branch, 'main');
     await _selectRepository(tester, 'owner/repo');
     await _waitForEnabledButton(tester, _importButton);
@@ -746,7 +764,7 @@ void main() {
     await _openSync(tester);
     final connectButton = find.byKey(const ValueKey('github-connect'));
     await _waitForEnabledButton(tester, connectButton);
-    final connect = tester.widget<TextButton>(connectButton).onPressed!;
+    final connect = tester.widget<ButtonStyleButton>(connectButton).onPressed!;
     await _tapVisible(tester, connectButton);
     await _pumpUntilBusySafe(tester, () => requests.isNotEmpty, 'GitHub authorization request');
     connect();
@@ -1100,7 +1118,7 @@ void main() {
     await _dismissCommitNotice(tester);
 
     await _openSync(tester);
-    expect(tester.widget<TextButton>(_importButton).onPressed, isNotNull);
+    expect(tester.widget<ButtonStyleButton>(_importButton).onPressed, isNotNull);
     await _tapVisible(tester, _importButton);
     await tester.pump();
     expect(requests, hasLength(requestsBeforeRejectedActions));
@@ -1296,7 +1314,7 @@ const String _commitBlockedNotice = 'Wait for the current commit to finish, then
 final Finder _commitAction = find.byKey(const ValueKey('canvas-title-action'));
 final Finder _submitCommit = find.descendant(
   of: find.byType(SurfaceDialog),
-  matching: find.widgetWithText(TextButton, 'Commit'),
+  matching: find.widgetWithText(FilledButton, 'Commit'),
 );
 
 Future<void> _openSync(WidgetTester tester) async {
@@ -1315,6 +1333,11 @@ Future<void> _closeSync(WidgetTester tester) async {
 Finder _importText(String text) => find.descendant(of: _importDialog, matching: find.text(text));
 
 Finder _importTextContaining(String text) => find.descendant(of: _importDialog, matching: find.textContaining(text));
+
+bool _hasFocusInsideGitHubImportDialog() {
+  final context = FocusManager.instance.primaryFocus?.context;
+  return context?.findAncestorWidgetOfExactType<SurfaceDialog>()?.key == const ValueKey('github-import-dialog');
+}
 
 Future<void> _tapImportBarrier(WidgetTester tester) async {
   await tester.tapAt(const Offset(1, 1));

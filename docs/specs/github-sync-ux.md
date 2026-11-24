@@ -6,6 +6,9 @@ Status: accepted
 
 When GitHub is configured, **Sync** appears between **Canvas** and **About** in Settings. Show **Connect GitHub** when signed out. Authorization returns to Sync, which shows the account and repository controls once verified.
 
+Use filled actions for **Connect GitHub** and **Import from GitHub**. Keep the
+existing secondary treatment for logout, retry, and management controls.
+
 ```text
 Canvas  | GitHub
 [Sync]  | Connected as @yourname                  [ Log out ]
@@ -80,9 +83,8 @@ it.
 2. **Confirm.** Show how many canvases are ready to import. If any local canvases
    would be replaced, show their count and paths and warn that shared images
    may also change in other canvases. Let long lists scroll without moving the
-   buttons. Focus **Cancel** initially. Cancel, Close, or Escape returns to Sync
-   without import writes. **Import canvases** starts saving, with or without
-   replacements.
+   buttons. Cancel, Close, or Escape returns to Sync without import writes.
+   **Import canvases** starts saving, with or without replacements.
 3. **Saving.** Keep the dialog open. Show a spinner with **Saving canvases…**,
    remove **Cancel**, and visibly disable Close. Escape does nothing. The user
    cannot dismiss the dialog once saving starts.
@@ -92,6 +94,9 @@ it.
    failure, explain what failed and warn if shared images may already have
    changed even though canvases were not saved. **Done**, Close, or Escape
    returns to Sync.
+
+Do not focus an action automatically when the dialog opens or changes phase.
+Keep normal keyboard traversal so users can Tab to an action and activate it.
 
 This flow applies to GitHub import only. Local import follows the
 [canvas file interaction model](interaction-model.md).
@@ -112,6 +117,7 @@ Hover/focus   some new*  [ Commit ]
 - Clicking or tapping the title, including the asterisk and the padding before the button, opens the canvas explorer. If the title is clipped, its tooltip shows the full path and sits clear of the title and **Commit**.
 - Hover over the title or move keyboard focus into the title area to reveal **Commit**. The button appears beside the title when it fits and directly below when it needs its own row. The title stays in place and the button stays visible while the pointer or focus moves onto it.
 - On touch-only browsers, show **Commit** whenever committing is available. **Commit** opens the dialog with the selected repository and branch and asks for a commit message before publishing the current canvas.
+- In the commit dialog, emphasize the submit **Commit** action and keep Cancel secondary.
 
 Confirmed commits show a success notification without an action. If saving the
 local baseline fails, show both outcomes in a persistent warning without

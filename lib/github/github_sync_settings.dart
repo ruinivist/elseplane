@@ -68,7 +68,7 @@ class _GitHubSyncSettingsState extends State<GitHubSyncSettings> {
               child: const Text('Retry logout'),
             )
           else if (!session.busy || _sync.progress != null)
-            TextButton(
+            FilledButton(
               key: const ValueKey('github-connect'),
               onPressed: disabled ? null : _sync.connect,
               child: const Text('Connect GitHub'),
@@ -156,7 +156,7 @@ class _GitHubSyncSettingsState extends State<GitHubSyncSettings> {
           crossAxisAlignment: WrapCrossAlignment.center,
           spacing: 8,
           children: [
-            TextButton(
+            FilledButton(
               key: const ValueKey('github-import'),
               onPressed: (disabled && !_sync.commitInProgress) || !_sync.canImport
                   ? null

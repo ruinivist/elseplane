@@ -200,6 +200,11 @@ ThemeData _starlessThemeData(BColors colors, Brightness brightness, Map<String, 
     surfaceTint: Colors.transparent,
   );
 
+  final textActionStyle = actionStyle.copyWith(
+    padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16, vertical: 6)),
+  );
+  const emphasizedMinimumSize = WidgetStatePropertyAll(Size(0, 36));
+
   return ThemeData(
     fontFamily: defaultFontFamily,
     brightness: brightness,
@@ -224,9 +229,29 @@ ThemeData _starlessThemeData(BColors colors, Brightness brightness, Map<String, 
       labelSmall: typo.label,
     ),
     iconTheme: IconThemeData(color: colors.textSecondary, size: BSizes.defaultIconSize),
-    textButtonTheme: TextButtonThemeData(
-      style: actionStyle.copyWith(
-        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16, vertical: 6)),
+    textButtonTheme: TextButtonThemeData(style: textActionStyle),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: textActionStyle.copyWith(
+        minimumSize: emphasizedMinimumSize,
+        side: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.focused)
+              ? BorderSide(color: colors.focusRing, width: 2)
+              : BorderSide(color: colors.borderSubtle),
+        ),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: textActionStyle.copyWith(
+        minimumSize: emphasizedMinimumSize,
+        elevation: const WidgetStatePropertyAll(0),
+        foregroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.disabled) ? colors.textMuted : colorScheme.onPrimary,
+        ),
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) return colors.surfaceSubtle;
+          return isDark ? colors.accent : colors.accentPressed;
+        }),
+        overlayColor: FilledButton.styleFrom(foregroundColor: colorScheme.onPrimary).overlayColor,
       ),
     ),
     iconButtonTheme: IconButtonThemeData(

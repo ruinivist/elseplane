@@ -438,7 +438,7 @@ Future<void> _closeReport(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-TextButton _button(WidgetTester tester, String key) => tester.widget(find.byKey(ValueKey(key)));
+ButtonStyleButton _button(WidgetTester tester, String key) => tester.widget(find.byKey(ValueKey(key)));
 
 CanvasLibrary _library(
   CanvasDocument current, {
