@@ -82,13 +82,18 @@ void main() {
     await expectLater(ZipTransferSource(_corruptFirstCrc(bytes)).entries(), throwsFormatException);
   });
 
-  test('rejects local and central header disagreements', () async {
+  test('uses the central directory path when the local filename disagrees', () async {
+    final data = Uint8List.fromList([1, 2, 3]);
+    final source = ZipTransferSource(_changeLocalFilename(_zip({'README': data})));
+    expect((await source.entries()).single.path, 'README');
+    expect(await source.read('README'), data);
+  });
+
+  test('rejects local and central flag, compression, and CRC disagreements', () async {
     final valid = _zip({
       'README': Uint8List.fromList([1, 2, 3]),
     });
     for (final corrupted in [
-      _changeLocalFilename(valid),
-      _changeCentralFilename(valid),
       _changeLocalFlags(valid),
       _changeCentralFlags(valid),
       _changeLocalCompression(valid),
@@ -98,6 +103,14 @@ void main() {
     ]) {
       await expectLater(ZipTransferSource(corrupted).entries(), throwsFormatException);
     }
+  });
+
+  test('rejects an unknown local compression method even for a stored central entry', () async {
+    final bytes = _zip({
+      'README': Uint8List.fromList([1, 2, 3]),
+    }, compression: CompressionType.none);
+    _writeUint16(bytes, _localHeaderOffset(bytes) + 8, 0xffff);
+    await expectLater(ZipTransferSource(bytes).entries(), throwsFormatException);
   });
 
   test('rejects malformed EOCD records, multi-disk metadata, and inconsistent entry counts', () async {
@@ -166,14 +179,6 @@ Uint8List _changeLocalFilename(Uint8List source) {
   final local = _localHeaderOffset(bytes);
   final nameLength = _readUint16(bytes, local + 26);
   bytes[local + 30 + nameLength - 1] ^= 1;
-  return bytes;
-}
-
-Uint8List _changeCentralFilename(Uint8List source) {
-  final bytes = Uint8List.fromList(source);
-  final central = _centralHeaderOffset(bytes);
-  final nameLength = _readUint16(bytes, central + 28);
-  bytes[central + 46 + nameLength - 1] ^= 1;
   return bytes;
 }
 

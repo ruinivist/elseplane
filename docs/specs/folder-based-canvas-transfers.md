@@ -193,7 +193,8 @@ An import discovers every supported canvas file under the supplied root. A
 standalone `.canvas.json` is a root canvas. ZIP and repository inputs are
 full-root inputs, not selected-subtree imports. Unrelated regular files are
 ignored; unsafe paths and unsupported file kinds such as links or submodules
-fail validation. ZIP entry paths are interpreted literally after one unzip.
+fail validation. Use ZIP entry paths from the central directory and interpret
+them literally after one unzip.
 
 For each supported canvas path, remove exactly one final `.canvas.json` suffix
 to get its full library name and parent path. Keep spaces and Unicode spelling;

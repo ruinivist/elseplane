@@ -48,15 +48,15 @@ final class ZipTransferSource implements TransferSource {
 
     final headers = <String, ZipFileHeader>{};
     final entries = <TransferEntry>[];
-    final zip = ByteData.sublistView(_bytes);
-    var centralOffset = directory.centralDirectoryOffset;
     var declaredTotal = 0;
     for (final header in directory.fileHeaders) {
       final name = header.filename;
-      if (header.compressionMethod != 0 && header.compressionMethod != 8 && header.compressionMethod != 12) {
-        throw FormatException('Unsupported ZIP compression: $name');
-      }
-      centralOffset = _checkZipHeaders(zip, centralOffset, directory.filePosition, header);
+      final compression = switch (header.compressionMethod) {
+        ZipFile.zipCompressionStore => CompressionType.none,
+        ZipFile.zipCompressionDeflate => CompressionType.deflate,
+        ZipFile.zipCompressionBZip2 => CompressionType.bzip2,
+        _ => throw FormatException('Unsupported ZIP compression: $name'),
+      };
       final ZipFile? file;
       try {
         file = header.file;
@@ -67,6 +67,8 @@ final class ZipTransferSource implements TransferSource {
       final isDirectory = name.endsWith('/') || unixKind == 4;
       final path = name.endsWith('/') ? name.substring(0, name.length - 1) : name;
       if (file == null ||
+          file.unsupportedMethod != null ||
+          file.compressionMethod != compression ||
           header.generalPurposeBitFlag != file.flags ||
           header.crc32 != file.crc32 ||
           (header.generalPurposeBitFlag & (0x1 | 0x40 | 0x2000)) != 0 ||
@@ -103,17 +105,12 @@ final class ZipTransferSource implements TransferSource {
           throw FormatException('Canvas inside attachments namespace: $path');
         }
       }
-      if (!headers.containsKey(path)) {
-        headers[path] = header;
-      } else {
-        throw FormatException('Duplicate transfer path: $path');
-      }
+      headers[path] = header;
       entries.add(entry);
     }
     validateTransferEntries(entries);
 
     final files = <String, Uint8List>{};
-    var actualTotal = 0;
     for (final entry in entries) {
       if (entry.kind == TransferEntryKind.directory) {
         if (headers[entry.path]!.crc32 != getCrc32(Uint8List(0))) {
@@ -121,14 +118,7 @@ final class ZipTransferSource implements TransferSource {
         }
         continue;
       }
-      final bytes = _checkedZipBytes(headers[entry.path]!, entry.path);
-      if (bytes.length != entry.size) throw FormatException('Damaged ZIP entry: ${entry.path}');
-      if (_isAttachmentPath(entry.path)) {
-        validateAttachmentSize(bytes.length, 'Attachment exceeds 10 MiB: ${entry.path}');
-      }
-      actualTotal += bytes.length;
-      validateCanvasTransferSize(actualTotal);
-      files[entry.path] = bytes;
+      files[entry.path] = _checkedZipBytes(headers[entry.path]!, entry.path);
     }
     _files = files;
     return List.unmodifiable(entries);
@@ -172,35 +162,10 @@ TransferSource transferSourceFromFile({required String name, required Uint8List 
   throw const FormatException('Unsupported transfer file');
 }
 
-// Archive exposes the central filename for both headers, so compare the wire fields.
-int _checkZipHeaders(ByteData zip, int central, int end, ZipFileHeader header) {
-  final local = header.localHeaderOffset;
-  final invalid = FormatException('Invalid ZIP entry: ${header.filename}');
-  if (central < 0 || central > end - 46 || local < 0 || local > central - 30) throw invalid;
-  if (zip.getUint32(local, Endian.little) != ZipFile.zipSignature ||
-      zip.getUint16(local + 8, Endian.little) != header.compressionMethod) {
-    throw invalid;
-  }
-  final nameLength = zip.getUint16(central + 28, Endian.little);
-  final next =
-      central +
-      46 +
-      nameLength +
-      zip.getUint16(central + 30, Endian.little) +
-      zip.getUint16(central + 32, Endian.little);
-  if (next > end || zip.getUint16(local + 26, Endian.little) != nameLength || local + 30 + nameLength > central) {
-    throw invalid;
-  }
-  for (var index = 0; index < nameLength; index++) {
-    if (zip.getUint8(local + 30 + index) != zip.getUint8(central + 46 + index)) throw invalid;
-  }
-  return next;
-}
-
 Uint8List _checkedZipBytes(ZipFileHeader header, String path) {
   final output = _BoundedZipOutput(header.uncompressedSize);
   try {
-    if (header.compressionMethod == 8) {
+    if (header.compressionMethod == ZipFile.zipCompressionDeflate) {
       Inflate.stream(header.file!.getStream(decompress: false), output: output);
     } else {
       header.file!.decompress(output);
