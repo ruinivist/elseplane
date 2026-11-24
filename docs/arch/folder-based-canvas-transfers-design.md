@@ -614,8 +614,11 @@ and freshly checks membership only in the supplied installation, using that
 operation's token. The installation ID is required lookup context, not proof of
 access. After checking membership, capture that operation's current
 default-branch head, read one bounded recursive Git tree, and reject a truncated
-tree. Its source keeps immutable path-to-blob-SHA metadata. Reads use those SHAs
-and enforce declared sizes before allocation and actual sizes after decoding.
+tree. Its source keeps immutable path-to-blob-SHA metadata and shares one
+raw read per normalized SHA within the attempt. Validate declared sizes
+before any read; bound and verify each successful body against its size and
+SHA. Workspace opts GitHub into up to eight concurrent reads in the shared
+codec. Count bytes per literal path and leave local reads sequential.
 The shared codec discovers all `.canvas.json` files and recognized
 `attachments/<uuid>.<ext>` image paths in the whole repository; non-format
 regular files are ignored. No archive endpoint bypasses path or byte limits.
@@ -717,9 +720,10 @@ after merging, and a later checkpoint never reuses the import head or tree.
 
 Keep the mediator's cookie-enabled browser client separate from the GitHub
 client. Access tokens stay in memory. Preserve the current identity checks,
-sanitized errors, rate-limit behavior, 15-second request timeout, bounded
-32 MiB metadata JSON responses, size-derived base64 blob-response bounds, and
-100 MiB GitHub blob limit. A prepared tree and a
+sanitized errors, 15-second request timeout, bounded 32 MiB metadata JSON
+responses, exact-size raw blob bounds, and the 100 MiB GitHub blob limit.
+Use raw read error status and headers without consuming the body. Report
+rate limits without an automatic retry or shared cooldown. A prepared tree and a
 decoded candidate remain within the 140 MiB total transfer budget; images
 remain capped at 10 MiB. ZIP compressed and expanded totals retain their
 existing 140 MiB limits. Enforce metadata size before allocating, then check

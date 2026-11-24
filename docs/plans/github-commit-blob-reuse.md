@@ -6,7 +6,7 @@ Status: draft
 
 Implement the commit half of [ADR 0009](../adr/0009-speed-up-github-canvas-transfers.md)
 and the [draft specification](../specs/github-transfer-performance.md) first.
-This does not depend on [repository archive import](github-repository-archive-import.md).
+This does not depend on [parallel blob import](github-parallel-blob-import.md).
 Make the production change on `main`.
 Do not change the sync UX, local persistence, or write retry policy.
 

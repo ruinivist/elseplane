@@ -22,43 +22,51 @@ Otherwise upload the file as before. Build one tree and one commit on the
 captured head, then update the selected default branch without force. This
 does not change which bytes or paths the commit represents.
 
-**Import one GitHub repository ZIP pinned to the captured commit.** Treat it
-as the exported snapshot: the ZIP determines both the file list and the
-bytes to import. Do not fetch a separate recursive tree or individual blobs
-for import. Validate the archive and keep the existing shared decode,
-confirmation, and save flow. Local file imports do not change.
+**Read up to eight distinct GitHub blobs in parallel.** Keep the captured
+default-branch commit and its bounded recursive tree as the import
+manifest. Request raw bytes by immutable blob ID directly from GitHub.
+Fetch a blob only once per attempt, even when several paths refer to it.
+Keep the shared decode, confirmation, and save flow. Local file imports
+remain sequential.
 
-GitHub continues to own authentication, snapshot selection, and archive
-retrieval. The library owns ZIP validation and the shared transfer codec.
-Verify private archive access and ZIP compatibility in the browser before
-implementing import. If that check fails, report the blocker and stop the
-import task. Do not add a per-file fallback, durable cache, dependency, or
-transport service.
+GitHub owns authentication, snapshot selection, raw blob retrieval, and
+deduplication within an attempt. The shared transfer codec schedules reads
+and accounts for bytes; Workspace opts GitHub into the eight-read limit.
+First verify private raw blob access in the actual browser with the
+existing GitHub App session. If it fails, stop and report the blocker. Do
+not add a transport fallback, durable cache, or dependency. The mediator
+continues to handle tokens only, not file traffic.
+
+**Report rate limits without shared cooldown state.** Stop the active
+operation and show GitHub's wait hint, or advise waiting a minute. Do not
+retry automatically or prevent the user from initiating another operation.
+This removes shared mutable state that concurrent or stale responses
+could otherwise update.
 
 ## Alternatives
 
 - **Parallel uploads:** Speeds up necessary writes but still sends the
   unchanged images. Reuse first; measure the remaining uploads before
   considering concurrency.
-- **Concurrent blob reads:** Shorten the serial wait but still make a
-  request per file. Not part of this design or a fallback.
-- **Shallow Git clone:** Uses a bulk transfer too, but requires Git protocol
-  support and packfile handling when we only need the files at one commit.
+- **One repository archive:** The private ZIP was available outside the
+  browser, but the direct browser probe failed before receiving a usable
+  response. Public archive responses allowed GitHub's render origin, not
+  the app's origin. A relay would send all archive traffic through the
+  mediator, which is outside its role.
+- **Shallow Git clone:** GitHub's Smart HTTP endpoint did not grant CORS
+  access to the app's origin in the public check. A browser Git client
+  would not remove that restriction.
 
 ## Consequences
 
 Commit trades local hashing for fewer round trips and less upload traffic.
-Archive import replaces per-file network round trips with one archive
-download. It also downloads unrelated files and shifts work to ZIP
-validation and decompression. Honor omissions from archive export rules
-such as `export-ignore`; do not fetch excluded files separately or treat
-their absence as an error. Exported bytes still have to pass the normal
-import checks. We no longer guarantee that an export includes every tracked
-file or matches the raw blob bytes when export rules rewrite a file. Verify
-the request-count reduction without assuming a wall-time gain. Do not
+Import overlaps network waits and avoids JSON/Base64 overhead. Each
+distinct supported blob still costs one request. Eight is a ceiling, not a
+speedup guarantee: total bytes, browser connection limits, and GitHub
+rate limits still matter. Keep all existing path and byte limits and do not
 change timeouts or retry policy.
 
 The [draft behavior](../specs/github-transfer-performance.md) adds to the
 accepted transfer contracts. The [commit](../plans/github-commit-blob-reuse.md)
-and [import](../plans/github-repository-archive-import.md) plans define the
+and [import](../plans/github-parallel-blob-import.md) plans define the
 work and checks separately.

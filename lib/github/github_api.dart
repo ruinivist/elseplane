@@ -170,7 +170,6 @@ final class GitHubApi {
   final Uri _mediatorUrl;
   late final http.Client _mediatorClient;
   late final http.Client _githubClient;
-  DateTime? _retryAt;
 
   Future<Uri> startAuthorization() async {
     final response = await _mediatorPost('/oauth/github/start');
@@ -274,9 +273,21 @@ final class GitHubApi {
     final snapshot = await _snapshot(destination, token, isCurrent: isCurrent);
     final entries = _transferEntries(snapshot);
     final byPath = {for (final entry in snapshot.entries.values) entry.path: entry};
+    final reads = <String, Future<Uint8List>>{};
     return _GitHubTransferSource(
       entries,
-      (path) => _readTransferBlob(destination, token, byPath, path, isCurrent),
+      (path) {
+        _checkImportCurrent(isCurrent);
+        final entry = byPath[path];
+        final isImage = _isTransferAttachmentPath(path);
+        if (entry == null || !entry.isRegularBlob || (!isImage && !_isTransferDocumentPath(path))) {
+          _invalid('Unsupported GitHub transfer read');
+        }
+        return reads.putIfAbsent(
+          entry.sha.toLowerCase(),
+          () => _readTransferBlob(destination, token, entry, isImage, isCurrent),
+        );
+      },
       () => _checkImportCurrent(isCurrent),
     );
   }
@@ -419,40 +430,23 @@ final class GitHubApi {
     String token,
     GitHubTreeEntry entry, {
     required int maximumBytes,
-    int? maximumResponseBytes,
     bool Function()? isCurrent,
   }) async {
     if (!entry.isRegularBlob) _invalid('Unsupported Git object: ${entry.path}');
     final declaredSize = entry.size;
     if (declaredSize == null) _invalid('GitHub did not declare a size for ${entry.path}');
     if (declaredSize > maximumBytes) _invalid('File exceeds its size limit: ${entry.path}');
-    final responseLimit = maximumResponseBytes ?? _maximumBase64JsonBytes(maximumBytes);
     final response = await _githubRequest(
       'GET',
       _repoUri(destination, ['git', 'blobs', entry.sha]),
       token: token,
-      maximumResponseBytes: responseLimit,
+      maximumResponseBytes: declaredSize,
+      rawResponse: true,
       isCurrent: isCurrent,
     );
-    final blob = _decodeObject(
-      response.bodyBytes,
-      'Invalid GitHub blob response',
-      maximumBytes: responseLimit,
-    );
-    final blobSize = blob['size'];
-    final content = blob['content'];
-    if (blob['sha'] != entry.sha ||
-        blob['encoding'] != 'base64' ||
-        content is! String ||
-        blobSize is! int ||
-        blobSize < 0 ||
-        blobSize > maximumBytes) {
-      _invalid('Invalid GitHub blob response');
-    }
-    final bytes = _decodeBase64(content);
-    if (bytes.length != blobSize || bytes.length != declaredSize) {
-      _invalid('GitHub blob size does not match its tree entry');
-    }
+    final bytes = response.bodyBytes;
+    if (bytes.length != declaredSize) _invalid('GitHub blob size does not match its tree entry');
+    if (_gitBlobId(bytes) != entry.sha.toLowerCase()) _invalid('GitHub blob content does not match its Git ID');
     return bytes;
   }
 
@@ -980,6 +974,7 @@ final class GitHubApi {
 
   List<TransferEntry> _transferEntries(GitHubSnapshot snapshot) {
     final result = <TransferEntry>[];
+    final declaredSizesBySha = <String, int>{};
     var declaredTotal = 0;
     for (final entry in snapshot.entries.values) {
       if (!_isSafeRepoPath(entry.path)) _invalid('Invalid GitHub tree path');
@@ -1003,6 +998,12 @@ final class GitHubApi {
         if (_isRepositoryAttachmentPath(entry.path) && size > attachmentMaximumBytes) {
           _invalid('Attachment exceeds 10 MiB: ${entry.path}');
         }
+        final sha = entry.sha.toLowerCase();
+        final previousSize = declaredSizesBySha[sha];
+        if (previousSize != null && previousSize != size) {
+          _invalid('GitHub returned inconsistent sizes for the same blob');
+        }
+        declaredSizesBySha[sha] = size;
         if (size > canvasTransferMaximumBytes - declaredTotal) _invalid('Repository exceeds 140 MiB');
         declaredTotal += size;
       }
@@ -1020,27 +1021,19 @@ final class GitHubApi {
   Future<Uint8List> _readTransferBlob(
     GitHubDestination destination,
     String token,
-    Map<String, GitHubTreeEntry> entries,
-    String path,
+    GitHubTreeEntry entry,
+    bool isImage,
     bool Function()? isCurrent,
   ) async {
     _checkImportCurrent(isCurrent);
-    final entry = entries[path];
-    final isImage = _isTransferAttachmentPath(path);
-    if (entry == null || !entry.isRegularBlob || (!isImage && !_isTransferDocumentPath(path))) {
-      _invalid('Unsupported GitHub transfer read');
-    }
     final bytes = await _fetchBlob(
       destination,
       token,
       entry,
       maximumBytes: isImage ? attachmentMaximumBytes : _maximumGitHubBlobBytes,
-      maximumResponseBytes: _maximumBase64JsonBytes(
-        entry.size ?? (isImage ? attachmentMaximumBytes : _maximumGitHubBlobBytes),
-      ),
       isCurrent: isCurrent,
     );
-    return Uint8List.fromList(bytes).asUnmodifiableView();
+    return bytes.asUnmodifiableView();
   }
 
   void _validateTransferTree(TransferTree tree) {
@@ -1124,7 +1117,6 @@ final class GitHubApi {
   }) async {
     _checkImportCurrent(isCurrent);
     deadline?.check();
-    _checkRateLimit();
     final uri = _mediatorUrl.replace(path: path);
     late final http.Response response;
     try {
@@ -1158,12 +1150,12 @@ final class GitHubApi {
     Map<String, String>? query,
     bool checkResponse = true,
     int maximumResponseBytes = _maximumJsonResponseBytes,
+    bool rawResponse = false,
     _DiscoveryDeadline? deadline,
     bool Function()? isCurrent,
   }) async {
     _checkImportCurrent(isCurrent);
     deadline?.check();
-    _checkRateLimit();
     final target = query == null ? uri : uri.replace(queryParameters: query);
     late final http.Response response;
     try {
@@ -1173,16 +1165,24 @@ final class GitHubApi {
                 ? http.Request(method, target)
                 : http.AbortableRequest(method, target, abortTrigger: abort.future))
             ..headers.addAll({
-              'Accept': 'application/vnd.github+json',
+              'Accept': rawResponse ? 'application/vnd.github.raw+json' : 'application/vnd.github+json',
               'Authorization': 'Bearer $token',
               'X-GitHub-Api-Version': _githubApiVersion,
             });
+      if (rawResponse) request.followRedirects = false;
       if (body != null) {
         request
           ..headers['Content-Type'] = 'application/json'
           ..body = jsonEncode(body);
       }
-      response = await _sendBounded(_githubClient, request, maximumResponseBytes, deadline: deadline, abort: abort);
+      response = await _sendBounded(
+        _githubClient,
+        request,
+        maximumResponseBytes,
+        rawResponse: rawResponse,
+        deadline: deadline,
+        abort: abort,
+      );
     } on _DiscoveryDeadlineExceeded {
       rethrow;
     } on _ResponseTooLarge {
@@ -1206,10 +1206,14 @@ final class GitHubApi {
     }
     if (status == 429 ||
         (status == 403 && (headers['x-ratelimit-remaining'] == '0' || headers.containsKey('retry-after')))) {
-      final retryAfter = _retryAfter(headers) ?? const Duration(seconds: 60);
-      _retryAt = DateTime.now().add(retryAfter);
+      final parsedRetryAfter = _retryAfter(headers);
+      final retryAfter = parsedRetryAfter ?? const Duration(minutes: 1);
       throw GitHubApiException(
-        'GitHub rate limit reached. Wait before trying again.',
+        parsedRetryAfter == null
+            ? 'GitHub rate limit reached. Try again in a minute.'
+            : retryAfter == Duration.zero
+            ? 'GitHub rate limit reached. Try again.'
+            : 'GitHub rate limit reached. Try again in ${_ceilSeconds(retryAfter)} seconds.',
         kind: GitHubErrorKind.rateLimited,
         statusCode: status,
         retryAfter: retryAfter,
@@ -1293,62 +1297,38 @@ final class GitHubApi {
     _invalid(error);
   }
 
-  Uint8List _decodeBase64(String source) {
-    final compact = source.replaceAll('\r\n', '').replaceAll('\n', '');
-    if (source.contains('\r') && source.replaceAll('\r\n', '').contains('\r') ||
-        compact.contains(RegExp('[^A-Za-z0-9+/=]')) ||
-        compact.length % 4 != 0) {
-      _invalid('Invalid base64 GitHub blob');
-    }
-    try {
-      final bytes = Uint8List.fromList(base64.decode(compact));
-      if (base64.encode(bytes) != compact) _invalid('Invalid base64 GitHub blob');
-      return bytes;
-    } on Object {
-      _invalid('Invalid base64 GitHub blob');
-    }
-  }
-
   Duration? _retryAfter(Map<String, String> headers) {
-    final seconds = int.tryParse(headers['retry-after'] ?? '');
+    final seconds = int.tryParse((headers['retry-after'] ?? '').trim());
     if (seconds != null && seconds >= 0) return Duration(seconds: seconds);
-    final reset = int.tryParse(headers['x-ratelimit-reset'] ?? '');
+    final reset = int.tryParse((headers['x-ratelimit-reset'] ?? '').trim());
     if (reset == null) return null;
     final delay = DateTime.fromMillisecondsSinceEpoch(reset * 1000).difference(DateTime.now());
     return delay.isNegative ? Duration.zero : delay;
   }
 
-  void _checkRateLimit() {
-    final retryAt = _retryAt;
-    if (retryAt == null) return;
-    final now = DateTime.now();
-    if (!retryAt.isAfter(now)) {
-      _retryAt = null;
-      return;
-    }
-    throw GitHubApiException(
-      'GitHub rate limit reached. Wait before trying again.',
-      kind: GitHubErrorKind.rateLimited,
-      retryAfter: retryAt.difference(now),
-    );
-  }
-
-  int _maximumBase64JsonBytes(int maximumBytes) {
-    final encodedBytes = ((maximumBytes + 2) ~/ 3) * 4;
-    final wrappedLines = encodedBytes ~/ 60;
-    // Four bytes cover a JSON-escaped CRLF at each wrap.
-    return encodedBytes + wrappedLines * 4 + 256 * 1024;
-  }
+  int _ceilSeconds(Duration duration) =>
+      (duration.inMicroseconds + Duration.microsecondsPerSecond - 1) ~/ Duration.microsecondsPerSecond;
 
   Future<http.Response> _sendBounded(
     http.Client client,
     http.BaseRequest request,
     int maximumBytes, {
+    bool rawResponse = false,
     _DiscoveryDeadline? deadline,
     Completer<void>? abort,
   }) async {
     try {
       final streamed = await _withRequestTimeout(client.send(request), deadline);
+      if (rawResponse && (streamed.statusCode < 200 || streamed.statusCode >= 300)) {
+        _cancelUnread(streamed.stream);
+        return http.Response.bytes(
+          Uint8List(0),
+          streamed.statusCode,
+          request: request,
+          headers: streamed.headers,
+          reasonPhrase: streamed.reasonPhrase,
+        );
+      }
       final responseBytes = await _withRequestTimeout(_readBounded(streamed.stream, maximumBytes), deadline);
       return http.Response.bytes(
         responseBytes,
@@ -1363,6 +1343,18 @@ final class GitHubApi {
     } on TimeoutException {
       if (abort != null && !abort.isCompleted) abort.complete();
       rethrow;
+    }
+  }
+
+  void _cancelUnread(Stream<List<int>> stream) {
+    try {
+      final subscription = stream.listen(
+        (_) {},
+        onError: (Object error, StackTrace stackTrace) {},
+      );
+      unawaited(subscription.cancel().catchError((Object error) {}));
+    } on Object {
+      // Cancellation is best-effort; status and headers remain authoritative.
     }
   }
 
@@ -1527,5 +1519,5 @@ final class _GitHubTransferSource implements TransferSource {
   }
 
   @override
-  Future<Uint8List> read(String path) => _read(path);
+  Future<Uint8List> read(String path) async => await _read(path);
 }

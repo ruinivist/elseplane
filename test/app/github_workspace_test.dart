@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:elseplane/app/workspace.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_page.dart';
@@ -29,7 +30,6 @@ const _tree = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const _documentBlob = 'cccccccccccccccccccccccccccccccccccccccc';
 const _nextTree = 'dddddddddddddddddddddddddddddddddddddddd';
 const _nextCommit = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-const _imageBlob = 'ffffffffffffffffffffffffffffffffffffffff';
 const _destination = GitHubDestination(
   accountId: 7,
   repositoryId: 13,
@@ -260,6 +260,7 @@ void main() {
   testWidgets('requires confirmation before importing without collisions', (tester) async {
     final local = _document('Local');
     final remote = _document('Remote');
+    final remoteSha = _gitBlobSha(utf8.encode(jsonEncode(remote.toJson())));
     final store = TestLibraryStore(local)
       ..library = CanvasLibrary(
         files: [CanvasFile(id: 'local', name: 'Local', document: local)],
@@ -281,7 +282,7 @@ void main() {
       'GitHub import confirmation',
     );
 
-    expect(requests, contains('GET /repos/owner/repo/git/blobs/$_documentBlob'));
+    expect(requests, contains('GET /repos/owner/repo/git/blobs/$remoteSha'));
     expect(
       requests.where((request) => request == 'GET /user/installations/23/repositories').length,
       greaterThanOrEqualTo(2),
@@ -422,7 +423,11 @@ void main() {
     final firstBlobStarted = Completer<void>();
     final secondBlobStarted = Completer<void>();
     final remoteBytes = utf8.encode(jsonEncode(_document('Remote').toJson()));
+    final otherBytes = utf8.encode(jsonEncode(_document('Other').toJson()));
+    final remoteSha = _gitBlobSha(remoteBytes);
+    final otherSha = _gitBlobSha(otherBytes);
     var blobReads = 0;
+    var remoteBlobReads = 0;
     final api = _commitApi(
       github: (request) async {
         final path = request.url.path;
@@ -436,31 +441,27 @@ void main() {
           return _json({
             'truncated': false,
             'tree': [
-              _treeEntry('New.canvas.json', _documentBlob, remoteBytes.length),
-              _treeEntry('Other.canvas.json', _nextCommit, remoteBytes.length),
+              _treeEntry('New.canvas.json', remoteSha, remoteBytes.length),
+              _treeEntry('Other.canvas.json', otherSha, otherBytes.length),
             ],
           });
         }
-        if (path.endsWith('/git/blobs/$_documentBlob')) {
+        if (path.endsWith('/git/blobs/$remoteSha')) {
           blobReads++;
-          if (blobReads == 1) {
+          remoteBlobReads++;
+          if (remoteBlobReads == 1) {
             firstBlobStarted.complete();
             return await firstBlob.future;
           }
-          if (blobReads == 2) {
+          if (remoteBlobReads == 2) {
             secondBlobStarted.complete();
             return await secondBlob.future;
           }
           fail('Canceled import performed an unexpected additional blob read');
         }
-        if (path.endsWith('/git/blobs/$_nextCommit')) {
+        if (path.endsWith('/git/blobs/$otherSha')) {
           blobReads++;
-          return _json({
-            'sha': _nextCommit,
-            'size': remoteBytes.length,
-            'encoding': 'base64',
-            'content': base64Encode(remoteBytes),
-          });
+          return _rawBytes(otherBytes);
         }
         return _json({'error': 'not found'}, status: 404);
       },
@@ -473,6 +474,7 @@ void main() {
       tester,
       () =>
           firstBlobStarted.isCompleted &&
+          blobReads == 2 &&
           _importDialog.evaluate().isNotEmpty &&
           _importText('Preparing import…').evaluate().isNotEmpty,
       'first lazy GitHub blob read',
@@ -508,6 +510,7 @@ void main() {
       tester,
       () =>
           secondBlobStarted.isCompleted &&
+          blobReads == 4 &&
           _importDialog.evaluate().isNotEmpty &&
           _importText('Preparing import…').evaluate().isNotEmpty,
       'retry lazy GitHub blob read',
@@ -515,23 +518,16 @@ void main() {
     expect(_hasFocusInsideGitHubImportDialog(), isFalse);
     final localAfterEdit = store.library;
 
-    firstBlob.complete(http.Response('{}', 429, headers: {'retry-after': '60'}));
+    firstBlob.complete(http.Response('rate limited', 429, headers: {'retry-after': '60'}));
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
     await tester.pump();
     expect(_importDialog, findsOneWidget);
     expect(_importText('Preparing import…'), findsOneWidget);
     expect(_importText('Imported 1 canvas.'), findsNothing);
     expect(store.library, same(localAfterEdit));
-    expect(blobReads, 2);
+    expect(blobReads, 4);
 
-    secondBlob.complete(
-      _json({
-        'sha': _documentBlob,
-        'size': remoteBytes.length,
-        'encoding': 'base64',
-        'content': base64Encode(remoteBytes),
-      }),
-    );
+    secondBlob.complete(_rawBytes(remoteBytes));
     await _pumpUntilBusySafe(
       tester,
       () => _importDialog.evaluate().isNotEmpty && _importText('2 canvases ready to import.').evaluate().isNotEmpty,
@@ -539,7 +535,7 @@ void main() {
     );
     expect(_hasFocusInsideGitHubImportDialog(), isFalse);
     expect(store.library, same(localAfterEdit));
-    expect(blobReads, 3);
+    expect(blobReads, 4);
     for (var tab = 0; tab < 3; tab++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
@@ -554,7 +550,8 @@ void main() {
     );
     expect(_hasFocusInsideGitHubImportDialog(), isFalse);
     expect(store.library.files.any((file) => file.name == 'New'), isTrue);
-    expect(blobReads, 3);
+    expect(store.library.files.any((file) => file.name == 'Other'), isTrue);
+    expect(blobReads, 4);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
@@ -562,6 +559,100 @@ void main() {
     expect(_hasFocusInsideGitHubImportDialog(), isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
+    await _waitForImportDialogClosed(tester);
+  });
+
+  testWidgets('a terminal read error returns before siblings and permits a fresh import', (tester) async {
+    final store = _savedStore();
+    final beforeImport = store.library;
+    final lateSibling = Completer<http.Response>();
+    final siblingStarted = Completer<void>();
+    final firstBytes = utf8.encode(jsonEncode(_document('First').toJson()));
+    final siblingBytes = utf8.encode(jsonEncode(_document('Sibling').toJson()));
+    final firstSha = _gitBlobSha(firstBytes);
+    final siblingSha = _gitBlobSha(siblingBytes);
+    var firstReads = 0;
+    var siblingReads = 0;
+    final api = _commitApi(
+      github: (request) async {
+        final path = request.url.path;
+        if (path.endsWith('/git/ref/heads/main')) return _ref();
+        if (path.endsWith('/git/commits/$_head')) {
+          return _json({
+            'tree': {'sha': _tree},
+          });
+        }
+        if (path.endsWith('/git/trees/$_tree')) {
+          return _json({
+            'truncated': false,
+            'tree': [
+              _treeEntry('A.canvas.json', firstSha, firstBytes.length),
+              _treeEntry('B.canvas.json', siblingSha, siblingBytes.length),
+            ],
+          });
+        }
+        if (path.endsWith('/git/blobs/$firstSha')) {
+          firstReads++;
+          if (firstReads == 1) return http.Response('rate limited', 429, headers: {'retry-after': '60'});
+          return _rawBytes(firstBytes);
+        }
+        if (path.endsWith('/git/blobs/$siblingSha')) {
+          siblingReads++;
+          if (siblingReads == 1) {
+            siblingStarted.complete();
+            return await lateSibling.future;
+          }
+          return _rawBytes(siblingBytes);
+        }
+        return _json({'error': 'not found'}, status: 404);
+      },
+    );
+    await _pumpWorkspace(tester, store, api, navigate: (_) {});
+    await _openSync(tester);
+    await _waitForEnabledButton(tester, _importButton);
+
+    await _tapVisible(tester, _importButton);
+    await _pumpUntilBusySafe(
+      tester,
+      () =>
+          siblingStarted.isCompleted &&
+          _importDialog.evaluate().isNotEmpty &&
+          _importText('Done').evaluate().isNotEmpty,
+      'terminal GitHub blob failure while a sibling is pending',
+    );
+    expect(_importText('Preparing import…'), findsNothing);
+    expect(store.library, same(beforeImport));
+    expect(store.persisted, isNull);
+
+    await _tapVisible(tester, _importText('Done'));
+    await _waitForImportDialogClosed(tester);
+    lateSibling.complete(http.Response('late rate limit', 429, headers: {'retry-after': '60'}));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+
+    await _tapVisible(tester, _importButton);
+    await _pumpUntilBusySafe(
+      tester,
+      () =>
+          firstReads == 2 &&
+          siblingReads == 2 &&
+          _importDialog.evaluate().isNotEmpty &&
+          _importText('2 canvases ready to import.').evaluate().isNotEmpty,
+      'fresh GitHub import after a late sibling rate limit',
+    );
+    expect(store.library, same(beforeImport));
+    expect(store.persisted, isNull);
+
+    await _tapVisible(tester, _importConfirm);
+    await _pumpUntilBusySafe(
+      tester,
+      () => _importDialog.evaluate().isNotEmpty && _importText('Imported 2 canvases.').evaluate().isNotEmpty,
+      'confirmed import after read failure',
+    );
+    expect(store.library.files.any((file) => file.name == 'A'), isTrue);
+    expect(store.library.files.any((file) => file.name == 'B'), isTrue);
+    expect(store.persisted, isNotNull);
+    await _tapVisible(tester, _importText('Done'));
     await _waitForImportDialogClosed(tester);
   });
 
@@ -630,7 +721,7 @@ void main() {
         if (path.endsWith('/git/trees/$_tree')) {
           return _json({
             'truncated': false,
-            'tree': [_treeEntry('README.md', _nextCommit, 7)],
+            'tree': [_treeEntry('README.md', _gitBlobSha(utf8.encode('ignored')), 7)],
           });
         }
         fail('An empty import must not fetch blobs');
@@ -1523,6 +1614,9 @@ GitHubApi _importApi(
   Uint8List? attachmentBytes,
 }) {
   final bytes = utf8.encode(jsonEncode(document.toJson()));
+  final documentSha = _gitBlobSha(bytes);
+  final attachmentSha = attachmentBytes == null ? null : _gitBlobSha(attachmentBytes);
+  final ignoredBytes = utf8.encode('ignored');
   return _commitApi(
     requests: requests,
     github: (request) async {
@@ -1537,27 +1631,15 @@ GitHubApi _importApi(
         return _json({
           'truncated': false,
           'tree': [
-            _treeEntry(path, _documentBlob, bytes.length),
-            if (attachmentPath != null) _treeEntry(attachmentPath, _imageBlob, attachmentBytes!.length),
-            _treeEntry('README.md', _nextCommit, 7),
+            _treeEntry(path, documentSha, bytes.length),
+            if (attachmentPath != null) _treeEntry(attachmentPath, attachmentSha!, attachmentBytes!.length),
+            _treeEntry('README.md', _gitBlobSha(ignoredBytes), ignoredBytes.length),
           ],
         });
       }
-      if (pathRequested.endsWith('/git/blobs/$_documentBlob')) {
-        return _json({
-          'sha': _documentBlob,
-          'size': bytes.length,
-          'encoding': 'base64',
-          'content': base64Encode(bytes),
-        });
-      }
-      if (pathRequested.endsWith('/git/blobs/$_imageBlob')) {
-        return _json({
-          'sha': _imageBlob,
-          'size': attachmentBytes!.length,
-          'encoding': 'base64',
-          'content': base64Encode(attachmentBytes),
-        });
+      if (pathRequested.endsWith('/git/blobs/$documentSha')) return _rawBytes(bytes);
+      if (attachmentSha != null && pathRequested.endsWith('/git/blobs/$attachmentSha')) {
+        return _rawBytes(attachmentBytes!);
       }
       return _json({'error': 'not found'}, status: 404);
     },
@@ -1631,6 +1713,12 @@ http.Response _json(Object value, {int status = 200}) => http.Response(
   status,
   headers: const {'content-type': 'application/json'},
 );
+
+http.Response _rawBytes(List<int> bytes, {int status = 200, Map<String, String> headers = const {}}) =>
+    http.Response.bytes(bytes, status, headers: {'content-type': 'application/octet-stream', ...headers});
+
+String _gitBlobSha(List<int> bytes) =>
+    sha1.convert([...utf8.encode('blob ${bytes.length}\u0000'), ...bytes]).toString();
 
 class _FailingLibraryStore extends TestLibraryStore {
   _FailingLibraryStore(super.initial);

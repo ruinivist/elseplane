@@ -319,7 +319,7 @@ class _WorkspaceState extends State<Workspace> {
     if (!mounted || !isCurrent()) return null;
     await _library.flush();
     if (!mounted || !isCurrent()) return null;
-    final candidate = await decodeTransfer(source);
+    final candidate = await decodeTransfer(source, maxConcurrentReads: 8, isCurrent: isCurrent);
     if (!mounted || !isCurrent()) return null;
     return await _library.previewTransferImport(candidate);
   }

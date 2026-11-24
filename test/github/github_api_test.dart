@@ -393,12 +393,12 @@ void main() {
                   (delay) => delay != null && delay > Duration.zero && delay <= const Duration(seconds: 30),
                 ),
               )
-              .having((error) => error.toString(), 'message', contains('Wait before trying again')),
+              .having((error) => error.toString(), 'message', contains('Try again in')),
         ),
       );
     });
 
-    test('blocks all requests during the Retry-After window', () async {
+    test('a later explicit request reaches GitHub after a rate limit', () async {
       var mediatorRequests = 0;
       var githubRequests = 0;
       final api = _api(
@@ -408,7 +408,9 @@ void main() {
         },
         github: (_) async {
           githubRequests++;
-          return _json({'message': 'rate limited'}, status: 429, headers: {'retry-after': '60'});
+          return githubRequests == 1
+              ? _json({'message': 'rate limited'}, status: 429, headers: {'retry-after': '60'})
+              : _user();
         },
       );
 
@@ -420,22 +422,12 @@ void main() {
               .having(
                 (error) => error.retryAfter,
                 'retryAfter',
-                predicate<Duration?>(
-                  (delay) => delay != null && delay > Duration.zero && delay <= const Duration(seconds: 60),
-                ),
+                const Duration(seconds: 60),
               ),
         ),
       );
-      final requestsBeforeRetry = (mediatorRequests, githubRequests);
-      await expectLater(
-        api.account(),
-        throwsA(
-          isA<GitHubApiException>()
-              .having((error) => error.kind, 'kind', GitHubErrorKind.rateLimited)
-              .having((error) => error.retryAfter, 'retryAfter', greaterThan(Duration.zero)),
-        ),
-      );
-      expect((mediatorRequests, githubRequests), requestsBeforeRetry);
+      expect((await api.account()).id, 1);
+      expect((mediatorRequests, githubRequests), (2, 2));
     });
 
     test('uses a 60-second default when rate-limit timing is absent', () async {
@@ -444,13 +436,16 @@ void main() {
       await expectLater(
         api.account(),
         throwsA(
-          isA<GitHubApiException>().having(
-            (error) => error.retryAfter,
-            'retryAfter',
-            predicate<Duration?>(
-              (delay) => delay != null && delay >= const Duration(seconds: 59) && delay <= const Duration(seconds: 60),
-            ),
-          ),
+          isA<GitHubApiException>()
+              .having(
+                (error) => error.retryAfter,
+                'retryAfter',
+                predicate<Duration?>(
+                  (delay) =>
+                      delay != null && delay >= const Duration(seconds: 59) && delay <= const Duration(seconds: 60),
+                ),
+              )
+              .having((error) => error.message, 'message', contains('Try again in a minute')),
         ),
       );
     });
@@ -476,7 +471,8 @@ void main() {
         throwsA(
           isA<GitHubApiException>()
               .having((error) => error.kind, 'kind', GitHubErrorKind.rateLimited)
-              .having((error) => error.retryAfter, 'retryAfter', Duration.zero),
+              .having((error) => error.retryAfter, 'retryAfter', Duration.zero)
+              .having((error) => error.message, 'message', 'GitHub rate limit reached. Try again.'),
         ),
       );
       expect((await api.account()).id, 1);

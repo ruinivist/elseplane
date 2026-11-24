@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -12,11 +13,12 @@ const _mediatorUrl = 'https://mediator.example';
 const _headSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const _treeSha = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const _nextTreeSha = 'cccccccccccccccccccccccccccccccccccccccc';
-const _documentSha = 'dddddddddddddddddddddddddddddddddddddddd';
-const _imageSha = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+const _documentSha = 'aed2973e4b8a7ff1b30ff5c4751e5a2b38989e74';
+const _imageSha = '1ccd5817b2e1e7c3adefd77769a761a207e1bc91';
 const _commitSha = 'ffffffffffffffffffffffffffffffffffffffff';
 const _secondCommitSha = '1111111111111111111111111111111111111111';
 const _imagePath = 'Folder/attachments/123e4567-e89b-42d3-a456-426614174000.png';
+const _secondImagePath = 'Other/attachments/123e4567-e89b-42d3-a456-426614174000.png';
 
 GitHubDestination _destination({String branch = 'main', int accountId = 1}) => GitHubDestination(
   accountId: accountId,
@@ -45,6 +47,15 @@ http.Response _json(Object? value, {int status = 200}) => http.Response(
   status,
   headers: const {'content-type': 'application/json'},
 );
+
+final class _StreamingClient extends http.BaseClient {
+  _StreamingClient(this._send);
+
+  final Future<http.StreamedResponse> Function(http.BaseRequest) _send;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) => _send(request);
+}
 
 http.Response _token(http.Request request) =>
     _json({'access_token': 'secret-token', 'token_type': 'Bearer', 'scope': ''});
@@ -163,6 +174,7 @@ void main() {
     test('captures one head and lazily reads supported content by captured SHA', () async {
       final requests = <String>[];
       final blobReads = <String>[];
+      final rawRequests = <http.Request>[];
       var currentHead = _headSha;
       const document = [1, 2, 3];
       final api = _api((request) async {
@@ -187,12 +199,8 @@ void main() {
         if (request.url.path.contains('/git/blobs/')) {
           final sha = request.url.path.split('/').last;
           blobReads.add(sha);
-          return _json({
-            'sha': sha,
-            'size': document.length,
-            'encoding': 'base64',
-            'content': base64.encode(document),
-          });
+          rawRequests.add(request);
+          return http.Response.bytes(document, 200, headers: const {'content-type': 'application/octet-stream'});
         }
         return _json({'error': 'unexpected request'}, status: 404);
       });
@@ -216,6 +224,10 @@ void main() {
       expect(() => documentBytes[0] = 9, throwsUnsupportedError);
       await expectLater(source.read('README.md'), throwsA(isA<GitHubApiException>()));
       expect(blobReads, [_documentSha]);
+      expect(rawRequests.single.headers['Accept'], 'application/vnd.github.raw+json');
+      expect(rawRequests.single.headers['Authorization'], 'Bearer secret-token');
+      expect(rawRequests.single.headers['X-GitHub-Api-Version'], '2022-11-28');
+      expect(rawRequests.single.followRedirects, isFalse);
       expect(requests, [
         'GET /user',
         'GET /user/installations/10/repositories',
@@ -414,7 +426,9 @@ void main() {
       );
     });
 
-    test('bounds a lazy blob response from its declared size', () async {
+    test('shares one raw immutable read for normalized blob aliases', () async {
+      const bytes = [4, 5];
+      final blobReads = <String>[];
       final api = _api((request) async {
         if (request.url.path == '/user') return _user();
         if (request.url.path == '/user/installations/10/repositories') return _membership();
@@ -423,27 +437,30 @@ void main() {
         if (request.url.path.endsWith('/git/trees/$_treeSha')) {
           return _json({
             'truncated': false,
-            'tree': [_blobEntry('Map.canvas.json', _documentSha, 3)],
+            'tree': _entries([
+              (path: _imagePath, sha: _imageSha.toUpperCase(), type: 'blob', mode: '100644', size: 2),
+              (path: _secondImagePath, sha: _imageSha, type: 'blob', mode: '100644', size: 2),
+              (path: '.git/config', sha: _imageSha, type: 'blob', mode: '100644', size: null),
+            ]),
           });
         }
-        if (request.url.path.endsWith('/git/blobs/$_documentSha')) {
-          final response = _json({
-            'sha': _documentSha,
-            'size': 3,
-            'encoding': 'base64',
-            'content': base64.encode([1, 2, 3]),
-          });
-          return http.Response(response.body.padRight(300_000), 200, headers: response.headers);
+        if (request.url.path.contains('/git/blobs/')) {
+          blobReads.add(request.url.path.split('/').last);
+          return http.Response.bytes(bytes, 200);
         }
         return _json({'error': 'unexpected request'}, status: 404);
       });
       final source = await api.readRepository(_destination(), installationId: 10);
+      final results = await Future.wait([source.read(_imagePath), source.read(_secondImagePath)]);
 
-      await expectLater(source.read('Map.canvas.json'), throwsA(isA<GitHubApiException>()));
+      expect(results, [bytes, bytes]);
+      expect(identical(results[0], results[1]), isTrue);
+      expect(() => results.first[0] = 9, throwsUnsupportedError);
+      expect(blobReads, [_imageSha.toUpperCase()]);
     });
 
-    test('rejects malformed and noncanonical base64 blob content', () async {
-      var content = '';
+    test('rejects inconsistent known sizes for a blob before any blob GET', () async {
+      var blobReads = 0;
       final api = _api((request) async {
         if (request.url.path == '/user') return _user();
         if (request.url.path == '/user/installations/10/repositories') return _membership();
@@ -452,24 +469,108 @@ void main() {
         if (request.url.path.endsWith('/git/trees/$_treeSha')) {
           return _json({
             'truncated': false,
-            'tree': [_blobEntry('Map.canvas.json', _documentSha, 1)],
+            'tree': [
+              _blobEntry('Map.canvas.json', _documentSha, 3),
+              _blobEntry('Copy.canvas.json', _documentSha.toUpperCase(), 4),
+            ],
           });
         }
-        if (request.url.path.endsWith('/git/blobs/$_documentSha')) {
-          return _json({'sha': _documentSha, 'size': 1, 'encoding': 'base64', 'content': content});
-        }
+        if (request.url.path.contains('/git/blobs/')) blobReads++;
         return _json({'error': 'unexpected request'}, status: 404);
       });
-      final source = await api.readRepository(_destination(), installationId: 10);
 
-      for (final malformed in ['Z=g=', 'Zh==', 'Zm9v====', '__8=', 'Zg%3D%3D', 'Zg\r==', 'Zg= =']) {
-        content = malformed;
+      await expectLater(
+        api.readRepository(_destination(), installationId: 10),
+        throwsA(isA<GitHubApiException>().having((error) => error.kind, 'kind', GitHubErrorKind.invalidData)),
+      );
+      expect(blobReads, 0);
+    });
+
+    test('rejects oversized, short, and wrong-content raw blob responses', () async {
+      for (final failure in [
+        (name: 'oversized', bytes: <int>[1, 2, 3, 4]),
+        (name: 'short', bytes: <int>[1, 2]),
+        (name: 'wrong-content', bytes: <int>[3, 2, 1]),
+      ]) {
+        final api = _api((request) async {
+          if (request.url.path == '/user') return _user();
+          if (request.url.path == '/user/installations/10/repositories') return _membership();
+          if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
+          if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
+          if (request.url.path.endsWith('/git/trees/$_treeSha')) {
+            return _json({
+              'truncated': false,
+              'tree': [_blobEntry('Map.canvas.json', _documentSha, 3)],
+            });
+          }
+          if (request.url.path.endsWith('/git/blobs/$_documentSha')) {
+            return http.Response.bytes(failure.bytes, 200);
+          }
+          return _json({'error': 'unexpected request'}, status: 404);
+        });
+        final source = await api.readRepository(_destination(), installationId: 10);
+
         await expectLater(
           source.read('Map.canvas.json'),
           throwsA(isA<GitHubApiException>().having((error) => error.kind, 'kind', GitHubErrorKind.invalidData)),
-          reason: 'Rejected $malformed',
+          reason: failure.name,
         );
       }
+    });
+
+    test('classifies a nonempty zero-byte 429 without waiting for body cleanup', () async {
+      var cleanupCalled = false;
+      final normalClient = MockClient((request) async {
+        if (request.url.path == '/user') return _user();
+        if (request.url.path == '/user/installations/10/repositories') return _membership();
+        if (request.url.path.endsWith('/git/ref/heads/main')) return _ref();
+        if (request.url.path.endsWith('/git/commits/$_headSha')) return _commitTree();
+        if (request.url.path.endsWith('/git/trees/$_treeSha')) {
+          return _json({
+            'truncated': false,
+            'tree': [_blobEntry('Map.canvas.json', _documentSha, 0)],
+          });
+        }
+        return _json({'error': 'unexpected request'}, status: 404);
+      });
+      final client = _StreamingClient((request) async {
+        if (request.url.path.endsWith('/git/blobs/$_documentSha')) {
+          late final StreamController<List<int>> body;
+          body = StreamController<List<int>>(
+            onListen: () => body.add([1]),
+            onCancel: () {
+              cleanupCalled = true;
+              return Future<void>.error(StateError('cleanup failed'));
+            },
+          );
+          return http.StreamedResponse(
+            body.stream,
+            429,
+            request: request,
+            headers: const {'retry-after': '9'},
+          );
+        }
+        return await normalClient.send(request);
+      });
+      final api = GitHubApi(
+        mediatorUrl: Uri.parse(_mediatorUrl),
+        mediatorClient: MockClient((request) async {
+          if (request.url.path == '/oauth/github/token') return _token(request);
+          return _json({'error': 'not found'}, status: 404);
+        }),
+        githubClient: client,
+      );
+      final source = await api.readRepository(_destination(), installationId: 10);
+
+      await expectLater(
+        source.read('Map.canvas.json'),
+        throwsA(
+          isA<GitHubApiException>()
+              .having((error) => error.kind, 'kind', GitHubErrorKind.rateLimited)
+              .having((error) => error.retryAfter, 'retryAfter', const Duration(seconds: 9)),
+        ),
+      );
+      expect(cleanupCalled, isTrue);
     });
 
     test('rejects unsafe tree paths and oversized declared images before blob reads', () async {
@@ -581,7 +682,7 @@ void main() {
                 (path: 'Folder/attachments', sha: _nextTreeSha, type: 'tree', mode: '040000', size: null),
                 (
                   path: exactCopy ? 'Original.canvas.json' : 'Folder/Map.canvas.json',
-                  sha: exactCopy ? documentBlobId : _documentSha,
+                  sha: exactCopy ? documentBlobId : '7b54d3b14da13cb4f132fe0ce5063b4ba72df77e',
                   type: 'blob',
                   mode: '100644',
                   size: 3,

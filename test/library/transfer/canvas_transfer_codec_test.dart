@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -194,6 +195,109 @@ void main() {
     await expectLater(decodeTransfer(mismatch), throwsFormatException);
   });
 
+  test('defaults to sequential sorted reads and preserves document order', () async {
+    final source = _ControlledSource({
+      'Z.canvas.json': _json(_document('', 'z').toJson()),
+      'A.canvas.json': _json(_document('', 'a').toJson()),
+    });
+    final decoding = decodeTransfer(source);
+
+    await source.waitForReadCount(1);
+    expect(source.startedPaths, ['A.canvas.json']);
+    expect(source.maximumConcurrentReads, 1);
+    source.completeRead('A.canvas.json');
+    await source.waitForReadCount(2);
+    expect(source.startedPaths, ['A.canvas.json', 'Z.canvas.json']);
+    source.completeRead('Z.canvas.json');
+
+    final decoded = await decoding;
+    expect(decoded.canvases.keys, ['Z.canvas.json', 'A.canvas.json']);
+    expect(
+      decoded.canvases.values.map((document) => document.elements.whereType<MediaElementData>().single.id),
+      ['z', 'a'],
+    );
+  });
+
+  test('bounded reads claim sorted paths as slots open and decode deterministically', () async {
+    final source = _ControlledSource({
+      'C.canvas.json': _json(_document('', 'c').toJson()),
+      'A.canvas.json': _json(_document('', 'a').toJson()),
+      'B.canvas.json': _json(_document('', 'b').toJson()),
+    });
+    final decoding = decodeTransfer(source, maxConcurrentReads: 2);
+
+    await source.waitForReadCount(2);
+    expect(source.startedPaths, ['A.canvas.json', 'B.canvas.json']);
+    expect(source.maximumConcurrentReads, 2);
+    source.completeRead('B.canvas.json');
+    await source.waitForReadCount(3);
+    expect(source.startedPaths, ['A.canvas.json', 'B.canvas.json', 'C.canvas.json']);
+    expect(source.maximumConcurrentReads, 2);
+    source
+      ..completeRead('C.canvas.json')
+      ..completeRead('A.canvas.json');
+
+    final decoded = await decoding;
+    expect(decoded.canvases.keys, ['C.canvas.json', 'A.canvas.json', 'B.canvas.json']);
+    expect(
+      decoded.canvases.values.map((document) => document.elements.whereType<MediaElementData>().single.id),
+      ['c', 'a', 'b'],
+    );
+  });
+
+  test('read failure stops claims and returns before a slow sibling', () async {
+    final source = _ControlledSource({
+      'A.canvas.json': _json(_document('', 'a').toJson()),
+      'B.canvas.json': _json(_document('', 'b').toJson()),
+      'C.canvas.json': _json(_document('', 'c').toJson()),
+    });
+    final decoding = decodeTransfer(source, maxConcurrentReads: 2);
+    await source.waitForReadCount(2);
+
+    source.failRead('A.canvas.json', StateError('read failed'));
+    await expectLater(decoding, throwsStateError);
+    expect(source.startedPaths, ['A.canvas.json', 'B.canvas.json']);
+    expect(source.inFlightReads, 1);
+
+    source.failRead('B.canvas.json', StateError('late sibling failure'));
+    await Future<void>.delayed(Duration.zero);
+    expect(source.inFlightReads, 0);
+    expect(source.startedPaths, ['A.canvas.json', 'B.canvas.json']);
+  });
+
+  test('cancellation stops claims and ignores a late sibling result', () async {
+    var current = true;
+    final source = _ControlledSource({
+      'A.canvas.json': _json(_document('', 'a').toJson()),
+      'B.canvas.json': _json(_document('', 'b').toJson()),
+      'C.canvas.json': _json(_document('', 'c').toJson()),
+    });
+    final decoding = decodeTransfer(
+      source,
+      maxConcurrentReads: 2,
+      isCurrent: () => current,
+    );
+    await source.waitForReadCount(2);
+
+    current = false;
+    source.completeRead('A.canvas.json');
+    await expectLater(decoding, throwsA(isA<Exception>()));
+    expect(source.startedPaths, ['A.canvas.json', 'B.canvas.json']);
+    expect(source.inFlightReads, 1);
+
+    source.completeRead('B.canvas.json');
+    await Future<void>.delayed(Duration.zero);
+    expect(source.inFlightReads, 0);
+    expect(source.startedPaths, ['A.canvas.json', 'B.canvas.json']);
+  });
+
+  test('rejects a nonpositive read limit', () async {
+    await expectLater(
+      decodeTransfer(_ControlledSource({}), maxConcurrentReads: 0),
+      throwsArgumentError,
+    );
+  });
+
   test('standalone source strips only the final suffix and validates its basename', () async {
     final source = StandaloneCanvasTransferSource(
       name: 'Résumé.canvas.json.canvas.json',
@@ -278,5 +382,56 @@ class _MemorySource implements TransferSource {
     reads.add(path);
     if (failReads) throw StateError('source read failed');
     return files[path]!;
+  }
+}
+
+class _ControlledSource implements TransferSource {
+  _ControlledSource(this.files);
+
+  final Map<String, Uint8List> files;
+  final List<String> startedPaths = [];
+  final Map<String, Completer<Uint8List>> _pendingReads = {};
+  final List<({int count, Completer<void> completer})> _readWaiters = [];
+  int inFlightReads = 0;
+  int maximumConcurrentReads = 0;
+
+  @override
+  Future<List<TransferEntry>> entries() async => [
+    for (final entry in files.entries)
+      TransferEntry(path: entry.key, kind: TransferEntryKind.regularFile, size: entry.value.length),
+  ];
+
+  @override
+  Future<Uint8List> read(String path) async {
+    final completer = Completer<Uint8List>();
+    _pendingReads[path] = completer;
+    startedPaths.add(path);
+    inFlightReads++;
+    if (inFlightReads > maximumConcurrentReads) maximumConcurrentReads = inFlightReads;
+    _notifyReadWaiters();
+    try {
+      return await completer.future;
+    } finally {
+      inFlightReads--;
+    }
+  }
+
+  Future<void> waitForReadCount(int count) {
+    if (startedPaths.length >= count) return Future.value();
+    final completer = Completer<void>();
+    _readWaiters.add((count: count, completer: completer));
+    return completer.future;
+  }
+
+  void completeRead(String path) => _pendingReads[path]!.complete(files[path]!);
+
+  void failRead(String path, Object error) => _pendingReads[path]!.completeError(error);
+
+  void _notifyReadWaiters() {
+    _readWaiters.removeWhere((waiter) {
+      if (startedPaths.length < waiter.count) return false;
+      waiter.completer.complete();
+      return true;
+    });
   }
 }

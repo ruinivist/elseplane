@@ -199,8 +199,14 @@ Future<TransferTree> encodeTransfer(
 }
 
 /// Validates a complete source and decodes its supported canvas documents.
-Future<TransferImport> decodeTransfer(TransferSource source) async {
+Future<TransferImport> decodeTransfer(
+  TransferSource source, {
+  int maxConcurrentReads = 1,
+  bool Function()? isCurrent,
+}) async {
+  if (maxConcurrentReads < 1) throw ArgumentError.value(maxConcurrentReads, 'maxConcurrentReads');
   final sourceEntries = await source.entries();
+  _checkTransferDecodeCurrent(isCurrent);
   for (final entry in sourceEntries) {
     if (entry.kind == TransferEntryKind.unsupported) {
       throw FormatException('Unsupported transfer entry: ${entry.path}');
@@ -256,17 +262,42 @@ Future<TransferImport> decodeTransfer(TransferSource source) async {
   final pathsToRead = [...documentPaths, ...imagePaths]..sort();
   final payloads = <String, Uint8List>{};
   var actualTotal = 0;
-  for (final path in pathsToRead) {
-    final bytes = await source.read(path);
-    final declaredSize = entriesByPath[path]!.size;
-    if (declaredSize != null && bytes.length != declaredSize) {
-      throw FormatException('Transfer entry size mismatch: $path');
+  var nextPathIndex = 0;
+  var stopped = false;
+
+  Future<void> readWorker() async {
+    try {
+      while (true) {
+        if (stopped) return;
+        if (!_isTransferDecodeCurrent(isCurrent)) throw const _TransferDecodeCancelled();
+        if (nextPathIndex == pathsToRead.length) return;
+
+        final path = pathsToRead[nextPathIndex++];
+        final bytes = await source.read(path);
+        if (!_isTransferDecodeCurrent(isCurrent)) throw const _TransferDecodeCancelled();
+        if (stopped) return;
+
+        final declaredSize = entriesByPath[path]!.size;
+        if (declaredSize != null && bytes.length != declaredSize) {
+          throw FormatException('Transfer entry size mismatch: $path');
+        }
+        if (imagePaths.contains(path)) validateAttachmentSize(bytes.length, 'Attachment exceeds 10 MiB: $path');
+        actualTotal += bytes.length;
+        validateCanvasTransferSize(actualTotal);
+        payloads[path] = bytes;
+      }
+    } on Object {
+      stopped = true;
+      rethrow;
     }
-    if (imagePaths.contains(path)) validateAttachmentSize(bytes.length, 'Attachment exceeds 10 MiB: $path');
-    actualTotal += bytes.length;
-    validateCanvasTransferSize(actualTotal);
-    payloads[path] = bytes;
   }
+
+  final workerCount = pathsToRead.length < maxConcurrentReads ? pathsToRead.length : maxConcurrentReads;
+  await Future.wait<void>(
+    [for (var index = 0; index < workerCount; index++) readWorker()],
+    eagerError: true,
+  );
+  _checkTransferDecodeCurrent(isCurrent);
 
   final canvases = <String, CanvasDocument>{};
   final skipped = <TransferIssue>[];
@@ -301,6 +332,16 @@ Future<TransferImport> decodeTransfer(TransferSource source) async {
     directories: explorerDirectories.toSet(),
     skippedCanvases: skipped,
   );
+}
+
+bool _isTransferDecodeCurrent(bool Function()? isCurrent) => isCurrent == null || isCurrent();
+
+void _checkTransferDecodeCurrent(bool Function()? isCurrent) {
+  if (!_isTransferDecodeCurrent(isCurrent)) throw const _TransferDecodeCancelled();
+}
+
+final class _TransferDecodeCancelled implements Exception {
+  const _TransferDecodeCancelled();
 }
 
 ({CanvasDocument? document, TransferIssue? issue}) _decodeCanvas(String path, Uint8List bytes) {

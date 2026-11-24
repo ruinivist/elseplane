@@ -343,8 +343,10 @@ App. GitHub's installation screen controls the grant; the app picker does not
 change it. Import uses the latest default branch and the whole repository; it
 does not accept a separate URL or independently selected destination. Importing
 reads the repository from one immutable default-branch head and bounded recursive
-tree, imports supported canvas files and recognized image paths through the
-shared source and codec, and applies the same additive local merge above.
+tree. It fetches raw bytes for supported files directly from GitHub, with up
+to eight reads in flight and one request per distinct blob ID per attempt.
+It imports the original canvas and recognized image paths through the shared
+source and codec, and applies the same additive local merge above.
 Repository deletions never delete local files. Existing non-format files such as
 `README` and `.gitignore` are ignored. Import never triggers a checkpoint.
 
@@ -399,8 +401,9 @@ commit. Remote writes are never retried automatically.
 
 Keep the existing GitHub account and repository identity checks, in-memory
 session credentials, cookie-enabled mediator separation, sanitized errors,
-rate-limit handling, and finite response and time budgets. Portable data never
-contains credentials.
+and finite response and time budgets. Rate limiting stops the active
+operation and advises when to retry, without automatic retries or a shared
+client cooldown. Portable data never contains credentials.
 
 ### Validation and failure boundaries
 

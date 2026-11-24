@@ -269,7 +269,7 @@ class GitHubSync extends ChangeNotifier {
                 .readRepository(
                   attempt.destination,
                   installationId: installationId,
-                  isCurrent: () => _isCurrentImport(attempt),
+                  isCurrent: () => _isPreparingImport(attempt),
                 )
                 .then<TransferSource?>((source) => source),
             attempt._cancelled.future.then<TransferSource?>((_) => null),
@@ -286,7 +286,7 @@ class GitHubSync extends ChangeNotifier {
         _setImportResult(attempt, 'Could not prepare the GitHub import. Try again.');
         return;
       }
-      final merge = await prepareImport(source, () => _isCurrentImport(attempt));
+      final merge = await prepareImport(source, () => _isPreparingImport(attempt));
       if (!_isCurrentImport(attempt)) return;
       if (merge == null) {
         _setImportResult(attempt, 'Could not prepare the GitHub import. Try again.');
@@ -324,6 +324,9 @@ class GitHubSync extends ChangeNotifier {
   }
 
   bool _isCurrentImport(GitHubImport attempt) => !_disposed && identical(_importAttempt, attempt);
+
+  bool _isPreparingImport(GitHubImport attempt) =>
+      _isCurrentImport(attempt) && attempt.phase == GitHubImportPhase.preparing;
 
   void _cancelImport(GitHubImport attempt) {
     if (!attempt._cancelled.isCompleted) attempt._cancelled.complete();
