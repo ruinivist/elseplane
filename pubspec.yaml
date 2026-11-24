@@ -16,14 +16,14 @@ dependencies:
   flutter_markdown_plus:
     git:
       url: https://github.com/ruinivist/flutter_markdown_plus.git
-      ref: e5089a731a1d97898e3b2899b57d76b84f23c116
+      ref: main
   flutter_svg: ^2.3.0
   google_fonts: ^9.0.0
   http: ^1.6.0
   infinite_lazy_grid:
     git:
       url: https://github.com/ruinivist/infinite_lazy_grid.git
-      ref: 3a5b4cd6b4fdd821e172ada014c36c922ee42b65
+      ref: main
   json_annotation: ^4.12.0
   lucide_icons_flutter: ^4.0.1
   markdown:

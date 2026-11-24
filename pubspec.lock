@@ -319,7 +319,7 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: e5089a731a1d97898e3b2899b57d76b84f23c116
+      ref: main
       resolved-ref: e5089a731a1d97898e3b2899b57d76b84f23c116
       url: "https://github.com/ruinivist/flutter_markdown_plus.git"
     source: git
@@ -410,7 +410,7 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: "3a5b4cd6b4fdd821e172ada014c36c922ee42b65"
+      ref: main
       resolved-ref: "3a5b4cd6b4fdd821e172ada014c36c922ee42b65"
       url: "https://github.com/ruinivist/infinite_lazy_grid.git"
     source: git
