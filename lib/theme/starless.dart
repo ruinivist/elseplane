@@ -233,11 +233,7 @@ ThemeData _starlessThemeData(BColors colors, Brightness brightness, Map<String, 
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: textActionStyle.copyWith(
         minimumSize: emphasizedMinimumSize,
-        side: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.focused)
-              ? BorderSide(color: colors.focusRing, width: 2)
-              : BorderSide(color: colors.borderSubtle),
-        ),
+        side: WidgetStatePropertyAll(BorderSide(color: colors.borderSubtle)),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -308,10 +304,6 @@ ButtonStyle _actionButtonStyle(BTheme theme) => ButtonStyle(
     return Colors.transparent;
   }),
   overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-  side: WidgetStateProperty.resolveWith(
-    (states) =>
-        states.contains(WidgetState.focused) ? BorderSide(color: theme.colors.focusRing, width: 2) : BorderSide.none,
-  ),
   shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: theme.geo.radiusMedium)),
   textStyle: WidgetStatePropertyAll(theme.typo.body),
   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
