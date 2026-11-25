@@ -15,7 +15,7 @@ enum SurfaceStyle { solid, glass }
 class BColors {
   // ---------- Construction ----------
 
-  const BColors({
+  BColors({
     required this.canvasBackground,
     required this.canvasGrid,
     required this.surface,
@@ -40,7 +40,7 @@ class BColors {
     required this.focusRing,
     required this.shadow,
     required this.scrim,
-  });
+  }) : _glassFills = _deriveGlassFills(glassSurface, accentSoft, canvasBackground);
 
   final Color canvasBackground;
   final Color canvasGrid;
@@ -66,6 +66,25 @@ class BColors {
   final Color focusRing;
   final Color shadow;
   final Color scrim;
+
+  final ({Color selected, Color clear, Color selectedClear}) _glassFills;
+
+  Color glassFill({required bool selected, required bool blurEnabled}) => blurEnabled
+      ? (selected ? _glassFills.selected : glassSurface)
+      : (selected ? _glassFills.selectedClear : _glassFills.clear);
+
+  static ({Color selected, Color clear, Color selectedClear}) _deriveGlassFills(
+    Color tint,
+    Color accentSoft,
+    Color background,
+  ) {
+    final selected = Color.alphaBlend(accentSoft.withValues(alpha: 0.25), tint);
+    return (
+      selected: selected,
+      clear: Color.alphaBlend(tint, background),
+      selectedClear: Color.alphaBlend(selected, background),
+    );
+  }
 
   // ---------- Interpolation ----------
 

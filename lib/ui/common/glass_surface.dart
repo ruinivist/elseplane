@@ -12,6 +12,7 @@ class GlassSurface extends StatelessWidget {
   const GlassSurface({
     required this.child,
     this.selected = false,
+    this.blurEnabled = true,
     this.borderRadius,
     this.clipper,
     super.key,
@@ -19,6 +20,7 @@ class GlassSurface extends StatelessWidget {
 
   final Widget child;
   final bool selected;
+  final bool blurEnabled;
   final BorderRadius? borderRadius;
   final CustomClipper<Path>? clipper;
 
@@ -27,11 +29,10 @@ class GlassSurface extends StatelessWidget {
     final theme = BTheme.of(context);
     final radius = borderRadius ?? theme.geo.radiusLarge;
     final surface = BackdropFilter(
+      enabled: blurEnabled,
       filter: ui.ImageFilter.blur(sigmaX: theme.geo.glassBlurSigma, sigmaY: theme.geo.glassBlurSigma),
       child: Material(
-        color: selected
-            ? Color.alphaBlend(theme.colors.accentSoft.withValues(alpha: 0.25), theme.colors.glassSurface)
-            : theme.colors.glassSurface,
+        color: theme.colors.glassFill(selected: selected, blurEnabled: blurEnabled),
         shape: RoundedRectangleBorder(
           borderRadius: radius,
           side: selected

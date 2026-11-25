@@ -34,6 +34,7 @@ class CodeElementView extends StatefulWidget {
     this.onInteract,
     this.onControlPointerDown,
     this.canHandlePointer,
+    this.blurEnabled = true,
     super.key,
   });
 
@@ -41,6 +42,7 @@ class CodeElementView extends StatefulWidget {
   final CodeElementData data;
   final bool selected;
   final bool active;
+  final bool blurEnabled;
   final VoidCallback onEdit;
   final VoidCallback? onInteract;
   final ValueChanged<Offset> onMove;
@@ -322,16 +324,19 @@ class _CodeElementViewState extends State<CodeElementView> {
                   height: codeTitleHeight,
                   child: IgnorePointer(
                     ignoring: !showTitle,
-                    child: AnimatedSwitcher(
-                      duration: widget.data.title.trim().isEmpty ? _codeControlAnimationDuration : Duration.zero,
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeOutCubic,
-                      transitionBuilder: _codeControlTransition,
-                      child: showTitle
-                          ? editing
-                                ? titleTab
-                                : _previewInteraction(titleTab, key: const ValueKey('code-title-preview-surface'))
-                          : const SizedBox(key: ValueKey('code-title-hidden')),
+                    child: _CodeTitleBlur(
+                      enabled: widget.blurEnabled,
+                      child: AnimatedSwitcher(
+                        duration: widget.data.title.trim().isEmpty ? _codeControlAnimationDuration : Duration.zero,
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeOutCubic,
+                        transitionBuilder: _codeControlTransition,
+                        child: showTitle
+                            ? editing
+                                  ? titleTab
+                                  : _previewInteraction(titleTab, key: const ValueKey('code-title-preview-surface'))
+                            : const SizedBox(key: ValueKey('code-title-hidden')),
+                      ),
                     ),
                   ),
                 ),
@@ -345,6 +350,7 @@ class _CodeElementViewState extends State<CodeElementView> {
                             ? GlassSurface(
                                 key: const ValueKey('code-block-surface'),
                                 selected: widget.selected,
+                                blurEnabled: widget.blurEnabled,
                                 borderRadius: theme.geo.radiusMedium,
                                 child: codeBody,
                               )
@@ -419,6 +425,16 @@ BorderSide _codeSurfaceBorder(BColors colors, CodeElementData data, bool selecte
 
 // ---------- Title ----------
 
+// AnimatedSwitcher retains outgoing titles, which still need the current blur decision.
+class _CodeTitleBlur extends InheritedWidget {
+  const _CodeTitleBlur({required this.enabled, required super.child});
+
+  final bool enabled;
+
+  @override
+  bool updateShouldNotify(_CodeTitleBlur oldWidget) => enabled != oldWidget.enabled;
+}
+
 class _CodeTitleTab extends StatelessWidget {
   const _CodeTitleTab({
     required this.resources,
@@ -459,6 +475,7 @@ class _CodeTitleTab extends StatelessWidget {
                 ? GlassSurface(
                     key: ValueKey(editing ? 'code-title-input-tab-surface' : 'code-title-tab-surface'),
                     selected: selected,
+                    blurEnabled: context.dependOnInheritedWidgetOfExactType<_CodeTitleBlur>()!.enabled,
                     borderRadius: borderRadius,
                     clipper: _CodeTitleSurfaceClipper(
                       theme.geo.radiusMedium.toRRect(const Offset(0, codeTitleHeight) & data.size),

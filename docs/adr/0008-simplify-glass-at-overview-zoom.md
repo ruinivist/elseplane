@@ -1,6 +1,6 @@
 # Simplify glass at overview zoom
 
-Status: proposed
+Status: declined in favor of [ADR 0010: Skip blur on clear canvas backdrops](0010-skip-blur-on-clear-canvas-backdrops.md).
 
 Date: 2026-11-22
 
@@ -10,11 +10,11 @@ Live glass blurs the scene behind each surface. That detail is useful at normal 
 
 The [canvas pan performance investigation](../research/canvas-pan-performance.md) measured a roughly threefold increase in median animation callback interval for Glass versus Solid at 10% zoom after the spatial lookup fix. The test used software rendering and changed the entire surface style. It justifies testing blur on its own, but does not establish its cost on a hardware GPU.
 
-## Proposed decision
+## Declined proposal
 
 At overview zoom, draw canvas content that uses Glass with its translucent tint, outline, exterior shadow, and selection cues, but without live backdrop blur. Keep live blur on canvas content at normal zoom and on screen-space chrome such as toolbars, menus, and dialogs. Choose the zoom cutoff by checking when the visual difference becomes hard to see; avoid flicker around the cutoff. Do not change saved block styles, hit testing, or editing behavior.
 
-The canvas presentation owns the zoom-dependent choice; shared surface widgets render the chosen treatment without depending on the canvas controller. The [interaction model](../specs/interaction-model.md) remains authoritative until this proposal is accepted, including its blur requirements for text and code blocks.
+The proposal would have put the zoom-dependent choice in canvas presentation and kept shared surface widgets independent of the canvas controller. It was declined because large images and overlapping cards still need softening at overview zoom. The replacement uses backdrop content, not zoom level, to decide where blur can be skipped.
 
 ## Alternatives
 

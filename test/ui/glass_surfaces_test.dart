@@ -18,6 +18,39 @@ import 'package:material_ui/material_ui.dart';
 // ---------- Tests ----------
 
 void main() {
+  testWidgets('clear glass uses the opaque equivalent of live glass in each palette', (tester) async {
+    final dark = starlessDarkThemeData.extension<BTheme>()!;
+    final light = starlessLightThemeData.extension<BTheme>()!;
+    for (final palette in [dark, dark.lerp(light, 0.5), light]) {
+      for (final selected in [false, true]) {
+        final colors = palette.colors;
+        final tint = selected
+            ? Color.alphaBlend(colors.accentSoft.withValues(alpha: 0.25), colors.glassSurface)
+            : colors.glassSurface;
+        for (final blurEnabled in [false, true]) {
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: starlessDarkThemeData.copyWith(extensions: [palette]),
+              home: Center(
+                child: GlassSurface(
+                  selected: selected,
+                  blurEnabled: blurEnabled,
+                  child: const SizedBox.square(dimension: 60),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final filter = tester.widget<BackdropFilter>(find.byType(BackdropFilter));
+          expect(filter.enabled, blurEnabled);
+          final fill = (filter.child! as Material).color!;
+          expect(fill, blurEnabled ? tint : Color.alphaBlend(tint, colors.canvasBackground));
+          expect(fill.a, blurEnabled ? lessThan(1) : 1);
+        }
+      }
+    }
+  });
+
   for (final kind in ['dropdown', 'searchable', 'context']) {
     for (final count in [2, 30]) {
       testWidgets('$kind menu with $count items contains pointer scrolling', (tester) async {

@@ -82,6 +82,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - New users start in Dark theme and Glass surface style.
 - Compile-time flags independently control theme and surface-style selection. With a flag disabled, the app uses Dark or Glass and omits that selector. With both disabled, Settings omits the Appearance section. Enabling a flag restores its selector and normal preference persistence.
 - All glass surfaces, including toolbars, menus, and dialogs, use a faint, centered halo outside their rounded bounds; the shadow does not darken the translucent interior.
+- [Selective canvas glass](selective-canvas-glass.md) permits Glass text and code blocks to use a matching opaque fill instead of translucent live blur when only the canvas background can contribute. This is the sole exception to the block blur and translucency requirements below.
 - The first color preset is White, matching the Dark theme’s body-text shade. New text, pen strokes, shape outlines, and arrows default to this fixed color; shapes start without a fill. Existing objects retain their saved colors.
 - App-wide surface style controls the backgrounds of future text and code blocks. Existing and pasted blocks retain their backgrounds and per-block options.
 

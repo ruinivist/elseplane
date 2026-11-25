@@ -27,6 +27,7 @@ import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_preview.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
+import 'package:elseplane/canvas/editor/glass_backdrop_bounds.dart';
 import 'package:elseplane/canvas/editor/media_source.dart';
 import 'package:elseplane/canvas/editor/tools/arrow_tool.dart';
 import 'package:elseplane/canvas/editor/tools/pen_tool.dart';
@@ -116,6 +117,10 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   late final void Function(Set<String>) _attachmentInvalidator = _invalidateAttachments;
   void Function(void Function(Set<String>)?)? _registeredInvalidatorCallback;
   final _declaredSizes = <String, Size>{};
+  final _backdropFootprints = <String, GlassBackdropFootprint>{};
+  final _clearGlassBackdrops = ValueNotifier<Set<String>>(const {});
+  late double _glassHaloOutset;
+  String? _backdropActiveId;
   CanvasElementData? get _activeElement => _elements.where((a) => a.id == _session.activeId).firstOrNull;
   final ValueNotifier<CanvasElementData?> _editingChromeModel = ValueNotifier(null);
   final _selectionKeys = <Object, GlobalKey>{};
@@ -293,8 +298,15 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_projectedDocument == null) _sessionChanged();
-    _canvasController.background = _canvasBackgroundKind.build(BTheme.of(context).colors);
+    final theme = BTheme.of(context);
+    final shadow = theme.geo.glassShadow;
+    _glassHaloOutset = shadow.offset.distance + shadow.spreadRadius.abs() + 3 * shadow.blurSigma;
+    if (_projectedDocument == null) {
+      _sessionChanged();
+    } else {
+      _updateBackdropFootprints();
+    }
+    _canvasController.background = _canvasBackgroundKind.build(theme.colors);
   }
 
   @override
@@ -329,6 +341,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
           break;
       }
     }
+    _updateBackdropFootprints();
   }
 
   void _updateInvalidatorRegistration() {
@@ -351,6 +364,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
           break;
       }
     }
+    _updateBackdropFootprints();
   }
 
   void _detachSession(EditorSession session) {
@@ -368,6 +382,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     _input.dispose();
     _detachModels(List.of(_elements));
     _targets.clear();
+    _backdropFootprints.clear();
     _projectedDocument = null;
   }
 
@@ -400,6 +415,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     _detachSession(_session);
     _contextMenuFocusNode.dispose();
     _editingChromeModel.dispose();
+    _clearGlassBackdrops.dispose();
     _canvasController.removeListener(_closeContextMenuOnNavigation);
     _canvasController.dispose();
     super.dispose();
@@ -407,7 +423,8 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
 
   void _sessionChanged() {
     final document = _session.document;
-    if (!identical(_projectedDocument, document)) {
+    final documentChanged = !identical(_projectedDocument, document);
+    if (documentChanged) {
       final previous = _projectedDocument;
       _projectedDocument = document;
       final values = {for (final value in document.elements) value.id: value};
@@ -427,6 +444,11 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       if (previous?.background != document.background) {
         _canvasController.background = document.background.build(BTheme.of(context).colors);
       }
+    }
+    if (documentChanged) {
+      _updateBackdropFootprints();
+    } else if (_backdropActiveId != _session.activeId) {
+      _refreshGlassBackdrops();
     }
     if (_activeElement case final active?) _editingChromeModel.value = active;
     if (mounted) setState(() {});
@@ -876,7 +898,13 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       _bounds(value).topLeft,
       ListenableBuilder(
         key: ObjectKey(_session.elementLifetime(value.id)),
-        listenable: Listenable.merge([_session, _input, _editingChromeModel, ?resource]),
+        listenable: Listenable.merge([
+          _session,
+          _input,
+          _editingChromeModel,
+          ?resource,
+          if (value is TextElementData || value is CodeElementData) _clearGlassBackdrops,
+        ]),
         builder: (context, _) {
           final current = _session.element(value.id);
           if (current == null || current.runtimeType != value.runtimeType) return const SizedBox.shrink();
@@ -896,7 +924,15 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     if (resource != null) {
       void sync() {
         final current = _session.element(value.id);
-        if (current != null) _syncGeometry(current);
+        if (current == null) return;
+        _syncGeometry(current);
+        if (current is MediaElementData) {
+          final footprint = _backdropFootprint(current);
+          if (footprint != _backdropFootprints[current.id]) {
+            _backdropFootprints[current.id] = footprint;
+            _refreshGlassBackdrops();
+          }
+        }
       }
 
       _geometryListeners[value.id] = sync;
@@ -914,6 +950,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         resources: _resources[a.id]! as TextEditorResources,
         selected: selected,
         active: active,
+        blurEnabled: !_clearGlassBackdrops.value.contains(a.id),
         attachmentStore: _attachmentStore,
         onEdit: () => target.activate(edit: true),
         onInteract: target.interact,
@@ -927,6 +964,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         resources: _resources[a.id]! as CodeEditorResources,
         selected: selected,
         active: active,
+        blurEnabled: !_clearGlassBackdrops.value.contains(a.id),
         onEdit: () => target.activate(edit: true),
         onInteract: target.interact,
         onMove: target.move,
@@ -993,6 +1031,77 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
                   : const Size(mediaUrlPanelMinimumWidth, mediaUrlPanelCanvasHeight))
         : Size.zero,
   );
+
+  void _updateBackdropFootprints() {
+    final footprints = {for (final value in _elements) value.id: _backdropFootprint(value)};
+    if (!listEquals(_backdropFootprints.keys.toList(), footprints.keys.toList()) ||
+        !mapEquals(_backdropFootprints, footprints)) {
+      _backdropFootprints
+        ..clear()
+        ..addAll(footprints);
+      _refreshGlassBackdrops();
+    } else if (_backdropActiveId != _session.activeId) {
+      _refreshGlassBackdrops();
+    }
+  }
+
+  void _refreshGlassBackdrops() {
+    final activeId = _session.activeId;
+    _backdropActiveId = activeId;
+    final active = _backdropFootprints[activeId];
+    final clear = glassCardsWithClearBackdrop([
+      for (final entry in _backdropFootprints.entries)
+        if (entry.key != activeId) entry,
+      if (activeId != null && active != null) MapEntry(activeId, active),
+    ]);
+    if (!setEquals(_clearGlassBackdrops.value, clear)) _clearGlassBackdrops.value = clear;
+  }
+
+  GlassBackdropFootprint _backdropFootprint(CanvasElementData value) {
+    final background = switch (value) {
+      TextElementData(:final style) => style.background,
+      CodeElementData(:final background) => background,
+      _ => null,
+    };
+    final glass = background == BlockBackgroundKind.glass;
+    final resource = _resources[value.id];
+    final bounds = switch (value) {
+      TextElementData(height: null) => null,
+      MediaElementData(:final url, :final position, :final width) when isLinkMediaSource(url) =>
+        position & mediaLinkCardSize(url, width),
+      MediaElementData(:final url, :final position, :final width) =>
+        resource is MediaResources && resource.data.url == url && resource.hasImage
+            ? position & Size(width, width / resource.aspectRatio!)
+            : null,
+      final PenElementData pen => resource is PenResources ? _penBackdropBounds(pen, resource) : null,
+      _ => _bounds(value),
+    };
+    final paintOutset = switch (value) {
+      // Default miter joins can extend to four times the stroke's half-width.
+      ShapeElementData(:final strokeWidth) => 2 * strokeWidth,
+      // Elevated material cards and link cards also paint outside their bounds.
+      _ when background == BlockBackgroundKind.card || value is MediaElementData && isLinkMediaSource(value.url) =>
+        math.max(_glassHaloOutset, 48),
+      _ when glass => _glassHaloOutset,
+      _ => 0.0,
+    };
+    return (
+      bounds: bounds == null ? null : rotatedBackdropBounds(bounds, _rotation(value)),
+      paintOutset: paintOutset + 1,
+      glass: glass,
+    );
+  }
+
+  Rect _penBackdropBounds(PenElementData pen, PenResources resource) {
+    final measured = resource.data;
+    // A document notification can arrive before the retained path is synchronized.
+    final path =
+        identical(measured.points, pen.points) && measured.width == pen.width && measured.streamline == pen.streamline
+        ? resource.path
+        : createPenPath(pen.points, pen.width, pen.streamline);
+    return _bounds(pen).expandToInclude(path.getBounds().shift(pen.position));
+  }
+
   double _rotation(CanvasElementData value) => switch (value) {
     TextElementData(:final rotation) ||
     CodeElementData(:final rotation) ||

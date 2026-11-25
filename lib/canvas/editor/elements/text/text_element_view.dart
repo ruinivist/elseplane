@@ -36,6 +36,7 @@ class TextElementView extends StatelessWidget {
     this.onInteract,
     this.onChangeEnd,
     this.onControlPointerDown,
+    this.blurEnabled = true,
     super.key,
   });
 
@@ -43,6 +44,7 @@ class TextElementView extends StatelessWidget {
   final TextElementData data;
   final bool selected;
   final bool active;
+  final bool blurEnabled;
   final AttachmentStore attachmentStore;
   final VoidCallback onEdit;
   final VoidCallback? onInteract;
@@ -156,6 +158,7 @@ class TextElementView extends StatelessWidget {
                 ? GlassSurface(
                     key: const ValueKey('text-block-surface'),
                     selected: selected,
+                    blurEnabled: blurEnabled,
                     child: surfaceBody,
                   )
                 : surface,

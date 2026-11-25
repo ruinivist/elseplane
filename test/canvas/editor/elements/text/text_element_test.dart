@@ -1308,15 +1308,36 @@ x+y
     expect(tester.widget<Material>(surface).color, isNotNull);
   });
 
-  testWidgets('glass keeps a clipped backdrop in preview, editing, and selection', (tester) async {
-    for (final themeMode in [ThemeMode.light, ThemeMode.dark]) {
+  testWidgets('glass keeps its clip and matches the backdrop in preview, editing, and selection', (tester) async {
+    for (final (themeMode, hasBackdrop) in [
+      for (final mode in [ThemeMode.light, ThemeMode.dark])
+        for (final behind in [false, true]) (mode, behind),
+    ]) {
+      final document = _rendererDocument();
       await tester.pumpWidget(
         MaterialApp(
           theme: starlessLightThemeData,
           darkTheme: starlessDarkThemeData,
           themeMode: themeMode,
           home: Workspace(
-            libraryStore: TestLibraryStore(_rendererDocument()),
+            libraryStore: TestLibraryStore(
+              hasBackdrop
+                  ? document.copyWith(
+                      elements: [
+                        ShapeElementData(
+                          id: 'behind-text',
+                          kind: ShapeKind.roundedRectangle,
+                          position: const Offset(185, 250),
+                          size: const Size(80, 80),
+                          strokeColor: const Color(0xffffffff),
+                          fillColor: null,
+                          strokeWidth: 2,
+                        ),
+                        ...document.elements,
+                      ],
+                    )
+                  : document,
+            ),
             attachmentStore: TestAttachmentStore(),
             projectFiles: TestProjectFiles(),
           ),
@@ -1335,7 +1356,8 @@ x+y
         expect(tester.getSize(clip), tester.getSize(surface));
         expect(tester.widget<BackdropFilter>(filter).child, tester.widget<Material>(surface));
         expect(tester.widget<BackdropFilter>(filter).backdropGroupKey, isNull);
-        expect(tester.widget<Material>(surface).color!.a, inExclusiveRange(0, 1));
+        expect(tester.widget<BackdropFilter>(filter).enabled, hasBackdrop);
+        expect(tester.widget<Material>(surface).color!.a, hasBackdrop ? inExclusiveRange(0, 1) : 1);
         expect(find.descendant(of: block, matching: find.byType(ImageFiltered)), findsNothing);
       }
 
