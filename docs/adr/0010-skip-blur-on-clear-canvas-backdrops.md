@@ -4,6 +4,10 @@ Status: accepted; implemented on web.
 
 Date: 2026-11-24
 
+This records the initial text and code rollout. The
+[current specification](../specs/selective-canvas-glass.md) also covers
+link cards and inline media URL cards.
+
 ## Context
 
 Live backdrop blur is the largest isolated pan cost at overview zoom on the

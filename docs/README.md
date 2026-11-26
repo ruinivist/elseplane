@@ -46,8 +46,9 @@ then read the authority relevant to the work. Do not create a separate
   Replaced by [ADR 0010: skip blur on clear canvas backdrops](adr/0010-skip-blur-on-clear-canvas-backdrops.md).
 - **Implemented:** the
   [selective canvas glass specification](specs/selective-canvas-glass.md)
-  defines the card-only policy. The [completed plan](archive/selective-canvas-glass.md)
-  links validation of the initial implementation.
+  covers text, code, link cards, and inline media URL cards. The
+  [completed plan](archive/selective-canvas-glass.md) links validation
+  of the text and code implementation.
 - **Proposed:** [ADR 0009: speed up GitHub canvas transfers](adr/0009-speed-up-github-canvas-transfers.md),
   with a [draft specification](specs/github-transfer-performance.md), a
   [commit blob reuse plan](plans/github-commit-blob-reuse.md), and a

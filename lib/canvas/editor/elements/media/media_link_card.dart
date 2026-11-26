@@ -16,6 +16,7 @@ class MediaLinkCard extends StatelessWidget {
     required this.thumbnail,
     required this.thumbnailFailed,
     required this.selected,
+    this.blurEnabled = true,
     super.key,
   });
 
@@ -26,6 +27,7 @@ class MediaLinkCard extends StatelessWidget {
   final ImageProvider<Object>? thumbnail;
   final bool thumbnailFailed;
   final bool selected;
+  final bool blurEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +44,7 @@ class MediaLinkCard extends StatelessWidget {
       size: size,
       child: Surface(
         selected: selected,
+        blurEnabled: blurEnabled,
         raised: false,
         child: rich
             ? Column(

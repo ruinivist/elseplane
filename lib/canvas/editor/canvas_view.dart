@@ -120,6 +120,8 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   final _backdropFootprints = <String, GlassBackdropFootprint>{};
   final _clearGlassBackdrops = ValueNotifier<Set<String>>(const {});
   late double _glassHaloOutset;
+  late bool _mediaUsesGlass;
+  late double _inlineUrlPanelMaxHeight;
   String? _backdropActiveId;
   CanvasElementData? get _activeElement => _elements.where((a) => a.id == _session.activeId).firstOrNull;
   final ValueNotifier<CanvasElementData?> _editingChromeModel = ValueNotifier(null);
@@ -301,6 +303,8 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     final theme = BTheme.of(context);
     final shadow = theme.geo.glassShadow;
     _glassHaloOutset = shadow.offset.distance + shadow.spreadRadius.abs() + 3 * shadow.blurSigma;
+    _mediaUsesGlass = theme.surfaceStyle == SurfaceStyle.glass;
+    _inlineUrlPanelMaxHeight = MediaElementView.inlineUrlPanelMaxHeight(context);
     if (_projectedDocument == null) {
       _sessionChanged();
     } else {
@@ -903,7 +907,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
           _input,
           _editingChromeModel,
           ?resource,
-          if (value is TextElementData || value is CodeElementData) _clearGlassBackdrops,
+          if (value is TextElementData || value is CodeElementData || value is MediaElementData) _clearGlassBackdrops,
         ]),
         builder: (context, _) {
           final current = _session.element(value.id);
@@ -978,6 +982,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         resources: _resources[a.id]! as MediaResources,
         selected: selected,
         active: active,
+        blurEnabled: !_clearGlassBackdrops.value.contains(a.id),
         onActivate: target.activate,
         onActivateLink: (openLink, {required fromPointer}) =>
             target.activate(afterActivate: openLink, fromPointer: fromPointer),
@@ -1063,26 +1068,30 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       CodeElementData(:final background) => background,
       _ => null,
     };
-    final glass = background == BlockBackgroundKind.glass;
     final resource = _resources[value.id];
+    final media = resource is MediaResources && value is MediaElementData && resource.data.url == value.url
+        ? resource
+        : null;
+    final mediaHasSurface = media != null && !media.hasImage;
+    final glass = background == BlockBackgroundKind.glass || mediaHasSurface && _mediaUsesGlass;
     final bounds = switch (value) {
       TextElementData(height: null) => null,
-      MediaElementData(:final url, :final position, :final width) when isLinkMediaSource(url) =>
-        position & mediaLinkCardSize(url, width),
-      MediaElementData(:final url, :final position, :final width) =>
-        resource is MediaResources && resource.data.url == url && resource.hasImage
-            ? position & Size(width, width / resource.aspectRatio!)
-            : null,
+      MediaElementData(:final position) =>
+        media == null
+            ? null
+            : position &
+                  (media.isLink || media.hasImage
+                      ? media.canvasSize
+                      : Size(media.urlPanelWidth, _inlineUrlPanelMaxHeight)),
       final PenElementData pen => resource is PenResources ? _penBackdropBounds(pen, resource) : null,
       _ => _bounds(value),
     };
     final paintOutset = switch (value) {
       // Default miter joins can extend to four times the stroke's half-width.
       ShapeElementData(:final strokeWidth) => 2 * strokeWidth,
-      // Elevated material cards and link cards also paint outside their bounds.
-      _ when background == BlockBackgroundKind.card || value is MediaElementData && isLinkMediaSource(value.url) =>
-        math.max(_glassHaloOutset, 48),
       _ when glass => _glassHaloOutset,
+      // Solid cards can paint an elevation shadow outside their bounds.
+      _ when background == BlockBackgroundKind.card || mediaHasSurface => math.max(_glassHaloOutset, 48),
       _ => 0.0,
     };
     return (

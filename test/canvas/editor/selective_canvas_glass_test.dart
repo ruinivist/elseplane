@@ -13,6 +13,8 @@ import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts_lite.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:infinite_lazy_grid/infinite_lazy_grid.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -83,6 +85,92 @@ void main() {
     expect(camera.scale, lessThan(scale));
     expect(_filters(tester, text), [true]);
     expect(_filters(tester, code), [false, false]);
+  });
+
+  testWidgets('generic and rich link cards reuse selective blur but their floating editor does not', (tester) async {
+    final session = _session([
+      _text('text', const Offset(40, 90)),
+      MediaElementData(id: 'link', position: const Offset(375, 90), width: 230, url: 'https://example.com/'),
+    ]);
+    final link = find.byType(MediaLinkCard);
+    final urlPanel = find.byKey(const ValueKey('media-url-panel'));
+    await http.runWithClient(() async {
+      await _pumpCanvas(tester, session);
+      expect(tester.widget<MediaLinkCard>(link).target, isNull);
+      expect(_filters(tester, link), [false]);
+
+      session
+        ..setMediaUrl('link', 'https://youtu.be/M7lc1UVf-VE')
+        ..setSelection(['link'])
+        ..setActive('link');
+      await tester.pumpAndSettle();
+      expect(tester.widget<MediaLinkCard>(link).target, isNotNull);
+      expect(_filters(tester, link), [false]);
+      expect(_filters(tester, urlPanel), [true]);
+
+      session.move(['link'], const Offset(-290, 0));
+      await tester.pumpAndSettle();
+      expect(_filters(tester, link), [true]);
+      expect(_filters(tester, urlPanel), [true]);
+
+      await _pumpCanvas(tester, session, surfaceStyle: SurfaceStyle.solid);
+      expect(_filters(tester, link), isEmpty);
+      expect(_filters(tester, urlPanel), isEmpty);
+    }, () => MockClient((_) async => http.Response('', 404)));
+  });
+
+  testWidgets('inline URL card covers its three-line height in both paint orders', (tester) async {
+    final session = _session([
+      MediaElementData(id: 'inline', position: const Offset(40, 90), width: 480, url: ''),
+      _text('text', const Offset(40, 400)),
+    ]);
+    final panel = find.byKey(const ValueKey('media-url-panel'));
+    final note = _note('text');
+    await _pumpCanvas(tester, session);
+    expect(_filters(tester, panel), [false]);
+    expect(_filters(tester, note), [false]);
+
+    await _pumpCanvas(tester, session, textScaler: const TextScaler.linear(5));
+    session.move(['text'], const Offset(0, -130));
+    final resources = tester.widget<MediaElementView>(find.byType(MediaElementView)).resources;
+    resources.controller.text = 'First\nSecond\nThird';
+    await tester.pumpAndSettle();
+    expect(tester.getRect(panel).overlaps(tester.getRect(note)), isTrue);
+    expect(_filters(tester, panel), [false]);
+    expect(_filters(tester, note), [true]);
+
+    session.arrange(['inline'], ['text', 'inline']);
+    await tester.pumpAndSettle();
+    expect(_filters(tester, note), [false]);
+    expect(_filters(tester, panel), [true]);
+  });
+
+  testWidgets('the wrapped URL hint can extend beyond the three-line editor bound', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(240, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final session = _session([
+      MediaElementData(id: 'inline', position: const Offset(0, 90), width: 480, url: ''),
+    ]);
+    final panel = find.byKey(const ValueKey('media-url-panel'));
+    await _pumpCanvas(
+      tester,
+      session,
+      textScaler: const TextScaler.linear(5),
+      hintStyle: const TextStyle(fontSize: 24, height: 2),
+    );
+    expect(_filters(tester, panel), [false]);
+    final editable = tester.state<EditableTextState>(find.byType(EditableText)).renderEditable;
+    final panelRect = tester.getRect(panel);
+    expect(panelRect.height, greaterThan(editable.preferredLineHeight * 3 + 110));
+
+    session.insert([_text('text', Offset(0, panelRect.bottom - 5))]);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(panel).overlaps(tester.getRect(_note('text'))), isTrue);
+    expect(_filters(tester, _note('text')), [true]);
+
+    session.arrange(['inline'], ['text', 'inline']);
+    await tester.pumpAndSettle();
+    expect(_filters(tester, panel), [true]);
   });
 
   testWidgets('the outgoing empty title follows the body when code loses its lift', (tester) async {
@@ -211,13 +299,21 @@ Future<void> _pumpCanvas(
   EditorSession session, {
   TestAttachmentStore? attachments,
   BGeo? geometry,
+  SurfaceStyle surfaceStyle = SurfaceStyle.glass,
+  TextScaler textScaler = TextScaler.noScaling,
+  TextStyle? hintStyle,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: starlessLightThemeData.copyWith(
+        inputDecorationTheme: starlessLightThemeData.inputDecorationTheme.copyWith(hintStyle: hintStyle),
         extensions: [
-          starlessLightThemeData.extension<BTheme>()!.copyWith(geo: geometry, surfaceStyle: SurfaceStyle.glass),
+          starlessLightThemeData.extension<BTheme>()!.copyWith(geo: geometry, surfaceStyle: surfaceStyle),
         ],
+      ),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+        child: child!,
       ),
       home: Scaffold(
         body: CanvasView(
@@ -225,7 +321,7 @@ Future<void> _pumpCanvas(
           attachmentStore: attachments ?? TestAttachmentStore(),
           chromeBuilder: (_, _) => Align(
             alignment: Alignment.bottomCenter,
-            child: CanvasToolbar(buttonsBuilder: ({required compact}) => const [Text('Tool')]),
+            child: CanvasToolbar(buttonsBuilder: ({required compact}) => const [Icon(Icons.edit)]),
           ),
           onOpenLibrary: (_) async {},
         ),

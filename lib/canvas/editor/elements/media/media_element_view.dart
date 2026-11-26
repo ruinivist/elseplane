@@ -2,6 +2,7 @@
 // Used by the canvas media tool and persisted media elements.
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/image_import.dart';
@@ -54,6 +55,7 @@ class MediaElementView extends StatefulWidget {
     required this.onActivate,
     required this.onActivateLink,
     required this.onDeactivate,
+    this.blurEnabled = true,
     this.onControlPointerDown,
     this.onChangeEnd,
     super.key,
@@ -63,6 +65,7 @@ class MediaElementView extends StatefulWidget {
   final MediaElementData data;
   final bool selected;
   final bool active;
+  final bool blurEnabled;
   final ValueChanged<Offset> onMove;
   final VoidCallback? onChangeEnd;
   final ValueChanged<Offset> onResize;
@@ -70,6 +73,42 @@ class MediaElementView extends StatefulWidget {
   final void Function(VoidCallback, {required bool fromPointer}) onActivateLink;
   final VoidCallback onDeactivate;
   final PointerDownEventListener? onControlPointerDown;
+
+  static double inlineUrlPanelMaxHeight(BuildContext context) {
+    final theme = Theme.of(context);
+    final baseStyle = theme.useMaterial3 ? theme.textTheme.bodyLarge : theme.textTheme.titleMedium;
+    final bodyStyle = BTheme.of(context).typo.body;
+    final inputStyle = baseStyle?.merge(bodyStyle) ?? bodyStyle;
+    final bold = MediaQuery.boldTextOf(context) ? FontWeight.bold : null;
+    final style = inputStyle.copyWith(
+      fontWeight: bold,
+    );
+    final lineHeight = MediaQuery.maybeLineHeightScaleFactorOverrideOf(context);
+    final text = TextPainter(
+      text: TextSpan(style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      textHeightBehavior: DefaultTextHeightBehavior.maybeOf(context),
+      strutStyle: StrutStyle.fromTextStyle(style, forceStrutHeight: true).merge(
+        StrutStyle(height: lineHeight),
+      ),
+    );
+    // RenderEditable caps its height at this line height times maxLines.
+    final density = theme.inputDecorationTheme.visualDensity ?? theme.visualDensity;
+    final editableHeight = text.preferredLineHeight * _MediaUrlPanel.maxLines;
+    // The hint wraps independently of maxLines; measure its narrowest layout.
+    text
+      ..strutStyle = null
+      ..text = TextSpan(
+        text: _MediaUrlPanel.hint,
+        style: inputStyle.merge(theme.inputDecorationTheme.hintStyle).copyWith(fontWeight: bold, height: lineHeight),
+      )
+      ..layout(maxWidth: 0);
+    final height =
+        math.max(editableHeight, text.height) + _MediaUrlPanel.padding.vertical + density.baseSizeAdjustment.dy;
+    text.dispose();
+    return math.max(mediaUrlPanelCanvasHeight, height.ceilToDouble());
+  }
 
   @override
   State<MediaElementView> createState() => _MediaElementViewState();
@@ -247,6 +286,7 @@ class _MediaElementViewState extends State<MediaElementView> {
                       resources: model,
                       selected: widget.selected,
                       active: widget.active,
+                      blurEnabled: widget.blurEnabled,
                       onActivate: widget.onActivate,
                       onActivateLink: widget.onActivateLink,
                       onOpenLink: _openLink,
@@ -260,6 +300,7 @@ class _MediaElementViewState extends State<MediaElementView> {
                     resources: model,
                     selected: widget.selected,
                     active: widget.active,
+                    blurEnabled: widget.blurEnabled,
                     onActivate: widget.onActivate,
                     onOpenLink: _openLink,
                     onMove: widget.onMove,
@@ -279,6 +320,7 @@ class _MediaBody extends StatefulWidget {
     required this.resources,
     required this.selected,
     required this.active,
+    required this.blurEnabled,
     required this.onActivate,
     required this.onActivateLink,
     required this.onOpenLink,
@@ -291,6 +333,7 @@ class _MediaBody extends StatefulWidget {
   final MediaResources resources;
   final bool selected;
   final bool active;
+  final bool blurEnabled;
   final VoidCallback onActivate;
   final void Function(VoidCallback, {required bool fromPointer}) onActivateLink;
   final VoidCallback onOpenLink;
@@ -354,6 +397,7 @@ class _MediaBodyState extends State<_MediaBody> {
               thumbnail: model.thumbnailImage,
               thumbnailFailed: model.thumbnailFailed,
               selected: widget.selected,
+              blurEnabled: widget.blurEnabled,
             ),
           );
     Widget body = SizedBox.fromSize(
@@ -473,13 +517,19 @@ class _MediaUrlPanel extends StatefulWidget {
     required this.onOpenLink,
     required this.onPickImage,
     required this.onPaste,
+    this.blurEnabled = true,
     this.onMove,
     this.onChangeEnd,
   });
 
+  static const maxLines = 3;
+  static const padding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+  static const hint = 'Paste link';
+
   final MediaResources resources;
   final bool selected;
   final bool active;
+  final bool blurEnabled;
   final VoidCallback onActivate;
   final VoidCallback onOpenLink;
   final VoidCallback onPickImage;
@@ -517,6 +567,7 @@ class _MediaUrlPanelState extends State<_MediaUrlPanel> {
       width: widget.resources.urlPanelWidth,
       child: Surface(
         selected: widget.selected,
+        blurEnabled: widget.blurEnabled,
         raised: false,
         child: Stack(
           children: [
@@ -551,15 +602,15 @@ class _MediaUrlPanelState extends State<_MediaUrlPanel> {
                           widget.resources.commitUrl();
                         },
                         minLines: 1,
-                        maxLines: 3,
+                        maxLines: _MediaUrlPanel.maxLines,
                         keyboardType: TextInputType.url,
                         textInputAction: TextInputAction.done,
                         cursorColor: colors.accent,
                         style: theme.typo.body.copyWith(color: colors.textPrimary),
                         decoration: const InputDecoration(
-                          hintText: 'Paste link',
+                          hintText: _MediaUrlPanel.hint,
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          contentPadding: _MediaUrlPanel.padding,
                         ),
                       ),
                     ),
