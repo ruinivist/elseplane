@@ -41,7 +41,7 @@ preview:
 	flutter widget-preview start
 
 build:
-	flutter build web --dart-define=GIT_SHA=$(GIT_SHA) --dart-define=GITHUB_MEDIATOR_URL=$(GITHUB_MEDIATOR_URL) --dart-define=GITHUB_APP_SLUG=$(GITHUB_APP_SLUG)
+	flutter build web --wasm --dart-define=GIT_SHA=$(GIT_SHA) --dart-define=GITHUB_MEDIATOR_URL=$(GITHUB_MEDIATOR_URL) --dart-define=GITHUB_APP_SLUG=$(GITHUB_APP_SLUG)
 
 deploy: build
 	wrangler deploy
