@@ -22,11 +22,13 @@
   doing the test pass as lead. Give one worker exclusive browser control at a
   time; the lead owns scope, coordination, cleanup, and final assessment.
 - Test behavior and failure boundaries, not theme-token values. Run focused
-  browser tests with
+  tests that cover the behavior affected by the change. For browser tests, use
   `CHROME_EXECUTABLE=/usr/bin/chromium flutter test --platform chrome <test-file>`.
-  For code changes, use `flutter analyze` and `flutter build web`; run the full
-  Chrome suite once before committing feature or fix work. Styling/refactor
-  changes can skip tests; documentation-only changes need link and diff checks.
+  Run the full Chrome suite when focused tests can't cover the likely impact
+  or when explicitly requested, not as a routine pre-commit step. For code
+  changes, use `flutter analyze` and `flutter build web`. Styling and
+  refactoring changes that don't affect behavior can skip tests;
+  documentation-only changes need link and diff checks.
 - Tests must assert desired positive and negative behavior (where relevant, as
   the negative set can otherwise be infinite), never preserve known bugs as
   expected outcomes. Otherwise, future agents may mistake the broken behavior

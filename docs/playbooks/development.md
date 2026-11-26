@@ -71,10 +71,10 @@ CHROME_EXECUTABLE=/usr/bin/chromium flutter test --platform chrome '<test-file>'
 flutter build web
 ```
 
-Test behavior and failure boundaries rather than theme-token values. Run focused
-tests while changing code; run the full Chrome suite once before committing a
-feature or fix. Documentation-only changes need link and diff checks, not a
-Flutter test or build.
+Follow the [project testing guidance](../../AGENTS.md#project-guidance): run
+focused tests for the behavior your change affects. The full Chrome suite is
+not a routine pre-commit step. Documentation-only changes need link and diff
+checks, not a Flutter test or build.
 
 ## Feature flags
 
