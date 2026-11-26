@@ -18,9 +18,6 @@
   it.
 - Use dependencies available across Flutter platforms. At this stage, build
   and verify web only.
-- When using `elseplane-debug`, delegate browser testing to a worker rather than
-  doing the test pass as lead. Give one worker exclusive browser control at a
-  time; the lead owns scope, coordination, cleanup, and final assessment.
 - Test behavior and failure boundaries, not theme-token values. Run focused
   tests that cover the behavior affected by the change. For browser tests, use
   `CHROME_EXECUTABLE=/usr/bin/chromium flutter test --platform chrome <test-file>`.
@@ -35,3 +32,17 @@
   for intended behavior and preserve the bug. Deferred bugs belong in the backlog.
 - Use lowercase Conventional Commit subjects (`type: description`), 4–6 words
   total.
+
+## Debugging
+
+- For an owned Flutter debug run, use the
+  [`elseplane-debug` skill](.agents/skills/elseplane-debug/SKILL.md). Delegate
+  browser testing to one worker at a time with exclusive browser control. The
+  lead owns scope, coordination, cleanup, and final assessment.
+- For release-mode visual checks that do not need sign-in, run
+  `flutter build web`, serve `build/web` with a local HTTP server bound to
+  `127.0.0.1`, and open it in an isolated `agent-browser` session.
+- Before interacting or recording, wait for `#startup-loader` to disappear and
+  verify the canvas controls are visible. The browser's page-load event can
+  fire before Flutter paints its first frame. If startup times out, capture
+  console errors and failed requests before closing the browser.
