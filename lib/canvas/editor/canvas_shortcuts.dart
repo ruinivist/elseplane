@@ -6,7 +6,7 @@ import 'dart:async';
 import 'package:elseplane/canvas/editor/canvas_input.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart' show EditableText, FocusManager, FocusNode, SingleActivator;
+import 'package:flutter/widgets.dart' show BuildContext, EditableText, FocusManager, FocusNode, SingleActivator;
 
 // ---------- Keyboard dispatch ----------
 
@@ -14,6 +14,7 @@ class CanvasShortcuts {
   CanvasShortcuts({
     required this.input,
     required this.fieldForFocus,
+    required this.keepsEditorOpen,
     required this.macOS,
     required this.enabled,
     required this.blocked,
@@ -34,6 +35,7 @@ class CanvasShortcuts {
 
   final CanvasInput input;
   final EditorContext? Function(FocusNode) fieldForFocus;
+  final bool Function(BuildContext) keepsEditorOpen;
   final bool Function() macOS;
   final bool Function() enabled;
   final bool Function() blocked;
@@ -60,7 +62,9 @@ class CanvasShortcuts {
       return;
     }
     final context = node.context;
-    if (context?.widget is EditableText || context?.findAncestorWidgetOfExactType<EditableText>() != null) {
+    if (context != null &&
+        (context.widget is EditableText || context.findAncestorWidgetOfExactType<EditableText>() != null) &&
+        !keepsEditorOpen(context)) {
       input.session.editField(null);
     }
   }

@@ -79,13 +79,14 @@ void main() {
     },
   );
 
-  test('clipboard preserves text backgrounds and rejects the previous version', () {
+  test('clipboard preserves text backgrounds and font size and rejects the previous version', () {
     var text = _document.elements.whereType<TextElementData>().first;
     for (final background in BlockBackgroundKind.values) {
-      text = text.copyWith(style: text.style.copyWith(background: background));
+      text = text.copyWith(style: text.style.copyWith(background: background, fontSize: 24));
       final payload = encodeCanvasClipboard([text], sourceDirectory: '');
       final restored = decodeCanvasClipboard(payload)!.elements.single as TextElementData;
       expect(restored.style.background, background);
+      expect(restored.style.fontSize, 24);
       final previous = jsonDecode(payload) as Map<String, dynamic>;
       previous['version'] = canvasClipboardVersion - 1;
       expect(() => decodeCanvasClipboard(jsonEncode(previous)), throwsFormatException);
@@ -276,7 +277,7 @@ void main() {
     expect(invalidated, isFalse);
   });
 
-  test('clipboard preserves shape geometry and label', () {
+  test('clipboard preserves shape geometry and styled label', () {
     final shape = ShapeElementData(
       id: 'shape',
       kind: ShapeKind.diamond,
@@ -286,6 +287,9 @@ void main() {
       fillColor: const Color(0xffffc936),
       strokeWidth: 4,
       text: 'Canvas label — 雪',
+      labelFontSize: 24,
+      labelFontFamily: 'Unavailable Family',
+      labelColor: const Color(0x80ff0000),
     );
 
     final restored =
@@ -1027,6 +1031,7 @@ final _document = CanvasDocument(
       markdown: 'hello',
       style: const TextNodeStyle(
         fontFamily: 'ABeeZee',
+        fontSize: 24,
         color: Color(0xff201C1A),
       ),
     ),
@@ -1079,6 +1084,9 @@ final _menuDocument = CanvasDocument(
         strokeColor: const Color(0xff000000),
         fillColor: const Color(0xffffffff),
         strokeWidth: 2,
+        labelFontSize: 18,
+        labelFontFamily: 'Unavailable Family',
+        labelColor: const Color(0x802f6fde),
       ),
   ],
 );

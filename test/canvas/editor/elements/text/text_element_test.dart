@@ -186,6 +186,41 @@ void main() {
     expect(find.byType(ElementTransformControls), findsNothing);
   });
 
+  testWidgets('font size changes the open Markdown source and its preview', (tester) async {
+    await _addTextBlock(tester, const Offset(120, 200));
+    await tester.pumpAndSettle();
+    final source = find.byKey(const ValueKey('text-markdown-editor'));
+    final model = tester.widget<TextElementView>(find.byType(TextElementView)).resources;
+    await tester.enterText(source, '# Heading\nBody');
+    model.controller.selection = const TextSelection.collapsed(offset: 11);
+    await tester.pump();
+
+    final trigger = _selectTrigger('text-font-size-select');
+    await tester.tap(trigger, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(MenuItemButton, '24'), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(model.editing, isTrue);
+    expect(model.focusNode.hasFocus, isTrue);
+    expect(model.controller.selection, const TextSelection.collapsed(offset: 11));
+    expect(tester.widget<TextField>(source).style!.fontSize, 24);
+
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(text: '# Heading\nBXody', selection: TextSelection.collapsed(offset: 12)),
+    );
+    await tester.pumpAndSettle();
+    expect(model.node.markdown, '# Heading\nBXody');
+
+    await tester.tap(_selectTrigger('text-background-select'), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(model.editing, isFalse);
+    final preview = tester.widget<MarkdownBody>(find.byType(MarkdownBody)).styleSheet!;
+    expect(preview.p!.fontSize, 24);
+    expect(preview.h1!.fontSize, greaterThan(24));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('text editor forwards arrow keys to native editing', (tester) async {
     await _addTextBlock(tester, const Offset(120, 200));
     await tester.pumpAndSettle();

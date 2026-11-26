@@ -91,6 +91,17 @@ class _SettingsPreviewState extends State<_SettingsPreview> {
           markdown: 'Preview',
           style: const TextNodeStyle(fontFamily: defaultFontFamily),
         ),
+        ShapeElementData(
+          id: 'shape',
+          kind: ShapeKind.roundedRectangle,
+          position: Offset.zero,
+          size: const Size(220, 120),
+          strokeColor: defaultCanvasColor,
+          fillColor: null,
+          strokeWidth: 2,
+          text: 'Example label',
+          labelFontSize: 18,
+        ),
         CodeElementData(
           id: 'code',
           position: Offset.zero,
@@ -103,9 +114,10 @@ class _SettingsPreviewState extends State<_SettingsPreview> {
       ],
     ),
     initialColor: defaultCanvasColor,
-  )..setActive('text');
+  )..setActive(widget.kind == _SettingsKind.shape ? 'shape' : 'text');
   bool _colorExpanded = false;
   bool _fillExpanded = false;
+  bool _labelColorExpanded = false;
 
   @override
   void dispose() {
@@ -166,6 +178,12 @@ class _SettingsPreviewState extends State<_SettingsPreview> {
         onStrokeWidthChanged: (width) => _session.setDrawingDefaults(defaults.copyWith(shapeWidth: width)),
         onOutlineColorPickerExpandedChanged: _expandColor,
         onFillColorPickerExpandedChanged: (expanded) => setState(() => _fillExpanded = expanded),
+        labelOptions: ShapeLabelSettings(
+          session: _session,
+          id: 'shape',
+          colorPickerExpanded: _labelColorExpanded,
+          onColorPickerExpandedChanged: (expanded) => setState(() => _labelColorExpanded = expanded),
+        ),
       ),
       _SettingsKind.code => CodeToolSettings(
         session: _session,

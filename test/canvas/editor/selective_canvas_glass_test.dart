@@ -319,7 +319,7 @@ Future<void> _pumpCanvas(
         body: CanvasView(
           session: session,
           attachmentStore: attachments ?? TestAttachmentStore(),
-          chromeBuilder: (_, _) => Align(
+          chromeBuilder: (_, _, _) => Align(
             alignment: Alignment.bottomCenter,
             child: CanvasToolbar(buttonsBuilder: ({required compact}) => const [Icon(Icons.edit)]),
           ),

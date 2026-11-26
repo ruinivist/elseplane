@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:elseplane/attachments/attachment_store.dart';
 import 'package:elseplane/attachments/image_import.dart';
+import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_clipboard.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
 import 'package:elseplane/theme/theme.dart';
@@ -110,6 +111,7 @@ class _TextMarkdownEditorState extends State<TextMarkdownEditor> {
     final theme = BTheme.of(context);
     final colors = theme.colors;
     final code = theme.typo.code;
+    final fontSize = widget.model.style.fontSize ?? defaultTextFontSize;
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
@@ -145,10 +147,11 @@ class _TextMarkdownEditorState extends State<TextMarkdownEditor> {
               border: InputBorder.none,
               contentPadding: const EdgeInsets.all(24),
               hintText: 'Type something...',
-              hintStyle: theme.typo.body.copyWith(color: colors.textMuted),
+              maintainHintSize: false,
+              hintStyle: theme.typo.body.copyWith(color: colors.textMuted, fontSize: fontSize),
               floatingLabelBehavior: FloatingLabelBehavior.never,
             ),
-            style: code.copyWith(color: colors.textPrimary),
+            style: code.copyWith(color: colors.textPrimary, fontSize: fontSize),
           ),
         ),
       ),

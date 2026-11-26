@@ -258,6 +258,16 @@ class EditorSession extends ChangeNotifier {
       _change([id], (a) => (a as TextElementData).copyWith(markdown: markdown), promote: true);
   void setShapeText(String id, String text) =>
       _change([id], (a) => (a as ShapeElementData).copyWith(text: text), promote: true);
+  void setShapeLabelStyle(String id, {double? fontSize, String? fontFamily, Color? color, bool clearColor = false}) =>
+      _change(
+        [id],
+        (a) => (a as ShapeElementData).copyWith(
+          labelFontSize: fontSize,
+          labelFontFamily: fontFamily,
+          labelColor: color,
+          clearLabelColor: clearColor,
+        ),
+      );
   void setTextStyle(String id, TextNodeStyle style) =>
       _change([id], (a) => (a as TextElementData).copyWith(style: style));
   void setCodeSource(String id, String source) =>

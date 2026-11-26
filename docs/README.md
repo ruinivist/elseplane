@@ -49,6 +49,8 @@ then read the authority relevant to the work. Do not create a separate
   covers text, code, link cards, and inline media URL cards. The
   [completed plan](archive/selective-canvas-glass.md) links validation
   of the text and code implementation.
+- **Implemented:** the [canvas text styling plan](archive/canvas-text-styling.md)
+  covers font size for Text blocks and typography for shape labels.
 - **Proposed:** [ADR 0009: speed up GitHub canvas transfers](adr/0009-speed-up-github-canvas-transfers.md),
   with a [draft specification](specs/github-transfer-performance.md), a
   [commit blob reuse plan](plans/github-commit-blob-reuse.md), and a

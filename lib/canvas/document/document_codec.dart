@@ -113,6 +113,18 @@ final class _SizeConverter extends JsonConverter<Size, Map<String, dynamic>> {
 
 final _canonicalColor = RegExp(r'^#[0-9A-F]{6}$');
 
+void _validateFontSize(double? value, String field) {
+  if (value != null && !canvasFontSizes.contains(value)) {
+    throw FormatException('$field must be a canvas font size preset');
+  }
+}
+
+void _validateFontFamily(String? value, String field) {
+  if (value != null && value.trim().isEmpty) {
+    throw FormatException('$field must not be blank');
+  }
+}
+
 void _validateFinite(double value, String field) {
   if (!value.isFinite) throw FormatException('$field must be finite');
 }

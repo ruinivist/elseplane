@@ -25,6 +25,7 @@ import 'package:elseplane/canvas/editor/elements/pen/pen_resources.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_editor_resources.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_preview.dart';
+import 'package:elseplane/canvas/editor/elements/shape/shape_tool_settings.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_editor_resources.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/glass_backdrop_bounds.dart';
@@ -73,7 +74,7 @@ class CanvasView extends StatefulWidget {
   });
   final EditorSession session;
   final AttachmentStore attachmentStore;
-  final Widget Function(BuildContext, CanvasInput) chromeBuilder;
+  final Widget Function(BuildContext, CanvasInput, ValueChanged<EditorContext>) chromeBuilder;
   final Future<void> Function(CanvasInput) onOpenLibrary;
   final String canvasDirectory;
   final void Function(void Function(Set<String>)?)? onAttachmentInvalidatorChanged;
@@ -227,6 +228,12 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     _shortcuts = CanvasShortcuts(
       input: _input,
       fieldForFocus: _fieldForFocus,
+      keepsEditorOpen: (context) {
+        final options = context.findAncestorWidgetOfExactType<ShapeLabelSettings>();
+        return options != null &&
+            identical(options.session, _session) &&
+            _session.editing == (id: options.id, field: EditorField.shapeText);
+      },
       macOS: () => Theme.of(context).platform == TargetPlatform.macOS,
       enabled: () => _documentLoaded,
       blocked: () => widget.libraryOpen,
@@ -519,6 +526,23 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   void _startTextEditing(TextElementData model) {
     _setActiveElement(model);
     _focusElement(model.id, edit: true);
+  }
+
+  void _resumeEditorFocus(EditorContext editing) {
+    if (_session.editing != editing) return;
+    final session = _session;
+    final lifetime = session.elementLifetime(editing.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _canvasInputBlocked ||
+          !identical(session, _session) ||
+          session.editing != editing ||
+          !identical(session.elementLifetime(editing.id), lifetime)) {
+        return;
+      }
+      final value = session.element(editing.id);
+      if (value != null) _editorFocusNode(value)?.requestFocus();
+    });
   }
 
   void _clearTextEditing() {
@@ -1550,7 +1574,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
             ),
           ),
         ),
-        Positioned.fill(child: widget.chromeBuilder(context, _input)),
+        Positioned.fill(child: widget.chromeBuilder(context, _input, _resumeEditorFocus)),
       ],
     );
   }

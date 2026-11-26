@@ -130,6 +130,9 @@ final class ShapeElementData extends CanvasElementData {
     required this.fillColor,
     required this.strokeWidth,
     this.text = '',
+    this.labelFontSize,
+    this.labelFontFamily,
+    this.labelColor,
     super.autoArrange,
   }) : super(id, 'shape');
 
@@ -143,6 +146,9 @@ final class ShapeElementData extends CanvasElementData {
     required this.fillColor,
     required this.strokeWidth,
     required this.text,
+    required this.labelFontSize,
+    required this.labelFontFamily,
+    required this.labelColor,
     super.autoArrange,
   }) : super(id, type);
 
@@ -170,6 +176,10 @@ final class ShapeElementData extends CanvasElementData {
   final double strokeWidth;
   @JsonKey(defaultValue: '')
   final String text;
+  final double? labelFontSize;
+  final String? labelFontFamily;
+  @JsonKey(fromJson: _nullableArgbFromJson, toJson: _nullableArgbToJson)
+  final Color? labelColor;
 
   // ---------- Serialization ----------
 
@@ -190,6 +200,10 @@ final class ShapeElementData extends CanvasElementData {
     bool clearFillColor = false,
     double? strokeWidth,
     String? text,
+    double? labelFontSize,
+    String? labelFontFamily,
+    Color? labelColor,
+    bool clearLabelColor = false,
   }) => ShapeElementData(
     autoArrange: autoArrange ?? this.autoArrange,
     id: id ?? this.id,
@@ -200,6 +214,9 @@ final class ShapeElementData extends CanvasElementData {
     fillColor: clearFillColor ? null : fillColor ?? this.fillColor,
     strokeWidth: strokeWidth ?? this.strokeWidth,
     text: text ?? this.text,
+    labelFontSize: labelFontSize == defaultShapeLabelFontSize ? null : labelFontSize ?? this.labelFontSize,
+    labelFontFamily: labelFontFamily ?? this.labelFontFamily,
+    labelColor: clearLabelColor ? null : labelColor ?? this.labelColor,
   );
 }
 
@@ -274,27 +291,29 @@ final class TextNodeStyle {
 
   const TextNodeStyle({
     required this.fontFamily,
+    this.fontSize,
     this.color,
     this.background = BlockBackgroundKind.card,
   });
 
   const TextNodeStyle._json({
     required this.fontFamily,
+    required this.fontSize,
     required this.color,
     required this.background,
   });
 
-  factory TextNodeStyle.fromJson(Object? json) {
-    final style = _decode(json, 'style', _$TextNodeStyleFromJson);
-    if (style.fontFamily.trim().isEmpty) {
-      throw const FormatException('style.fontFamily must not be blank');
-    }
-    return style;
+  factory TextNodeStyle.fromJson(Object? json) => _decode(json, 'style', _$TextNodeStyleFromJson).._validate();
+
+  void _validate() {
+    _validateFontFamily(fontFamily, 'style.fontFamily');
+    _validateFontSize(fontSize, 'style.fontSize');
   }
 
   // ---------- State ----------
 
   final String fontFamily;
+  final double? fontSize;
 
   /// Null uses the theme's heading and body colors.
   @_TextColorConverter()
@@ -305,12 +324,15 @@ final class TextNodeStyle {
 
   TextNodeStyle copyWith({
     String? fontFamily,
+    double? fontSize,
+    bool clearFontSize = false,
     Color? color,
     bool clearColor = false,
     BlockBackgroundKind? background,
   }) {
     return TextNodeStyle(
       fontFamily: fontFamily ?? this.fontFamily,
+      fontSize: clearFontSize || fontSize == defaultTextFontSize ? null : fontSize ?? this.fontSize,
       color: clearColor ? null : color ?? this.color,
       background: background ?? this.background,
     );
@@ -319,10 +341,12 @@ final class TextNodeStyle {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is TextNodeStyle && (fontFamily, color, background) == (other.fontFamily, other.color, other.background);
+      other is TextNodeStyle &&
+          (fontFamily, fontSize, color, background) ==
+              (other.fontFamily, other.fontSize, other.color, other.background);
 
   @override
-  int get hashCode => Object.hash(fontFamily, color, background);
+  int get hashCode => Object.hash(fontFamily, fontSize, color, background);
 
   // ---------- Serialization ----------
 
@@ -750,8 +774,30 @@ bool _valuesEqual<T>(List<T> first, List<T> second) {
 
 bool _sameElement(CanvasElementData first, CanvasElementData second) => switch ((first, second)) {
   (final ShapeElementData a, final ShapeElementData b) =>
-    (a.kind, a.position, a.size, a.strokeColor, a.fillColor, a.strokeWidth, a.text) ==
-        (b.kind, b.position, b.size, b.strokeColor, b.fillColor, b.strokeWidth, b.text),
+    (
+          a.kind,
+          a.position,
+          a.size,
+          a.strokeColor,
+          a.fillColor,
+          a.strokeWidth,
+          a.text,
+          a.labelFontSize,
+          a.labelFontFamily,
+          a.labelColor,
+        ) ==
+        (
+          b.kind,
+          b.position,
+          b.size,
+          b.strokeColor,
+          b.fillColor,
+          b.strokeWidth,
+          b.text,
+          b.labelFontSize,
+          b.labelFontFamily,
+          b.labelColor,
+        ),
   (final MediaElementData a, final MediaElementData b) =>
     (a.position, a.width, a.url, a.rotation) == (b.position, b.width, b.url, b.rotation),
   (final TextElementData a, final TextElementData b) =>
@@ -780,6 +826,9 @@ int _elementHash(CanvasElementData value) => switch (value) {
     a.fillColor,
     a.strokeWidth,
     a.text,
+    a.labelFontSize,
+    a.labelFontFamily,
+    a.labelColor,
   ),
   final MediaElementData a => Object.hash(a.position, a.width, a.url, a.rotation),
   final TextElementData a => Object.hash(a.position, a.textSize, a.markdown, a.style, a.rotation),
@@ -832,6 +881,8 @@ void _validateElement(CanvasElementData value) {
       position(a.position);
       size(a.size, shapeMinimumSize);
       _validatePositive(a.strokeWidth, 'strokeWidth');
+      _validateFontSize(a.labelFontSize, 'shape.labelFontSize');
+      _validateFontFamily(a.labelFontFamily, 'shape.labelFontFamily');
     case final MediaElementData a:
       position(a.position);
       size(Size(a.width, 0), const Size(mediaNodeMinimumWidth, 0));
@@ -840,7 +891,7 @@ void _validateElement(CanvasElementData value) {
       position(a.position);
       size(Size(a.width, a.height ?? textNodeMinimumHeight), const Size(textNodeMinimumWidth, textNodeMinimumHeight));
       _validateFinite(a.rotation, 'rotation');
-      if (a.style.fontFamily.trim().isEmpty) throw const FormatException('Font family must not be blank');
+      a.style._validate();
     case final CodeElementData a:
       position(a.position);
       size(a.size, codeBlockMinimumSize);

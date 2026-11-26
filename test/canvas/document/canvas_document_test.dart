@@ -421,19 +421,68 @@ void main() {
     );
   });
 
-  test('shape text defaults, round-trips, copies, and decodes strictly', () {
+  test('Text size is optional, strict, and only normalized when chosen', () {
+    final legacy = TextElementData.fromJson(_encodedText()).style;
+    final json = legacy.toJson();
+    expect(legacy.fontSize, isNull);
+    expect(json, _encodedText()['style']);
+
+    final sized = legacy.copyWith(fontSize: 24);
+    final restored = TextNodeStyle.fromJson({...json, 'fontSize': 24});
+    expect(restored, sized);
+    expect(restored.hashCode, sized.hashCode);
+    expect(restored.copyWith().toJson()['fontSize'], 24.0);
+    expect(restored.copyWith(fontSize: defaultTextFontSize), legacy);
+    expect(restored.copyWith(clearFontSize: true), legacy);
+    expect(TextNodeStyle.fromJson({...json, 'fontSize': 14}).copyWith().fontSize, 14);
+    for (final invalid in [15, '24', double.nan, double.infinity]) {
+      expect(() => TextNodeStyle.fromJson({...json, 'fontSize': invalid}), throwsFormatException);
+    }
+  });
+
+  test('shape text and label style default, round-trip, copy, and decode strictly', () {
     final legacy = ShapeElementData.fromJson(_encodedShape());
     expect(legacy.text, '');
     expect(legacy.toJson()['text'], '');
+    expect(legacy.labelFontSize, isNull);
+    expect(legacy.labelFontFamily, isNull);
+    expect(legacy.labelColor, isNull);
+    for (final key in ['labelFontSize', 'labelFontFamily', 'labelColor']) {
+      expect(legacy.toJson(), isNot(contains(key)));
+    }
 
     const text = 'Shapes keep labels: café — 🪐';
-    final shape = legacy.copyWith(text: text);
+    final shape = legacy.copyWith(
+      text: text,
+      labelFontSize: 18,
+      labelFontFamily: 'Unavailable Family',
+      labelColor: const Color(0x802f6fde),
+    );
     final restored = ShapeElementData.fromJson(jsonDecode(jsonEncode(shape.toJson())));
     expect(restored.text, text);
     expect(restored, shape);
     expect(restored.hashCode, shape.hashCode);
     expect(restored.copyWith().text, text);
     expect(restored.copyWith(text: '').text, '');
+    expect(restored.copyWith().labelFontFamily, 'Unavailable Family');
+    expect(restored.labelFontSize, 18);
+    expect(restored.toJson()['labelColor'], 0x802f6fde);
+    expect(restored.copyWith(clearLabelColor: true).labelColor, isNull);
+    expect(restored.copyWith(labelFontSize: defaultShapeLabelFontSize).labelFontSize, isNull);
+    expect(ShapeElementData.fromJson({..._encodedShape(), 'labelFontSize': 13}).copyWith().labelFontSize, 13);
+
+    for (final (key, invalid) in [
+      ('labelFontSize', 15),
+      ('labelFontSize', '18'),
+      ('labelFontSize', double.nan),
+      ('labelFontFamily', ' \t'),
+      ('labelFontFamily', 18),
+      ('labelColor', -1),
+      ('labelColor', 0x100000000),
+      ('labelColor', 1.5),
+    ]) {
+      expect(() => ShapeElementData.fromJson({..._encodedShape(), key: invalid}), throwsFormatException);
+    }
 
     for (final malformed in [null, 42, true, <String, Object?>{}]) {
       expect(

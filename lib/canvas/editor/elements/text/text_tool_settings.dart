@@ -3,29 +3,26 @@
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
+import 'package:elseplane/canvas/editor/widgets/canvas_font_controls.dart';
 import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:material_ui/material_ui.dart';
 
-// ---------- Font options ----------
-
-final List<SelectOption<String>> textFontOptions = [
-  for (final fontFamily in textNodeFontFamilies) SelectOption(value: fontFamily, label: fontFamily),
-];
-
 // ---------- Settings ----------
 
-/// Presents font, color, and background controls for the active text element.
+/// Presents typography, color, and background controls for the active text element.
 /// Used by the canvas tool-options overlay during text editing.
-class TextToolSettings extends StatefulWidget {
+class TextToolSettings extends StatelessWidget {
   const TextToolSettings({
     required this.session,
     required this.id,
     required this.onChangeBoundary,
     required this.colorPickerExpanded,
     required this.onColorPickerExpandedChanged,
+    this.onLegacyPointerDown,
+    this.onSizeChosen,
     this.loadFont = loadTextFont,
     super.key,
   });
@@ -35,93 +32,34 @@ class TextToolSettings extends StatefulWidget {
   final VoidCallback onChangeBoundary;
   final bool colorPickerExpanded;
   final ValueChanged<bool> onColorPickerExpandedChanged;
-
+  final VoidCallback? onLegacyPointerDown;
+  final VoidCallback? onSizeChosen;
   final Future<void> Function(String) loadFont;
 
-  @override
-  State<TextToolSettings> createState() => _TextToolSettingsState();
-}
-
-class _TextToolSettingsState extends State<TextToolSettings> {
-  bool _loading = false;
-  Object? _request;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.session.addListener(_modelChanged);
+  void _editStyle(TextNodeStyle Function(TextNodeStyle) edit, {bool keepEditing = false}) {
+    final data = session.element(id);
+    if (!session.isLive || session.activeId != id || data is! TextElementData) return;
+    if (!keepEditing && session.editing == (id: id, field: EditorField.markdown)) session.editField(null);
+    final next = edit(data.style);
+    if (next == data.style) return;
+    onChangeBoundary();
+    session.setTextStyle(id, next);
+    onChangeBoundary();
   }
 
-  void _modelChanged() {
-    if (widget.session.activeId == widget.id || _request == null) return;
-    _request = null;
-    setState(() => _loading = false);
-  }
-
-  Future<void> _chooseFont(String family) async {
-    final session = widget.session;
-    final data = session.element(widget.id);
-    if (data is! TextElementData) return;
-    if (_loading || family == data.style.fontFamily) return;
-    final previousFamily = data.style.fontFamily;
-    final restoration = session.restorationGeneration;
-    final request = Object();
-    _request = request;
-    setState(() => _loading = true);
-    bool ownsRequest() =>
-        mounted &&
-        session.element(widget.id) is TextElementData &&
-        session.isLive &&
-        session.restorationGeneration == restoration &&
-        session.activeId == widget.id &&
-        identical(_request, request) &&
-        identical(widget.session, session) &&
-        (session.element(widget.id)! as TextElementData).style.fontFamily == previousFamily;
-    try {
-      await widget.loadFont(family);
-      if (!ownsRequest()) return;
-      widget.onChangeBoundary();
-      session.setTextStyle(
-        widget.id,
-        (session.element(widget.id)! as TextElementData).style.copyWith(fontFamily: family),
-      );
-      widget.onChangeBoundary();
-    } on Object {
-      if (!mounted || !ownsRequest()) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load font')));
-    } finally {
-      if (mounted && identical(_request, request)) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant TextToolSettings oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.session, widget.session) || oldWidget.id != widget.id) {
-      oldWidget.session.removeListener(_modelChanged);
-      widget.session.addListener(_modelChanged);
-      _request = null;
-      _loading = false;
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.session.removeListener(_modelChanged);
-    super.dispose();
-  }
+  Widget _legacyGroup(List<Widget> children) => Listener(
+    behavior: HitTestBehavior.translucent,
+    onPointerDown: (_) => onLegacyPointerDown?.call(),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+  );
 
   @override
   Widget build(BuildContext context) {
-    final session = widget.session;
-    final data = session.element(widget.id);
-    if (data is! TextElementData) return const SizedBox.shrink();
-    final onChangeBoundary = widget.onChangeBoundary;
     final theme = BTheme.of(context);
     return ListenableBuilder(
       listenable: session,
       builder: (context, _) {
-        final current = session.element(widget.id);
+        final current = session.element(id);
         if (current is! TextElementData) return const SizedBox.shrink();
         final style = current.style;
         return Column(
@@ -129,56 +67,66 @@ class _TextToolSettingsState extends State<TextToolSettings> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Font', style: theme.typo.label),
-            const SizedBox(height: 6),
-            SearchableSelect<String>(
-              key: const ValueKey('text-font-select'),
-              value: style.fontFamily,
-              options: textNodeFontFamilies.contains(style.fontFamily)
-                  ? textFontOptions
-                  : [SelectOption(value: style.fontFamily, label: style.fontFamily), ...textFontOptions],
-              preferredValues: [style.fontFamily, defaultFontFamily],
-              searchHint: 'Search fonts',
-              onChanged: _loading ? null : _chooseFont,
-            ),
-            if (_loading) const Padding(padding: EdgeInsets.only(top: 6), child: LinearProgressIndicator()),
+            _legacyGroup([
+              Text('Font', style: theme.typo.label),
+              const SizedBox(height: 6),
+              CanvasFontSelect(
+                session: session,
+                id: id,
+                selectKey: const ValueKey('text-font-select'),
+                loadFont: loadFont,
+                readFamily: (value) => value is TextElementData ? value.style.fontFamily : null,
+                onChosen: onLegacyPointerDown,
+                onLoaded: (family) => _editStyle((style) => style.copyWith(fontFamily: family), keepEditing: true),
+              ),
+            ]),
             const SizedBox(height: 10),
-            Text('Color', style: theme.typo.label),
-            const SizedBox(height: 6),
-            ColorControl(
-              color: style.color ?? theme.colors.textPrimary,
-              expanded: widget.colorPickerExpanded,
-              enableAlpha: false,
-              onExpandedChanged: widget.onColorPickerExpandedChanged,
-              onChanged: (color) {
-                onChangeBoundary();
-                session.setTextStyle(
-                  widget.id,
-                  (session.element(widget.id)! as TextElementData).style.copyWith(color: color),
-                );
-                onChangeBoundary();
-              },
+            TextFieldTapRegion(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Font size', style: theme.typo.label),
+                  const SizedBox(height: 6),
+                  CanvasFontSizeSelect(
+                    key: const ValueKey('text-font-size-select'),
+                    value: style.fontSize ?? defaultTextFontSize,
+                    onChanged: (size) {
+                      _editStyle(
+                        (style) =>
+                            (style.fontSize ?? defaultTextFontSize) == size ? style : style.copyWith(fontSize: size),
+                        keepEditing: true,
+                      );
+                      onSizeChosen?.call();
+                    },
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 10),
-            Text('Background', style: theme.typo.label),
-            const SizedBox(height: 6),
-            Select<BlockBackgroundKind>(
-              key: const ValueKey('text-background-select'),
-              value: style.background,
-              options: const [
-                SelectOption(value: BlockBackgroundKind.transparent, label: 'Transparent'),
-                SelectOption(value: BlockBackgroundKind.card, label: 'Card'),
-                SelectOption(value: BlockBackgroundKind.glass, label: 'Glass'),
-              ],
-              onChanged: (background) {
-                onChangeBoundary();
-                session.setTextStyle(
-                  widget.id,
-                  (session.element(widget.id)! as TextElementData).style.copyWith(background: background),
-                );
-                onChangeBoundary();
-              },
-            ),
+            _legacyGroup([
+              Text('Color', style: theme.typo.label),
+              const SizedBox(height: 6),
+              ColorControl(
+                color: style.color ?? theme.colors.textPrimary,
+                expanded: colorPickerExpanded,
+                enableAlpha: false,
+                onExpandedChanged: onColorPickerExpandedChanged,
+                onChanged: (color) => _editStyle((style) => style.copyWith(color: color)),
+              ),
+              const SizedBox(height: 10),
+              Text('Background', style: theme.typo.label),
+              const SizedBox(height: 6),
+              Select<BlockBackgroundKind>(
+                key: const ValueKey('text-background-select'),
+                value: style.background,
+                options: const [
+                  SelectOption(value: BlockBackgroundKind.transparent, label: 'Transparent'),
+                  SelectOption(value: BlockBackgroundKind.card, label: 'Card'),
+                  SelectOption(value: BlockBackgroundKind.glass, label: 'Glass'),
+                ],
+                onChanged: (background) => _editStyle((style) => style.copyWith(background: background)),
+              ),
+            ]),
           ],
         );
       },

@@ -54,6 +54,9 @@ ShapeElementData _$ShapeElementDataFromJson(
       'fillColor',
       'strokeWidth',
       'text',
+      'labelFontSize',
+      'labelFontFamily',
+      'labelColor',
     ],
   );
   final val = ShapeElementData._json(
@@ -75,6 +78,12 @@ ShapeElementData _$ShapeElementDataFromJson(
     fillColor: $checkedConvert('fillColor', (v) => _nullableArgbFromJson(v)),
     strokeWidth: $checkedConvert('strokeWidth', (v) => (v as num).toDouble()),
     text: $checkedConvert('text', (v) => v as String? ?? ''),
+    labelFontSize: $checkedConvert(
+      'labelFontSize',
+      (v) => (v as num?)?.toDouble(),
+    ),
+    labelFontFamily: $checkedConvert('labelFontFamily', (v) => v as String?),
+    labelColor: $checkedConvert('labelColor', (v) => _nullableArgbFromJson(v)),
     autoArrange: $checkedConvert('autoArrange', (v) => v as bool? ?? true),
   );
   return val;
@@ -92,6 +101,9 @@ Map<String, dynamic> _$ShapeElementDataToJson(ShapeElementData instance) =>
       'fillColor': ?_nullableArgbToJson(instance.fillColor),
       'strokeWidth': instance.strokeWidth,
       'text': instance.text,
+      'labelFontSize': ?instance.labelFontSize,
+      'labelFontFamily': ?instance.labelFontFamily,
+      'labelColor': ?_nullableArgbToJson(instance.labelColor),
     };
 
 const _$ShapeKindEnumMap = {
@@ -150,10 +162,11 @@ TextNodeStyle _$TextNodeStyleFromJson(Map<String, dynamic> json) =>
     $checkedCreate('TextNodeStyle', json, ($checkedConvert) {
       $checkKeys(
         json,
-        allowedKeys: const ['fontFamily', 'color', 'background'],
+        allowedKeys: const ['fontFamily', 'fontSize', 'color', 'background'],
       );
       final val = TextNodeStyle._json(
         fontFamily: $checkedConvert('fontFamily', (v) => v as String),
+        fontSize: $checkedConvert('fontSize', (v) => (v as num?)?.toDouble()),
         color: $checkedConvert(
           'color',
           (v) => _$JsonConverterFromJson<String, Color>(
@@ -172,6 +185,7 @@ TextNodeStyle _$TextNodeStyleFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$TextNodeStyleToJson(TextNodeStyle instance) =>
     <String, dynamic>{
       'fontFamily': instance.fontFamily,
+      'fontSize': ?instance.fontSize,
       'color': ?_$JsonConverterToJson<String, Color>(
         instance.color,
         const _TextColorConverter().toJson,

@@ -96,6 +96,7 @@ class _CanvasPageState extends State<CanvasPage> {
   bool _penColorPickerExpanded = false;
   bool _shapeOutlineColorPickerExpanded = false;
   bool _shapeFillColorPickerExpanded = false;
+  bool _shapeLabelColorPickerExpanded = false;
   bool _arrowColorPickerExpanded = false;
   bool _textColorPickerExpanded = false;
 
@@ -206,7 +207,7 @@ class _CanvasPageState extends State<CanvasPage> {
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
-    if (session == null) return Scaffold(body: _buildChrome(context, null));
+    if (session == null) return Scaffold(body: _buildChrome(context, null, null));
     return Scaffold(
       body: CanvasView(
         session: session,
@@ -223,7 +224,7 @@ class _CanvasPageState extends State<CanvasPage> {
     );
   }
 
-  Widget _buildChrome(BuildContext context, CanvasInput? input) {
+  Widget _buildChrome(BuildContext context, CanvasInput? input, ValueChanged<EditorContext>? resumeEditorFocus) {
     final action = widget.onTitleAction;
     return CanvasChrome(
       title: CanvasTitle(
@@ -249,7 +250,9 @@ class _CanvasPageState extends State<CanvasPage> {
         onPressed: !_documentLoaded || input == null ? null : () => _showSettingsDialog(input: input),
         icon: const Icon(LucideIcons.settings),
       ),
-      toolOptions: !_documentLoaded || input == null ? null : _buildToolOptions(input),
+      toolOptions: !_documentLoaded || input == null || resumeEditorFocus == null
+          ? null
+          : _buildToolOptions(input, resumeEditorFocus),
       notification: widget.notification,
     );
   }
@@ -278,14 +281,15 @@ class _CanvasPageState extends State<CanvasPage> {
       ),
   ];
 
-  Widget? _buildToolOptions(CanvasInput input) {
+  Widget? _buildToolOptions(CanvasInput input, ValueChanged<EditorContext> resumeEditorFocus) {
     final activeTextBlock = _activeTextBlock;
     final activeCodeBlock = _activeCodeBlock;
     final activeShape = _activeShape;
     final activeArrow = _activeArrow;
     return activeTextBlock != null
         ? Listener(
-            onPointerDown: (_) => _clearTextEditing(),
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => input.cancelQuickText(),
             child: TextToolSettings(
               key: ValueKey(
                 'text-settings-${activeTextBlock.id}',
@@ -293,6 +297,8 @@ class _CanvasPageState extends State<CanvasPage> {
               session: _session,
               id: activeTextBlock.id,
               onChangeBoundary: _finishHistoryOperation,
+              onLegacyPointerDown: _clearTextEditing,
+              onSizeChosen: () => resumeEditorFocus((id: activeTextBlock.id, field: EditorField.markdown)),
               colorPickerExpanded: _textColorPickerExpanded,
               onColorPickerExpandedChanged: (expanded) => setState(
                 () => _textColorPickerExpanded = expanded,
@@ -310,36 +316,40 @@ class _CanvasPageState extends State<CanvasPage> {
           )
         : activeShape != null
         ? Listener(
-            onPointerDown: (_) {
-              input.cancelQuickText();
-              _endShapeTextEditing(activeShape);
-            },
-            child: ListenableBuilder(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => input.cancelQuickText(),
+            child: ShapeToolSettings(
               key: const ValueKey('shape-settings-panel'),
-              listenable: _session,
-              builder: (context, _) => ShapeToolSettings(
-                kind: activeShape.kind,
-                strokeColor: activeShape.strokeColor,
-                fillColor: activeShape.fillColor,
-                strokeWidth: activeShape.strokeWidth,
-                outlineColorPickerExpanded: _shapeOutlineColorPickerExpanded,
-                fillColorPickerExpanded: _shapeFillColorPickerExpanded,
-                onKindChanged: (kind) =>
-                    _editElement(activeShape, () => _session.setShapeOptions(activeShape.id, kind: kind)),
-                onStrokeColorChanged: (color) =>
-                    _editElement(activeShape, () => _session.setShapeOptions(activeShape.id, strokeColor: color)),
-                onFillColorChanged: (color) => _editElement(
-                  activeShape,
-                  () => _session.setShapeOptions(activeShape.id, fillColor: color, clearFillColor: color == null),
-                ),
-                onStrokeWidthChanged: (width) =>
-                    _editElement(activeShape, () => _session.setShapeOptions(activeShape.id, strokeWidth: width)),
-                onFillColorPickerExpandedChanged: (expanded) => setState(
-                  () => _shapeFillColorPickerExpanded = expanded,
-                ),
-                onOutlineColorPickerExpandedChanged: (expanded) => setState(
-                  () => _shapeOutlineColorPickerExpanded = expanded,
-                ),
+              kind: activeShape.kind,
+              strokeColor: activeShape.strokeColor,
+              fillColor: activeShape.fillColor,
+              strokeWidth: activeShape.strokeWidth,
+              outlineColorPickerExpanded: _shapeOutlineColorPickerExpanded,
+              fillColorPickerExpanded: _shapeFillColorPickerExpanded,
+              onDrawingPointerDown: () => _endShapeTextEditing(activeShape),
+              labelOptions: ShapeLabelSettings(
+                key: ValueKey(activeShape.id),
+                session: _session,
+                id: activeShape.id,
+                colorPickerExpanded: _shapeLabelColorPickerExpanded,
+                onColorPickerExpandedChanged: (expanded) => setState(() => _shapeLabelColorPickerExpanded = expanded),
+                onDropdownChosen: () => resumeEditorFocus((id: activeShape.id, field: EditorField.shapeText)),
+              ),
+              onKindChanged: (kind) =>
+                  _editElement(activeShape, () => _session.setShapeOptions(activeShape.id, kind: kind)),
+              onStrokeColorChanged: (color) =>
+                  _editElement(activeShape, () => _session.setShapeOptions(activeShape.id, strokeColor: color)),
+              onFillColorChanged: (color) => _editElement(
+                activeShape,
+                () => _session.setShapeOptions(activeShape.id, fillColor: color, clearFillColor: color == null),
+              ),
+              onStrokeWidthChanged: (width) =>
+                  _editElement(activeShape, () => _session.setShapeOptions(activeShape.id, strokeWidth: width)),
+              onFillColorPickerExpandedChanged: (expanded) => setState(
+                () => _shapeFillColorPickerExpanded = expanded,
+              ),
+              onOutlineColorPickerExpandedChanged: (expanded) => setState(
+                () => _shapeOutlineColorPickerExpanded = expanded,
               ),
             ),
           )

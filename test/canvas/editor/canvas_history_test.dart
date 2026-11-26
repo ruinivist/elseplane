@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_view.dart';
+import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/elements/arrow/arrow_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_editor_resources.dart';
 import 'package:elseplane/canvas/editor/elements/code/code_element_view.dart';
@@ -289,6 +290,64 @@ void main() {
     expect(controller.text, 'void main() {}');
     await _shortcut(tester, redo: true);
     expect(controller.text, 'changed source');
+  });
+
+  test('shape label styling preserves editing and is undoable separately from typing', () {
+    final shape = ShapeElementData(
+      id: 'shape',
+      position: Offset.zero,
+      size: const Size.square(80),
+      kind: ShapeKind.rectangle,
+      strokeColor: const Color(0xff000000),
+      fillColor: null,
+      strokeWidth: 2,
+      text: 'original',
+    );
+    final other = shape.copyWith(id: 'other');
+    final session = testSession(CanvasDocument(background: CanvasBackgroundKind.plain, elements: [shape, other]));
+    const editing = (id: 'shape', field: EditorField.shapeText);
+    session
+      ..setActive(shape.id)
+      ..editField(editing)
+      ..setShapeText(shape.id, 'typed')
+      ..finishOperation();
+
+    ShapeElementData current() => session.element(shape.id)! as ShapeElementData;
+    final afterTyping = session.document;
+    expect(() => session.setShapeLabelStyle(shape.id, fontSize: 15), throwsFormatException);
+    expect(() => session.setShapeLabelStyle(shape.id, fontFamily: ' '), throwsFormatException);
+    session.setShapeLabelStyle(shape.id, fontSize: defaultShapeLabelFontSize, clearColor: true);
+    expect(session.document, same(afterTyping));
+
+    const color = Color(0x80123456);
+    session
+      ..setShapeLabelStyle(shape.id, fontSize: 24, fontFamily: 'Unavailable Family', color: color)
+      ..finishOperation();
+    expect(session.editing, editing);
+    expect(session.document.elements.map((element) => element.id), [other.id, shape.id]);
+    expect(current().labelFontSize, 24);
+    expect(current().labelFontFamily, 'Unavailable Family');
+    expect(current().labelColor, color);
+
+    session
+      ..setShapeLabelStyle(shape.id, fontSize: 24)
+      ..finishOperation()
+      ..undo();
+    expect(session.document, afterTyping);
+    expect(current().labelFontSize, isNull);
+    expect(current().text, 'typed');
+    session.undo();
+    expect(current(), shape);
+    session
+      ..redo()
+      ..redo();
+    expect(current().labelColor, color);
+    expect(current().text, 'typed');
+    session.setShapeLabelStyle(shape.id, clearColor: true);
+    expect(current().labelColor, isNull);
+    expect(current().labelFontSize, 24);
+    session.setShapeLabelStyle(other.id, fontSize: 18);
+    expect(session.document.elements.map((element) => element.id), [other.id, shape.id]);
   });
 
   testWidgets('shape label edits stay in one history group across focus loss', (tester) async {

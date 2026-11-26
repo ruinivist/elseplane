@@ -16,6 +16,9 @@ part 'document_codec.dart';
 
 const textNodeMinimumWidth = 160.0;
 const textNodeMinimumHeight = 52.0;
+const canvasFontSizes = <double>[12, 13, 14, 16, 18, 24, 32, 48];
+const defaultTextFontSize = 14.0;
+const defaultShapeLabelFontSize = 13.0;
 
 const codeBlockMinimumSize = Size(280, 240);
 const mediaNodeMinimumWidth = 120.0;

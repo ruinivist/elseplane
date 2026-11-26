@@ -223,33 +223,37 @@ class _EmptyTextMarkdownPreview extends StatelessWidget {
 MarkdownStyleSheet _styleSheet(BuildContext context, TextNodeStyle style) {
   final theme = BTheme.of(context);
   final colors = theme.colors;
-  final base = _fontStyle(context, style).copyWith(height: 1.5);
+  final fontSize = style.fontSize ?? defaultTextFontSize;
+  final font = _fontStyle(context, style);
+  final base = font.copyWith(height: 1.5);
+  final scale = fontSize / defaultTextFontSize;
+  double scaledSize(double size) => size * scale;
   final semibold = textFontStyle(style.fontFamily, base.copyWith(fontWeight: FontWeight.w600));
   final heading = semibold.copyWith(color: style.color == null ? colors.textHeading : base.color);
   final italic = textFontStyle(style.fontFamily, base.copyWith(fontStyle: FontStyle.italic));
   final code = theme.typo.code.copyWith(
     color: colors.textPrimary,
-    fontSize: BSizes.markdownBodyFontSize - 1,
+    fontSize: scaledSize(13),
     backgroundColor: colors.surfaceSubtle,
   );
-  final table = base.copyWith(fontSize: BSizes.markdownBodyFontSize - 1, height: 1.45);
+  final table = base.copyWith(fontSize: scaledSize(13), height: 1.45);
 
   return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
     a: base.copyWith(color: colors.accent),
     p: base,
-    latex: _fontStyle(context, style).copyWith(fontSize: BSizes.markdownLatexFontSize),
+    latex: font.copyWith(fontSize: fontSize * 1.2),
     code: code,
-    h1: heading.copyWith(fontSize: BSizes.markdownBodyFontSize + 10, fontWeight: FontWeight.w600, height: 1.2),
-    h2: heading.copyWith(fontSize: BSizes.markdownBodyFontSize + 8, fontWeight: FontWeight.w600, height: 1.25),
-    h3: heading.copyWith(fontSize: BSizes.markdownBodyFontSize + 6, fontWeight: FontWeight.w600, height: 1.3),
-    h4: heading.copyWith(fontSize: BSizes.markdownBodyFontSize + 4, fontWeight: FontWeight.w600, height: 1.35),
-    h5: heading.copyWith(fontSize: BSizes.markdownBodyFontSize + 2, fontWeight: FontWeight.w600, height: 1.35),
+    h1: heading.copyWith(fontSize: scaledSize(24), fontWeight: FontWeight.w600, height: 1.2),
+    h2: heading.copyWith(fontSize: scaledSize(22), fontWeight: FontWeight.w600, height: 1.25),
+    h3: heading.copyWith(fontSize: scaledSize(20), fontWeight: FontWeight.w600, height: 1.3),
+    h4: heading.copyWith(fontSize: scaledSize(18), fontWeight: FontWeight.w600, height: 1.35),
+    h5: heading.copyWith(fontSize: scaledSize(16), fontWeight: FontWeight.w600, height: 1.35),
     h6: heading.copyWith(fontWeight: FontWeight.w600, height: 1.4),
     em: italic,
     strong: semibold,
     del: base.copyWith(decoration: TextDecoration.lineThrough),
     blockquote: base,
-    img: base,
+    img: base.copyWith(fontSize: defaultTextFontSize),
     checkbox: base.copyWith(color: colors.accent, fontSize: BSizes.defaultIconSize),
     listBullet: base,
     tableHead: heading.copyWith(fontSize: table.fontSize, height: table.height),
@@ -280,7 +284,7 @@ Widget _buildCheckbox(bool checked, MarkdownStyleSheet styleSheet) => Padding(
 
 TextStyle _fontStyle(BuildContext context, TextNodeStyle style) {
   final base = TextStyle(
-    fontSize: BSizes.markdownBodyFontSize,
+    fontSize: style.fontSize ?? defaultTextFontSize,
     color: style.color ?? BTheme.of(context).colors.textPrimary,
   );
   return textFontStyle(style.fontFamily, base);

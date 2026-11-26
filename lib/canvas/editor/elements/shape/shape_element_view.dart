@@ -1,11 +1,14 @@
 // Renders persisted shapes with movement, resizing, and hit testing.
 // Used by the canvas element stack for saved shape models.
 
+import 'dart:async';
+
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_editor_resources.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_kind.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
 import 'package:elseplane/canvas/geometry/shape_geometry.dart';
+import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/icon_drag.dart';
 import 'package:flutter/gestures.dart';
@@ -46,6 +49,57 @@ class ShapeElementView extends StatefulWidget {
 
 class _ShapeElementViewState extends State<ShapeElementView> {
   Offset? _dragPosition;
+  String? _requestedFamily;
+  int _fontRequest = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.resources.addListener(_syncLabelFont);
+    _syncLabelFont();
+  }
+
+  @override
+  void didUpdateWidget(covariant ShapeElementView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.resources == widget.resources) return;
+    oldWidget.resources.removeListener(_syncLabelFont);
+    _requestedFamily = null;
+    _fontRequest++;
+    widget.resources.addListener(_syncLabelFont);
+    _syncLabelFont();
+  }
+
+  @override
+  void dispose() {
+    widget.resources.removeListener(_syncLabelFont);
+    super.dispose();
+  }
+
+  void _syncLabelFont() {
+    final resources = widget.resources;
+    final data = resources.data;
+    var family = data.labelFontFamily;
+    if (family != null &&
+        (!resources.attached ||
+            data.text.trim().isEmpty ||
+            shapeTextBounds(data.kind, data.size, data.strokeWidth).isEmpty)) {
+      family = null;
+    }
+    if (family == _requestedFamily) return;
+    _requestedFamily = family;
+    final request = ++_fontRequest;
+    if (family != null) unawaited(_loadLabelFont(family, request));
+  }
+
+  Future<void> _loadLabelFont(String family, int request) async {
+    try {
+      await loadTextFont(family);
+      if (mounted && request == _fontRequest && widget.resources.attached) setState(() {});
+    } on Object {
+      // Keep the saved family and render the bundled fallback.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +110,13 @@ class _ShapeElementViewState extends State<ShapeElementView> {
         final theme = BTheme.of(context);
         final colors = theme.colors;
         final textBounds = shapeTextBounds(data.kind, data.size, data.strokeWidth);
-        final textStyle = theme.typo.body.copyWith(color: data.strokeColor);
+        final textStyle = textFontStyle(
+          data.labelFontFamily ?? defaultFontFamily,
+          theme.typo.body.copyWith(
+            color: data.labelColor ?? data.strokeColor,
+            fontSize: data.labelFontSize ?? defaultShapeLabelFontSize,
+          ),
+        );
         return SizedBox.fromSize(
           size: data.size,
           child: Semantics(

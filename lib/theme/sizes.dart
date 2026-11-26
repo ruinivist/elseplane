@@ -12,6 +12,4 @@ abstract final class BSizes {
     minimumSize: WidgetStatePropertyAll(Size.zero),
     visualDensity: VisualDensity.standard,
   );
-  static const markdownBodyFontSize = 14.0;
-  static const double markdownLatexFontSize = markdownBodyFontSize * 1.2;
 }

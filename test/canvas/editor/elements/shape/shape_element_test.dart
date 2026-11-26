@@ -1,17 +1,22 @@
 // Verifies persisted shape hit targets, options, and controls.
 
+import 'dart:async';
+
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_view.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_editor_resources.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
+import 'package:elseplane/canvas/editor/elements/shape/shape_tool_settings.dart';
 import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/canvas/geometry/shape_geometry.dart';
+import 'package:elseplane/theme/fonts.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/starless.dart';
 import 'package:elseplane/ui/common/color_picker.dart';
 import 'package:elseplane/ui/common/discrete_slider.dart';
+import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +28,197 @@ import '../../../test_helpers.dart';
 
 void main() {
   setUp(() => SharedPreferencesAsyncWeb.registerWith(null));
+
+  testWidgets('label options appear while editing and preserve the editor, style, and bounds', (tester) async {
+    final original = _stylingShape();
+    final store = TestLibraryStore(CanvasDocument(background: CanvasBackgroundKind.plain, elements: [original]));
+    await pumpCanvas(tester, store);
+    final shape = find.byType(ShapeElementView);
+    await _doubleClick(tester, tester.getCenter(shape));
+    final resources = tester.widget<ShapeElementView>(shape).resources;
+    final editor = find.byKey(const ValueKey('shape-text-editor'));
+    final size = find.byKey(const ValueKey('shape-label-size-select'));
+    final color = find.byKey(const ValueKey('shape-label-color'));
+    expect(size, findsNothing);
+    await tester.enterText(editor, '   ');
+    await tester.pumpAndSettle();
+    expect(size, findsNothing);
+    await tester.enterText(editor, 'Label');
+    resources.controller.selection = const TextSelection.collapsed(offset: 2);
+    await tester.pumpAndSettle();
+    expect(size, findsOneWidget);
+    expect(find.byKey(const ValueKey('shape-label-font-select')), findsOneWidget);
+    expect(tester.widget<TextField>(editor).style!.fontSize, 13);
+    expect(tester.widget<TextField>(editor).style!.color, original.strokeColor);
+
+    final trigger = find.descendant(of: size, matching: find.byKey(const ValueKey('select-trigger')));
+    await tester.ensureVisible(trigger);
+    await tester.tap(trigger, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(resources.focusNode.hasFocus, isTrue);
+    expect(resources.controller.selection, const TextSelection.collapsed(offset: 2));
+    expect(tester.widget<TextField>(editor).style!.fontSize, 14);
+
+    const custom = Color(0xff0000ff);
+    tester.widget<ColorControl>(color).onChanged(custom);
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(editor).style!.color, custom);
+    await tester.enterText(editor, '');
+    await tester.pumpAndSettle();
+    expect(color, findsNothing);
+    await tester.enterText(editor, 'Retyped');
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(editor).style!.color, custom);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    final preview = find.byKey(const ValueKey('shape-text-preview'));
+    var style = tester.widget<Text>(preview).style!;
+    expect(style.fontSize, 14);
+    expect(style.color, custom);
+    resources.session.setShapeOptions(original.id, strokeColor: Colors.red);
+    await tester.pumpAndSettle();
+    expect(tester.widget<Text>(preview).style!.color, custom);
+    final reset = find.widgetWithText(TextButton, 'Use outline color');
+    await tester.ensureVisible(reset);
+    await tester.tap(reset, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    resources.session.setSelection([original.id]);
+    await tester.pumpAndSettle();
+    style = tester.widget<Text>(preview).style!;
+    expect(style.color, Colors.red);
+    expect(style.fontSize, 14);
+    expect(resources.data.size, original.size);
+    await pumpPastSave(tester);
+    expect((store.persisted!.elements.single as ShapeElementData).labelFontSize, 14);
+  });
+
+  testWidgets('clearing a label invalidates a pending font choice before retyping', (tester) async {
+    final shape = _stylingShape().copyWith(text: 'Label');
+    final model = testShapeFixture(shape);
+    final session = model.session..setActive(shape.id);
+    final first = Completer<void>();
+    final second = Completer<void>();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: starlessLightThemeData,
+        home: Scaffold(
+          body: ShapeLabelSettings(
+            session: session,
+            id: shape.id,
+            colorPickerExpanded: false,
+            onColorPickerExpandedChanged: (_) {},
+            loadFont: (family) => family == 'Abel' ? first.future : second.future,
+          ),
+        ),
+      ),
+    );
+    void choose(String family) =>
+        tester.widget<SearchableSelect<String>>(find.byType(SearchableSelect<String>)).onChanged!(family);
+    choose('Abel');
+    session
+      ..setShapeText(shape.id, '')
+      ..setShapeText(shape.id, 'New label');
+    await tester.pump();
+    choose('ABeeZee');
+    await tester.pump();
+    first.complete();
+    await tester.pump();
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect((session.element(shape.id)! as ShapeElementData).labelFontFamily, isNull);
+    second.complete();
+    await tester.pumpAndSettle();
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect((session.element(shape.id)! as ShapeElementData).labelFontFamily, 'ABeeZee');
+  });
+
+  testWidgets('font search and custom label color take focus without closing the shape editor', (tester) async {
+    final original = _stylingShape().copyWith(text: 'Label', labelFontFamily: 'Missing saved font');
+    await pumpCanvas(
+      tester,
+      TestLibraryStore(CanvasDocument(background: CanvasBackgroundKind.plain, elements: [original])),
+    );
+    final shape = find.byType(ShapeElementView);
+    await _doubleClick(tester, tester.getCenter(shape));
+    final resources = tester.widget<ShapeElementView>(shape).resources;
+    final editor = find.byKey(const ValueKey('shape-text-editor'));
+    resources.controller.selection = const TextSelection.collapsed(offset: 2);
+    await tester.pump();
+
+    final font = find.byKey(const ValueKey('shape-label-font-select'));
+    final fontTrigger = find.descendant(of: font, matching: find.byKey(const ValueKey('searchable-select-trigger')));
+    await tester.ensureVisible(fontTrigger);
+    await tester.tap(fontTrigger, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    final search = find.byKey(const ValueKey('searchable-select-search'));
+    expect(tester.widget<TextField>(search).focusNode!.hasFocus, isTrue);
+    expect(editor, findsOneWidget);
+    await tester.enterText(search, defaultFontFamily);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(resources.data.labelFontFamily, defaultFontFamily);
+    expect(resources.focusNode.hasFocus, isTrue);
+    expect(resources.controller.selection, const TextSelection.collapsed(offset: 2));
+
+    final labelColor = find.byKey(const ValueKey('shape-label-color'));
+    final custom = find.descendant(of: labelColor, matching: find.byKey(const ValueKey('color-picker-toggle')));
+    await tester.ensureVisible(custom);
+    await tester.tap(custom, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    final hex = find.descendant(of: labelColor, matching: find.byType(TextField));
+    await tester.ensureVisible(hex);
+    await tester.tap(hex, kind: PointerDeviceKind.mouse);
+    await tester.enterText(hex, '#112233');
+    await tester.pumpAndSettle();
+    expect(editor, findsOneWidget);
+    expect(tester.widget<TextField>(hex).focusNode!.hasFocus, isTrue);
+    expect(tester.widget<TextField>(editor).style!.color, const Color(0xff112233));
+    expect(resources.controller.selection, const TextSelection.collapsed(offset: 2));
+  });
+
+  testWidgets('maximum label size fits the tray on a short viewport without resizing the shape', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 360);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final small = _stylingShape().copyWith(
+      size: const Size.square(32),
+      text: 'Long plain label',
+      labelFontFamily: 'Missing saved font',
+    );
+    await pumpCanvas(
+      tester,
+      TestLibraryStore(CanvasDocument(background: CanvasBackgroundKind.plain, elements: [small])),
+    );
+    final shape = find.byType(ShapeElementView);
+    await tester.tap(shape, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    final trigger = find.descendant(
+      of: find.byKey(const ValueKey('shape-label-size-select')),
+      matching: find.byKey(const ValueKey('select-trigger')),
+    );
+    await tester.ensureVisible(trigger);
+    await tester.pumpAndSettle();
+    await tester.tap(trigger, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    final maxSize = find.widgetWithText(MenuItemButton, '48');
+    await tester.ensureVisible(maxSize);
+    await tester.pumpAndSettle();
+    await tester.tap(maxSize, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+
+    final label = tester.widget<Text>(find.byKey(const ValueKey('shape-text-preview')));
+    expect(label.style!.fontFamily, defaultFontFamily);
+    expect(label.style!.fontSize, 48);
+    expect(label.data, small.text);
+    expect(label.overflow, TextOverflow.clip);
+    expect(tester.getSize(shape), small.size);
+    expect(tester.takeException(), isNull);
+  });
 
   for (final kind in ShapeKind.values) {
     testWidgets('minimum $kind shape focuses and saves native text', (tester) async {
@@ -894,6 +1090,16 @@ void main() {
     expect(model().data.kind, ShapeKind.ellipse);
   });
 }
+
+ShapeElementData _stylingShape() => ShapeElementData(
+  id: 'styled-shape',
+  kind: ShapeKind.rectangle,
+  position: const Offset(140, 180),
+  size: const Size(220, 120),
+  strokeColor: const Color(0xff655a53),
+  fillColor: null,
+  strokeWidth: 2,
+);
 
 Future<void> _doubleClick(WidgetTester tester, Offset position, {int start = 100}) async {
   final first = await tester.createGesture(kind: PointerDeviceKind.mouse);
