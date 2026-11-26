@@ -44,8 +44,8 @@ class SettingsDialog extends StatefulWidget {
   final CanvasBackgroundKind canvasBackgroundKind;
   final ValueChanged<CanvasBackgroundKind>? onCanvasBackgroundChanged;
   final Future<bool> Function()? onImport;
-  final Future<void> Function()? onExportCanvas;
-  final Future<void> Function()? onExportLibrary;
+  final Future<bool> Function()? onExportCanvas;
+  final Future<bool> Function()? onExportLibrary;
   final Widget? syncContent;
   final bool openSync;
 
@@ -71,6 +71,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late ThemeMode _themeMode = widget.themeMode;
   late CanvasBackgroundKind _canvasBackgroundKind = widget.canvasBackgroundKind;
   var _transferActive = false;
+  var _themeSaveAttempt = 0;
+  var _surfaceSaveAttempt = 0;
+  var _linkAttempt = 0;
+  var _themeSaveFailed = false;
+  var _surfaceSaveFailed = false;
+  String? _failedLink;
+  ({String message, bool error})? _exportStatus;
+  final GlobalKey _exportStatusKey = GlobalKey();
 
   @override
   void didChangeDependencies() {
@@ -81,27 +89,25 @@ class _SettingsDialogState extends State<SettingsDialog> {
   // ---------- Theme selection ----------
 
   Future<void> _changeTheme(ThemeMode mode) async {
-    setState(() => _themeMode = mode);
+    final attempt = ++_themeSaveAttempt;
+    setState(() {
+      _themeMode = mode;
+      _themeSaveFailed = false;
+    });
     try {
       await widget.onThemeModeChanged?.call(mode);
     } on Object {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not save theme preference.')),
-        );
-      }
+      if (mounted && attempt == _themeSaveAttempt) setState(() => _themeSaveFailed = true);
     }
   }
 
   Future<void> _changeSurfaceStyle(SurfaceStyle style) async {
+    final attempt = ++_surfaceSaveAttempt;
+    setState(() => _surfaceSaveFailed = false);
     try {
       await widget.onSurfaceStyleChanged?.call(style);
     } on Object {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not save surface style preference.')),
-        );
-      }
+      if (mounted && attempt == _surfaceSaveAttempt) setState(() => _surfaceSaveFailed = true);
     }
   }
 
@@ -120,6 +126,29 @@ class _SettingsDialogState extends State<SettingsDialog> {
   Future<void> _closeAfterTransfer(Future<bool> Function()? callback) async {
     final completed = await _runTransfer(callback);
     if (mounted && completed == true) Navigator.of(context).pop();
+  }
+
+  Future<void> _export(Future<bool> Function()? callback, {required String success, required String failure}) async {
+    if (callback == null) return;
+    await _runTransfer(() async {
+      setState(() => _exportStatus = null);
+      try {
+        final saved = await callback();
+        if (saved) _showExportStatus(success, error: false);
+      } on Object {
+        _showExportStatus(failure, error: true);
+      }
+    });
+  }
+
+  void _showExportStatus(String message, {required bool error}) {
+    if (!mounted) return;
+    setState(() => _exportStatus = (message: message, error: error));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = _exportStatusKey.currentContext;
+      if (context == null || ModalRoute.isCurrentOf(context) == false) return;
+      Scrollable.ensureVisible(context, alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd);
+    });
   }
 
   // ---------- Rendering ----------
@@ -352,6 +381,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
             ],
             onChanged: _changeSurfaceStyle,
           ),
+          if (_surfaceSaveFailed) _status(theme, 'Could not save surface style preference.'),
         ],
         if (widget.onSurfaceStyleChanged != null && widget.onThemeModeChanged != null) const SizedBox(height: 20),
         if (widget.onThemeModeChanged != null) ...[
@@ -366,6 +396,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
             ],
             onChanged: _changeTheme,
           ),
+          if (_themeSaveFailed) _status(theme, 'Could not save theme preference.'),
         ],
       ],
     );
@@ -405,35 +436,52 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
   Widget _aboutLink(BuildContext context, {required String label, required String url, bool muted = false}) {
     final theme = BTheme.of(context);
-    return TextButton(
-      style: TextButton.styleFrom(
-        minimumSize: const Size(0, 36),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        foregroundColor: muted ? theme.colors.textSecondary : null,
-      ),
-      onPressed: () => _openAboutLink(url),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: const TextStyle(decoration: TextDecoration.underline)),
-          const SizedBox(width: 8),
-          const Icon(Icons.north_east, size: BSizes.defaultIconSize),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton(
+          style: TextButton.styleFrom(
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            foregroundColor: muted ? theme.colors.textSecondary : null,
+          ),
+          onPressed: () => _openAboutLink(url),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: const TextStyle(decoration: TextDecoration.underline)),
+              const SizedBox(width: 8),
+              const Icon(Icons.north_east, size: BSizes.defaultIconSize),
+            ],
+          ),
+        ),
+        if (_failedLink == url) _status(theme, 'Could not open link'),
+      ],
     );
   }
 
   Future<void> _openAboutLink(String url) async {
+    final attempt = ++_linkAttempt;
+    setState(() => _failedLink = null);
     try {
       if (await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) return;
     } on Exception {
       // Failed and unavailable platform launchers use the same feedback.
     }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not open link')),
-    );
+    if (mounted && attempt == _linkAttempt) setState(() => _failedLink = url);
   }
+
+  Widget _status(BTheme theme, String message, {bool error = true, Key? key}) => Padding(
+    key: key,
+    padding: const EdgeInsets.only(top: 8),
+    child: Semantics(
+      liveRegion: true,
+      child: Text(
+        message,
+        style: theme.typo.body.copyWith(color: error ? theme.colors.destructive : theme.colors.textSecondary),
+      ),
+    ),
+  );
 
   Widget _canvasContent(BuildContext context) {
     final theme = BTheme.of(context);
@@ -479,18 +527,28 @@ class _SettingsDialogState extends State<SettingsDialog> {
               key: const ValueKey('canvas-export-button'),
               onPressed: _transferActive || widget.onExportCanvas == null
                   ? null
-                  : () => _runTransfer(widget.onExportCanvas),
+                  : () => _export(
+                      widget.onExportCanvas,
+                      success: 'Canvas exported',
+                      failure: 'Could not export canvas',
+                    ),
               child: const Text('Export current canvas'),
             ),
             OutlinedButton(
               key: const ValueKey('library-export-button'),
               onPressed: _transferActive || widget.onExportLibrary == null
                   ? null
-                  : () => _runTransfer(widget.onExportLibrary),
+                  : () => _export(
+                      widget.onExportLibrary,
+                      success: 'Library exported',
+                      failure: 'Could not export library',
+                    ),
               child: const Text('Export library'),
             ),
           ],
         ),
+        if (_exportStatus case final status?)
+          _status(theme, status.message, error: status.error, key: _exportStatusKey),
       ],
     );
   }

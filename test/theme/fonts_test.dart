@@ -144,11 +144,12 @@ void main() {
 
   testWidgets('failed load retains the choice and shows an error', (tester) async {
     final model = _model();
-    await _pumpSettings(tester, model, (_) async => throw StateError('offline'));
+    final errors = <String>[];
+    await _pumpSettings(tester, model, (_) async => throw StateError('offline'), onError: errors.add);
     _choose(tester, 'ABeeZee');
     await tester.pumpAndSettle();
     expect(model.style.fontFamily, defaultFontFamily);
-    expect(find.text('Could not load font'), findsOneWidget);
+    expect(errors, ['Could not load font']);
     expect(tester.widget<SearchableSelect<String>>(find.byType(SearchableSelect<String>)).onChanged, isNotNull);
     await tester.pumpWidget(const SizedBox());
     model.dispose();
@@ -284,7 +285,8 @@ void main() {
     });
     final model = _model();
     var boundaries = 0;
-    await _pumpSettings(tester, model, loadTextFont, boundary: () => boundaries++);
+    final errors = <String>[];
+    await _pumpSettings(tester, model, loadTextFont, boundary: () => boundaries++, onError: errors.add);
     _choose(tester, 'ABeeZee');
     await tester.pump();
     await _waitForRequests(tester, transport, 2);
@@ -309,7 +311,7 @@ void main() {
     expect(transport.aborted, hasLength(2));
     expect(model.style.fontFamily, defaultFontFamily);
     expect(boundaries, 0);
-    expect(find.text('Could not load font'), findsOneWidget);
+    expect(errors, ['Could not load font']);
     expect(tester.widget<SearchableSelect<String>>(find.byType(SearchableSelect<String>)).onChanged, isNotNull);
     expect(queuedLoaded, isTrue);
     expect(textFontStyle('ABeeZee', const TextStyle()).fontFamily, defaultFontFamily);
@@ -330,7 +332,7 @@ void main() {
     expect(transport.canceledBodies, 2);
     expect(model.style.fontFamily, defaultFontFamily);
     expect(boundaries, 0);
-    expect(find.text('Could not load font'), findsOneWidget);
+    expect(errors, ['Could not load font', 'Could not load font']);
     expect(tester.widget<SearchableSelect<String>>(find.byType(SearchableSelect<String>)).onChanged, isNotNull);
     await tester.pumpWidget(const SizedBox());
     model.dispose();
@@ -443,6 +445,7 @@ Future<void> _pumpSettings(
   TextEditorResources model,
   Future<void> Function(String) loader, {
   VoidCallback? boundary,
+  ValueChanged<String>? onError,
 }) => tester.pumpWidget(
   MaterialApp(
     theme: starlessLightThemeData,
@@ -453,6 +456,7 @@ Future<void> _pumpSettings(
           session: model.session,
           id: model.data.id,
           onChangeBoundary: boundary ?? () {},
+          onError: onError,
           colorPickerExpanded: false,
           onColorPickerExpandedChanged: (_) {},
           loadFont: loader,

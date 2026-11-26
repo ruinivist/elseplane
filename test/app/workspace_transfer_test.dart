@@ -12,6 +12,7 @@ import 'package:elseplane/library/transfer/canvas_transfer.dart';
 import 'package:elseplane/library/transfer/canvas_transfer_zip.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
 import 'package:elseplane/library/widgets/canvas_title.dart';
+import 'package:elseplane/settings/settings_dialog.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -44,7 +45,10 @@ void main() {
     expect(files.savedMime, 'application/zip');
     expect(transfer.canvases.keys, ['Current.canvas.json']);
     expect(transfer.attachments.keys, [_path0]);
-    expect(find.text('Canvas exported'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(SettingsDialog), matching: find.text('Canvas exported')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('exports the whole library including completed edits and empty folders', (tester) async {
@@ -77,6 +81,26 @@ void main() {
       transfer.canvases['Current.canvas.json']!.elements.whereType<TextElementData>().single.markdown,
       'Before changed',
     );
+  });
+
+  testWidgets('failed export reports inline and releases the workspace transfer lock', (tester) async {
+    final store = _FakeLibraryStore(_library(_document('Current')));
+    final files = _FakeProjectFiles()..failSave = true;
+    await pumpElseplaneApp(tester, libraryStore: store, attachmentStore: _FakeAttachmentStore(), projectFiles: files);
+    await _openCanvasSettings(tester);
+    final export = find.byKey(const ValueKey('canvas-export-button'));
+    final failure = find.descendant(of: find.byType(SettingsDialog), matching: find.text('Could not export canvas'));
+    final success = find.descendant(of: find.byType(SettingsDialog), matching: find.text('Canvas exported'));
+
+    await tester.tap(export);
+    await pumpUntil(tester, () => failure.evaluate().isNotEmpty);
+    expect(success, findsNothing);
+
+    files.failSave = false;
+    await tester.tap(export);
+    await pumpUntil(tester, () => success.evaluate().isNotEmpty);
+    expect(failure, findsNothing);
+    expect(files.savedName, 'canvas.elseplane.zip');
   });
 
   testWidgets('imports without collisions add content and preserve current selection and local extras', (tester) async {
@@ -552,6 +576,7 @@ class _FakeProjectFiles implements CanvasProjectFiles {
   Completer<({String name, Uint8List bytes})?>? openCompleter;
   bool cancelOpen = false;
   bool cancelSave = false;
+  bool failSave = false;
   int openCalls = 0;
 
   @override
@@ -565,6 +590,7 @@ class _FakeProjectFiles implements CanvasProjectFiles {
 
   @override
   Future<bool> save(Uint8List bytes, {required String suggestedName, required String mimeType}) async {
+    if (failSave) throw StateError('save failed');
     if (cancelSave) return false;
     saved = bytes;
     savedName = suggestedName;

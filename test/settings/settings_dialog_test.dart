@@ -26,7 +26,7 @@ void main() {
     await _openCanvasSettings(
       tester,
       onImport: () async => true,
-      onExport: () async {},
+      onExport: () async => true,
     );
     await tester.tap(find.text('About'));
     await tester.pumpAndSettle();
@@ -42,15 +42,27 @@ void main() {
     if (gitSha.isEmpty) {
       expect(find.text('Development build'), findsOneWidget);
     } else {
-      await tester.tap(find.text('Build ${gitSha.substring(0, 7)}'));
+      final build = find.text('Build ${gitSha.length < 7 ? gitSha : gitSha.substring(0, 7)}');
+      await tester.tap(build);
       await tester.pumpAndSettle();
       expect(launcher.launched.last, 'https://github.com/ruinivist/elseplane/commit/$gitSha');
+
+      launcher.succeeds = false;
+      await tester.tap(build);
+      await tester.pumpAndSettle();
+      expect(_dialogText('Could not open link'), findsOneWidget);
     }
 
     launcher.succeeds = false;
     await tester.tap(github);
     await tester.pumpAndSettle();
-    expect(find.text('Could not open link'), findsOneWidget);
+    expect(_dialogText('Could not open link'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+
+    launcher.succeeds = true;
+    await tester.tap(github);
+    await tester.pumpAndSettle();
+    expect(_dialogText('Could not open link'), findsNothing);
   });
 
   for (final themeEnabled in [false, true]) {
@@ -61,7 +73,7 @@ void main() {
         await _openCanvasSettings(
           tester,
           onImport: () async => true,
-          onExport: () async {},
+          onExport: () async => true,
           onThemeModeChanged: themeEnabled ? (mode) async => chosenTheme = mode : null,
           onSurfaceStyleChanged: surfaceEnabled ? (style) async => chosenSurface = style : null,
         );
@@ -84,10 +96,60 @@ void main() {
     }
   }
 
+  testWidgets('Appearance reports save failures inline and ignores superseded failures', (tester) async {
+    final firstThemeSave = Completer<void>();
+    var themeSaves = 0;
+    var failSurface = true;
+    await _openCanvasSettings(
+      tester,
+      onImport: () async => false,
+      onExport: () async => false,
+      onThemeModeChanged: (_) async {
+        final attempt = ++themeSaves;
+        if (attempt == 1) await firstThemeSave.future;
+        if (attempt == 3) throw StateError('Theme save failed');
+      },
+      onSurfaceStyleChanged: (_) async {
+        if (failSurface) throw StateError('Surface save failed');
+      },
+    );
+    await tester.tap(find.text('Appearance').last);
+    await tester.pumpAndSettle();
+    final changeTheme = tester.widget<Select<ThemeMode>>(find.byKey(const ValueKey('theme-select'))).onChanged!;
+    final changeSurface = tester
+        .widget<Select<SurfaceStyle>>(
+          find.byKey(const ValueKey('surface-style-select')),
+        )
+        .onChanged!;
+    final themeError = _dialogText('Could not save theme preference.');
+    final surfaceError = _dialogText('Could not save surface style preference.');
+
+    changeTheme(ThemeMode.dark);
+    changeTheme(ThemeMode.light);
+    changeSurface(SurfaceStyle.solid);
+    firstThemeSave.completeError(StateError('Superseded theme save failed'));
+    await tester.pumpAndSettle();
+    expect(themeError, findsNothing);
+    expect(surfaceError, findsOneWidget);
+
+    changeTheme(ThemeMode.dark);
+    await tester.pumpAndSettle();
+    expect(themeError, findsOneWidget);
+    expect(surfaceError, findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+
+    failSurface = false;
+    changeSurface(SurfaceStyle.solid);
+    changeTheme(ThemeMode.dark);
+    await tester.pumpAndSettle();
+    expect(themeError, findsNothing);
+    expect(surfaceError, findsNothing);
+  });
+
   testWidgets(
     'transfer actions stay disabled until an export completes',
     (tester) async {
-      final exportCompleted = Completer<void>();
+      final exportCompleted = Completer<bool>();
       var exportCalls = 0;
 
       await _openCanvasSettings(
@@ -118,17 +180,48 @@ void main() {
       expect(exportCalls, 1);
       expect(_button(tester, 'canvas-import-button').onPressed, isNull);
       expect(_button(tester, 'canvas-export-button').onPressed, isNull);
+      expect(_button(tester, 'library-export-button').onPressed, isNull);
+      expect(_dialogText('Canvas exported'), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('canvas-export-button')));
       await tester.pump();
       expect(exportCalls, 1);
 
-      exportCompleted.complete();
+      exportCompleted.complete(true);
       await tester.pumpAndSettle();
 
       expect(find.byType(SettingsDialog), findsOneWidget);
+      expect(_dialogText('Canvas exported'), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
     },
   );
+
+  testWidgets('export failure stays inline and a canceled retry is silent', (tester) async {
+    var fail = true;
+    await _openCanvasSettings(
+      tester,
+      onImport: () async => false,
+      onExport: () async {
+        if (fail) throw StateError('Export failed');
+        return false;
+      },
+    );
+    final export = find.byKey(const ValueKey('library-export-button'));
+    await tester.tap(export);
+    await tester.pumpAndSettle();
+    expect(_dialogText('Could not export library'), findsOneWidget);
+    expect(_dialogText('Library exported'), findsNothing);
+    expect(_button(tester, 'library-export-button').onPressed, isNotNull);
+    expect(find.byType(SnackBar), findsNothing);
+
+    fail = false;
+    await tester.tap(export);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsDialog), findsOneWidget);
+    expect(_dialogText('Could not export library'), findsNothing);
+    expect(_dialogText('Library exported'), findsNothing);
+    expect(find.byType(SnackBar), findsNothing);
+  });
 
   testWidgets('import closes Settings only when the callback succeeds', (tester) async {
     var imported = true;
@@ -142,7 +235,7 @@ void main() {
     await _openCanvasSettings(
       tester,
       onImport: onImport,
-      onExport: () async {},
+      onExport: () async => true,
     );
 
     await tester.tap(find.byKey(const ValueKey('canvas-import-button')));
@@ -155,7 +248,7 @@ void main() {
     await _openCanvasSettings(
       tester,
       onImport: onImport,
-      onExport: () async {},
+      onExport: () async => true,
     );
     await tester.tap(find.byKey(const ValueKey('canvas-import-button')));
     await tester.pumpAndSettle();
@@ -172,7 +265,10 @@ void main() {
       tester,
       theme: starlessDarkThemeData,
       onImport: () async => false,
-      onExport: () async => exports++,
+      onExport: () async {
+        exports++;
+        return true;
+      },
     );
 
     expect(find.byKey(const ValueKey('canvas-import-button')).hitTestable(), findsOneWidget);
@@ -183,18 +279,42 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(exports, 1);
+    expect(_dialogText('Library exported'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('export feedback scrolls into view in short Settings', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(280, 310));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _openCanvasSettings(
+      tester,
+      onImport: () async => false,
+      onExport: () async => throw StateError('Export failed'),
+    );
+    final export = find.byKey(const ValueKey('canvas-export-button'));
+    await Scrollable.ensureVisible(
+      tester.element(export),
+      alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+    );
+    await tester.pumpAndSettle();
+    expect(export.hitTestable(), findsOneWidget);
+    await tester.tap(export);
+    await tester.pumpAndSettle();
+
+    expect(_dialogText('Could not export canvas').hitTestable(), findsOneWidget);
   });
 }
 
 ButtonStyleButton _button(WidgetTester tester, String key) => tester.widget(find.byKey(ValueKey(key)));
+
+Finder _dialogText(String text) => find.descendant(of: find.byType(SettingsDialog), matching: find.text(text));
 
 // ---------- Test helpers ----------
 
 Future<void> _openCanvasSettings(
   WidgetTester tester, {
   required Future<bool> Function() onImport,
-  required Future<void> Function() onExport,
+  required Future<bool> Function() onExport,
   ThemeData? theme,
   Future<void> Function(ThemeMode)? onThemeModeChanged,
   Future<void> Function(SurfaceStyle)? onSurfaceStyleChanged,

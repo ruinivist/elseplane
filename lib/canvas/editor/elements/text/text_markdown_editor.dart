@@ -19,11 +19,18 @@ import 'package:uuid/uuid.dart';
 /// Renders the focused Markdown source editor and handles rich paste data.
 /// Used by the text tool through the active [TextEditorResources].
 class TextMarkdownEditor extends StatefulWidget {
-  const TextMarkdownEditor({required this.model, required this.attachmentStore, this.onInteract, super.key});
+  const TextMarkdownEditor({
+    required this.model,
+    required this.attachmentStore,
+    this.onInteract,
+    this.onError,
+    super.key,
+  });
 
   final TextEditorResources model;
   final AttachmentStore attachmentStore;
   final VoidCallback? onInteract;
+  final ValueChanged<String>? onError;
 
   @override
   State<TextMarkdownEditor> createState() => _TextMarkdownEditorState();
@@ -61,9 +68,7 @@ class _TextMarkdownEditorState extends State<TextMarkdownEditor> {
       await widget.model.paste(readerFuture, widget.attachmentStore, canvasDirectory: canvasDirectory);
     } on Object {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not paste image')),
-      );
+      widget.onError?.call('Could not paste image');
     }
   }
 

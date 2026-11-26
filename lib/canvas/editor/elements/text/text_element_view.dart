@@ -33,6 +33,7 @@ class TextElementView extends StatelessWidget {
     required this.onMove,
     required this.onResize,
     this.onInteract,
+    this.onError,
     this.onChangeEnd,
     this.onControlPointerDown,
     this.blurEnabled = true,
@@ -47,6 +48,7 @@ class TextElementView extends StatelessWidget {
   final AttachmentStore attachmentStore;
   final VoidCallback onEdit;
   final VoidCallback? onInteract;
+  final ValueChanged<String>? onError;
   final ValueChanged<Offset> onMove;
   final VoidCallback? onChangeEnd;
   final PointerDownEventListener? onControlPointerDown;
@@ -66,13 +68,19 @@ class TextElementView extends StatelessWidget {
           final transparent = data.style.background == BlockBackgroundKind.transparent;
           final glass = data.style.background == BlockBackgroundKind.glass;
           final body = model.editing
-              ? TextMarkdownEditor(model: resources, attachmentStore: attachmentStore, onInteract: onInteract)
+              ? TextMarkdownEditor(
+                  model: resources,
+                  attachmentStore: attachmentStore,
+                  onInteract: onInteract,
+                  onError: onError,
+                )
               : TextMarkdownPreview(
                   source: data.markdown,
                   style: data.style,
                   scrollController: data.height == null ? null : model.scrollController,
                   onEdit: onEdit,
                   onInteract: onInteract,
+                  onError: onError,
                   onMove: onMove,
                   onChangeEnd: onChangeEnd,
                   images: model.images,

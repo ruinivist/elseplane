@@ -58,6 +58,7 @@ class MediaElementView extends StatefulWidget {
     this.blurEnabled = true,
     this.onControlPointerDown,
     this.onChangeEnd,
+    this.onError,
     super.key,
   });
 
@@ -68,6 +69,7 @@ class MediaElementView extends StatefulWidget {
   final bool blurEnabled;
   final ValueChanged<Offset> onMove;
   final VoidCallback? onChangeEnd;
+  final ValueChanged<String>? onError;
   final ValueChanged<Offset> onResize;
   final VoidCallback onActivate;
   final void Function(VoidCallback, {required bool fromPointer}) onActivateLink;
@@ -159,9 +161,7 @@ class _MediaElementViewState extends State<MediaElementView> {
       await widget.resources.paste(readerFuture);
     } on Object {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not paste image')),
-      );
+      widget.onError?.call('Could not paste image');
     }
   }
 
@@ -178,7 +178,7 @@ class _MediaElementViewState extends State<MediaElementView> {
       // The same feedback covers unavailable and failed platform launchers.
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open link')));
+    widget.onError?.call('Could not open link');
   }
 
   Future<void> _pickImage() async {
@@ -202,9 +202,7 @@ class _MediaElementViewState extends State<MediaElementView> {
       );
     } on Object {
       if (!mounted || !model.attached) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Could not open image')));
+      widget.onError?.call('Could not open image');
     }
   }
 

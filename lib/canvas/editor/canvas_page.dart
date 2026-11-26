@@ -39,6 +39,7 @@ class CanvasPage extends StatefulWidget {
     required this.onImport,
     required this.onExportCanvas,
     required this.onExportLibrary,
+    this.onError,
     this.canvasDirectory = '',
     this.onAttachmentInvalidatorChanged,
     this.blocked = false,
@@ -63,8 +64,9 @@ class CanvasPage extends StatefulWidget {
   final List<String> libraryPath;
   final Future<void> Function() onOpenLibrary;
   final Future<bool> Function() onImport;
-  final Future<void> Function() onExportCanvas;
-  final Future<void> Function() onExportLibrary;
+  final Future<bool> Function() onExportCanvas;
+  final Future<bool> Function() onExportLibrary;
+  final ValueChanged<String>? onError;
   final String canvasDirectory;
   final void Function(void Function(Set<String>)?)? onAttachmentInvalidatorChanged;
   final bool blocked;
@@ -211,6 +213,7 @@ class _CanvasPageState extends State<CanvasPage> {
     return Scaffold(
       body: CanvasView(
         session: session,
+        onError: widget.onError,
         attachmentStore: widget.attachmentStore,
         canvasDirectory: widget.canvasDirectory,
         onAttachmentInvalidatorChanged: widget.onAttachmentInvalidatorChanged,
@@ -296,6 +299,7 @@ class _CanvasPageState extends State<CanvasPage> {
               ),
               session: _session,
               id: activeTextBlock.id,
+              onError: widget.onError,
               onChangeBoundary: _finishHistoryOperation,
               onLegacyPointerDown: _clearTextEditing,
               onSizeChosen: () => resumeEditorFocus((id: activeTextBlock.id, field: EditorField.markdown)),
@@ -331,6 +335,7 @@ class _CanvasPageState extends State<CanvasPage> {
                 key: ValueKey(activeShape.id),
                 session: _session,
                 id: activeShape.id,
+                onError: widget.onError,
                 colorPickerExpanded: _shapeLabelColorPickerExpanded,
                 onColorPickerExpandedChanged: (expanded) => setState(() => _shapeLabelColorPickerExpanded = expanded),
                 onDropdownChosen: () => resumeEditorFocus((id: activeShape.id, field: EditorField.shapeText)),

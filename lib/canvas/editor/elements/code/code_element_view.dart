@@ -31,6 +31,7 @@ class CodeElementView extends StatefulWidget {
     required this.onResize,
     required this.onChangeBoundary,
     this.onInteract,
+    this.onError,
     this.onControlPointerDown,
     this.canHandlePointer,
     this.blurEnabled = true,
@@ -44,6 +45,7 @@ class CodeElementView extends StatefulWidget {
   final bool blurEnabled;
   final VoidCallback onEdit;
   final VoidCallback? onInteract;
+  final ValueChanged<String>? onError;
   final ValueChanged<Offset> onMove;
   final ValueChanged<Offset> onResize;
   final VoidCallback onChangeBoundary;
@@ -67,7 +69,7 @@ class _CodeElementViewState extends State<CodeElementView> {
       await widget.resources.paste(intoTitle: intoTitle);
     } on Object {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not paste code')));
+      widget.onError?.call('Could not paste code');
     }
   }
 

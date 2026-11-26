@@ -29,6 +29,7 @@ class CanvasFontSelect extends StatefulWidget {
     required this.readFamily,
     required this.onLoaded,
     this.onChosen,
+    this.onError,
     this.selectKey,
     this.loadFont = loadTextFont,
     super.key,
@@ -39,6 +40,7 @@ class CanvasFontSelect extends StatefulWidget {
   final String? Function(CanvasElementData?) readFamily;
   final ValueChanged<String> onLoaded;
   final VoidCallback? onChosen;
+  final ValueChanged<String>? onError;
   final Key? selectKey;
   final Future<void> Function(String) loadFont;
 
@@ -106,7 +108,7 @@ class _CanvasFontSelectState extends State<CanvasFontSelect> {
     } on Object {
       if (mounted && ownsRequest()) {
         setState(() => _request = null);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load font')));
+        widget.onError?.call('Could not load font');
       }
       return;
     }

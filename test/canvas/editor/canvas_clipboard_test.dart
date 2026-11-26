@@ -14,6 +14,7 @@ import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
+import 'package:elseplane/ui/common/notifications.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -741,7 +742,16 @@ void main() {
 
     read.completeError(const FormatException('Image exceeds 10 MiB'));
     await tester.pumpAndSettle();
-    expect(find.text('Could not paste canvas elements'), findsOneWidget);
+    final error = find.descendant(
+      of: find.byType(NotificationHost),
+      matching: find.text('Could not paste canvas elements'),
+    );
+    expect(error, findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    expect(error, findsOneWidget);
+    await tester.tap(find.byTooltip('Dismiss notification'));
+    await tester.pumpAndSettle();
+    expect(error, findsNothing);
     expect(tester.takeException(), isNull);
     expect(
       _models(tester).map((model) => model.data.toJson()),

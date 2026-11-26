@@ -4,10 +4,12 @@ Status: accepted.
 
 ## Scope
 
-Notifications are brief feedback about workspace actions or problems. Keep
-Settings validation and progress inline, confirmations modal, and detailed
-import reports in their existing surfaces. Notifications are not saved, and
-there is no notification history or system-level delivery.
+Notifications are brief feedback about workspace actions or problems, including
+canvas-picker and editor errors. Keep Settings feedback inline, including
+appearance preference save errors, About link errors, and export results.
+Canceling an export does not show a result. Keep confirmations modal and
+detailed import reports in their existing surfaces. Notifications are not
+saved, and there is no notification history or system-level delivery.
 
 ## Behavior
 

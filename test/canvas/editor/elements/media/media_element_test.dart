@@ -712,7 +712,7 @@ void main() {
     launcher.error = Exception('launcher unavailable');
     await tester.tap(find.byKey(const ValueKey('media-open-link')));
     await tester.pumpAndSettle();
-    expect(find.text('Could not open link'), findsOneWidget);
+    expect(find.text('Could not open link'), findsNWidgets(2));
     expect(model.active, isTrue);
   });
 
@@ -750,7 +750,7 @@ void main() {
     await tester.tap(find.byType(MediaLinkCard), kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
     expect(launcher.launched, [url, url]);
-    expect(find.text('Could not open link'), findsOneWidget);
+    expect(find.text('Could not open link'), findsNWidgets(2));
     await tester.pumpWidget(const SizedBox());
   });
 

@@ -23,6 +23,7 @@ class TextToolSettings extends StatelessWidget {
     required this.onColorPickerExpandedChanged,
     this.onLegacyPointerDown,
     this.onSizeChosen,
+    this.onError,
     this.loadFont = loadTextFont,
     super.key,
   });
@@ -34,6 +35,7 @@ class TextToolSettings extends StatelessWidget {
   final ValueChanged<bool> onColorPickerExpandedChanged;
   final VoidCallback? onLegacyPointerDown;
   final VoidCallback? onSizeChosen;
+  final ValueChanged<String>? onError;
   final Future<void> Function(String) loadFont;
 
   void _editStyle(TextNodeStyle Function(TextNodeStyle) edit, {bool keepEditing = false}) {
@@ -77,6 +79,7 @@ class TextToolSettings extends StatelessWidget {
                 loadFont: loadFont,
                 readFamily: (value) => value is TextElementData ? value.style.fontFamily : null,
                 onChosen: onLegacyPointerDown,
+                onError: onError,
                 onLoaded: (family) => _editStyle((style) => style.copyWith(fontFamily: family), keepEditing: true),
               ),
             ]),

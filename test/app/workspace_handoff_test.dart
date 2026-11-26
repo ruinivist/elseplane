@@ -15,6 +15,7 @@ import 'package:elseplane/canvas/editor/elements/text/text_markdown_editor.dart'
 import 'package:elseplane/library/canvas_library.dart';
 import 'package:elseplane/library/widgets/canvas_file_picker.dart';
 import 'package:elseplane/library/widgets/canvas_title.dart';
+import 'package:elseplane/ui/common/notifications.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -113,7 +114,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CanvasFilePicker), findsNothing);
     expect(model.data.markdown, contains('![pasted image]'));
-    expect(find.text('Could not open canvas. Your current canvas is still open.'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(NotificationHost),
+        matching: find.text('Could not open canvas. Your current canvas is still open.'),
+      ),
+      findsOneWidget,
+    );
     store.fail = false;
     await tester.tap(find.byType(CanvasTitle));
     await tester.pumpAndSettle();

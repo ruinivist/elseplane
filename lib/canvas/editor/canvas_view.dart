@@ -64,6 +64,7 @@ class CanvasView extends StatefulWidget {
     required this.attachmentStore,
     required this.chromeBuilder,
     required this.onOpenLibrary,
+    this.onError,
     this.canvasDirectory = '',
     this.onAttachmentInvalidatorChanged,
     this.blocked = false,
@@ -76,6 +77,7 @@ class CanvasView extends StatefulWidget {
   final AttachmentStore attachmentStore;
   final Widget Function(BuildContext, CanvasInput, ValueChanged<EditorContext>) chromeBuilder;
   final Future<void> Function(CanvasInput) onOpenLibrary;
+  final ValueChanged<String>? onError;
   final String canvasDirectory;
   final void Function(void Function(Set<String>)?)? onAttachmentInvalidatorChanged;
   final bool blocked;
@@ -980,6 +982,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         active: active,
         blurEnabled: !_clearGlassBackdrops.value.contains(a.id),
         attachmentStore: _attachmentStore,
+        onError: widget.onError,
         onEdit: () => target.activate(edit: true),
         onInteract: target.interact,
         onMove: target.move,
@@ -993,6 +996,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         selected: selected,
         active: active,
         blurEnabled: !_clearGlassBackdrops.value.contains(a.id),
+        onError: widget.onError,
         onEdit: () => target.activate(edit: true),
         onInteract: target.interact,
         onMove: target.move,
@@ -1007,6 +1011,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         selected: selected,
         active: active,
         blurEnabled: !_clearGlassBackdrops.value.contains(a.id),
+        onError: widget.onError,
         onActivate: target.activate,
         onActivateLink: (openLink, {required fromPointer}) =>
             target.activate(afterActivate: openLink, fromPointer: fromPointer),
@@ -1333,9 +1338,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
 
   void _showClipboardError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    widget.onError?.call(message);
   }
 
   // ---------- Keyboard commands ----------

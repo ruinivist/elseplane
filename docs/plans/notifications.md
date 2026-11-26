@@ -51,9 +51,11 @@ transfer and persistence rules.
 - [ ] Check the running web app with dark and light surfaces, short and narrow
   viewports, open tool options and dialogs, and keyboard navigation. Confirm
   canvas gestures still work outside the cards.
-- [ ] Review the pilot before migrating the remaining brief snackbars. Keep
-  Settings feedback inline and leave confirmations and detailed import reports
-  in their existing surfaces.
+- [x] Recheck the pilot with the Chrome widget tests and migrate the remaining
+  brief snackbars. Keep Settings feedback inline and leave confirmations
+  and detailed import reports in their existing surfaces.
+- [x] Add a VM architecture test to prevent Material snackbars from returning
+  in app source: `flutter test test/architecture/workspace_feedback_test.dart`.
 
 Screen reader testing is deferred to the [backlog](../backlog.md#improvements)
 and does not block the pilot.

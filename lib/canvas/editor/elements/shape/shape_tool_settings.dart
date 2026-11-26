@@ -147,6 +147,7 @@ class ShapeLabelSettings extends StatelessWidget {
     required this.colorPickerExpanded,
     required this.onColorPickerExpandedChanged,
     this.onDropdownChosen,
+    this.onError,
     this.loadFont = loadTextFont,
     super.key,
   });
@@ -156,6 +157,7 @@ class ShapeLabelSettings extends StatelessWidget {
   final bool colorPickerExpanded;
   final ValueChanged<bool> onColorPickerExpandedChanged;
   final VoidCallback? onDropdownChosen;
+  final ValueChanged<String>? onError;
   final Future<void> Function(String) loadFont;
 
   ShapeElementData? _labeledShape(CanvasElementData? value) =>
@@ -200,6 +202,7 @@ class ShapeLabelSettings extends StatelessWidget {
                 return current == null ? null : current.labelFontFamily ?? defaultFontFamily;
               },
               onChosen: onDropdownChosen,
+              onError: onError,
               onLoaded: (family) => _edit(family: family),
             ),
             const SizedBox(height: 10),

@@ -273,10 +273,6 @@ ThemeData _starlessThemeData(BColors colors, Brightness brightness, Map<String, 
     hoverColor: colors.surfaceHover,
     splashColor: colors.surfacePressed,
     splashFactory: NoSplash.splashFactory,
-    snackBarTheme: SnackBarThemeData(
-      backgroundColor: colors.textPrimary,
-      contentTextStyle: typo.body.copyWith(color: colors.surface),
-    ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
         color: colors.textPrimary,

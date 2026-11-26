@@ -222,7 +222,7 @@ class _WorkspaceState extends State<Workspace> {
       );
       if (mounted && selectedId != null && selectedId != _fileId) _replaceEditor();
     } on Object {
-      _showMessage('Could not open canvas. Your current canvas is still open.');
+      _showError('Could not open canvas. Your current canvas is still open.');
     } finally {
       if (mounted) setState(() => _blocked = false);
     }
@@ -230,27 +230,16 @@ class _WorkspaceState extends State<Workspace> {
 
   // ---------- Settings transfers ----------
 
-  Future<void> _exportCanvas() async {
-    if (_github?.rejectDuringCommit() == true) return;
-    if (_fileId == null || !_beginTransfer()) return;
-    try {
-      await _library.flush();
-      if (await _library.exportCanvas(_fileId!)) _showMessage('Canvas exported');
-    } on Object {
-      _showMessage('Could not export canvas');
-    } finally {
-      _endTransfer();
-    }
-  }
+  Future<bool> _exportCanvas() => _runExport(() => _library.exportCanvas(_fileId!));
 
-  Future<void> _exportLibrary() async {
-    if (_github?.rejectDuringCommit() == true) return;
-    if (_fileId == null || !_beginTransfer()) return;
+  Future<bool> _exportLibrary() => _runExport(_library.exportLibrary);
+
+  Future<bool> _runExport(Future<bool> Function() save) async {
+    if (_github?.rejectDuringCommit() == true) return false;
+    if (_fileId == null || !_beginTransfer()) return false;
     try {
       await _library.flush();
-      if (await _library.exportLibrary()) _showMessage('Library exported');
-    } on Object {
-      _showMessage('Could not export library');
+      return await save();
     } finally {
       _endTransfer();
     }
@@ -417,9 +406,9 @@ class _WorkspaceState extends State<Workspace> {
     );
   }
 
-  void _showMessage(String message) {
+  void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    _notifications.show(message, severity: NotificationSeverity.error);
   }
 
   // ---------- Editor connection ----------
@@ -436,6 +425,7 @@ class _WorkspaceState extends State<Workspace> {
           ? const ['Untitled']
           : _library.library.path(_library.library.currentId).map((file) => file.name).toList(),
       attachmentStore: widget.attachmentStore,
+      onError: _showError,
       onOpenLibrary: _showLibrary,
       onImport: _import,
       onExportCanvas: _exportCanvas,

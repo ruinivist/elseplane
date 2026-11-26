@@ -29,6 +29,7 @@ class TextMarkdownPreview extends StatefulWidget {
     required this.onMove,
     required this.images,
     this.onInteract,
+    this.onError,
     this.onChangeEnd,
     super.key,
   });
@@ -38,6 +39,7 @@ class TextMarkdownPreview extends StatefulWidget {
   final ScrollController? scrollController;
   final VoidCallback onEdit;
   final VoidCallback? onInteract;
+  final ValueChanged<String>? onError;
   final ValueChanged<Offset> onMove;
   final VoidCallback? onChangeEnd;
   final TextMarkdownImages images;
@@ -73,6 +75,19 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
     }
   }
 
+  Future<void> _openLink(String? href) async {
+    final uri = href == null ? null : Uri.tryParse(href);
+    final supported = uri != null && (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty;
+    if (supported) {
+      try {
+        if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+      } on Exception {
+        // The same feedback covers unavailable and failed platform launchers.
+      }
+    }
+    if (mounted) widget.onError?.call('Could not open link');
+  }
+
   // ---------- Rendering ----------
 
   @override
@@ -93,7 +108,7 @@ class _TextMarkdownPreviewState extends State<TextMarkdownPreview> {
             imageBuilder: (uri, title, alt) => _buildImage(uri, alt, widget.images),
             onTapLink: (_, href, _) {
               widget.onInteract?.call();
-              unawaited(_openLink(context, href));
+              unawaited(_openLink(href));
             },
           );
     return GestureDetector(
@@ -321,23 +336,5 @@ class _TextImageError extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     label: alt,
     child: const Icon(Icons.broken_image_outlined),
-  );
-}
-
-// ---------- Links ----------
-
-Future<void> _openLink(BuildContext context, String? href) async {
-  final uri = href == null ? null : Uri.tryParse(href);
-  final supported = uri != null && (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty;
-  if (supported) {
-    try {
-      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
-    } on Exception {
-      // The same feedback covers unavailable and failed platform launchers.
-    }
-  }
-  if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Could not open link')),
   );
 }
