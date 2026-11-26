@@ -123,8 +123,15 @@ void main() {
     );
     store.fail = false;
     await tester.tap(find.byType(CanvasTitle));
+    await tester.pump();
+    final picker = find.byType(CanvasFilePicker);
+    final route = ModalRoute.of(tester.element(picker))!;
+    expect(route.barrierColor, Colors.transparent);
+    final scale = find.ancestor(of: picker, matching: find.byType(ScaleTransition));
+    expect(tester.widget<ScaleTransition>(scale).scale.value, lessThan(1));
+    final fades = find.ancestor(of: picker, matching: find.byType(FadeTransition));
+    expect(tester.widgetList<FadeTransition>(fades).every((fade) => fade.opacity.value == 1), isTrue);
     await tester.pumpAndSettle();
-    expect(find.byType(CanvasFilePicker), findsOneWidget);
     expect(canvasAttachmentPaths(store.library.file('a').document!.elements), attachments.files.keys.toSet());
     await tester.pumpWidget(const SizedBox());
   });

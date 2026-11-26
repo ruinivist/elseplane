@@ -249,7 +249,7 @@ class _MediaElementViewState extends State<MediaElementView> {
                           reverseDuration: const Duration(milliseconds: 180),
                           switchInCurve: Curves.easeOutCubic,
                           switchOutCurve: Curves.easeOutCubic,
-                          transitionBuilder: _mediaTransition,
+                          transitionBuilder: _mediaScaleTransition,
                           child: widget.active && showUrlPanel
                               ? TapRegion(
                                   groupId: model,
@@ -452,7 +452,10 @@ class _MediaBodyState extends State<_MediaBody> {
                     reverseDuration: const Duration(milliseconds: 180),
                     switchInCurve: Curves.easeOutCubic,
                     switchOutCurve: Curves.easeOutCubic,
-                    transitionBuilder: (child, animation) => _mediaTransition(child, animation, Alignment.bottomRight),
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: _mediaScaleTransition(child, animation, Alignment.bottomRight),
+                    ),
                     child: widget.active
                         ? ResizeHandle(
                             key: const ValueKey('media-resize-handle'),
@@ -686,17 +689,14 @@ class _MediaUrlPanelState extends State<_MediaUrlPanel> {
 
 // ---------- Transitions ----------
 
-Widget _mediaTransition(
+Widget _mediaScaleTransition(
   Widget child,
   Animation<double> animation, [
   Alignment alignment = Alignment.topCenter,
-]) => FadeTransition(
-  opacity: animation,
-  child: ScaleTransition(
-    scale: Tween<double>(begin: 0.94, end: 1).animate(animation),
-    alignment: alignment,
-    child: child,
-  ),
+]) => ScaleTransition(
+  scale: Tween<double>(begin: 0.94, end: 1).animate(animation),
+  alignment: alignment,
+  child: child,
 );
 
 // ---------- Clipboard and device edits ----------

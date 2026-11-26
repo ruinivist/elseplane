@@ -22,6 +22,8 @@ then read the authority relevant to the work. Do not create a separate
   the canvas title's uncommitted-changes marker and commit action.
 - [Notifications](specs/notifications.md) defines workspace feedback cards.
   The [implementation plan](plans/notifications.md) covers the pilot and rollout.
+- [Surface animations](specs/surface-animations.md) defines shared Glass and
+  Solid motion for dialogs and the floating media URL editor.
 - **Deferred:** [canvas input delegation ADR 0004](adr/0004-delegate-canvas-input-behavior.md)
   and its [migration plan](plans/input-delegation.md). They remain proposals;
   accepted architecture and behavior remain authoritative until the ADR is

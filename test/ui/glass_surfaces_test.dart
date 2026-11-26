@@ -545,30 +545,37 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     bool? result;
+    const barrierColor = Color(0x660a1430);
     await tester.pumpWidget(
       _app(
-        Builder(
-          builder: (context) => TextButton(
-            onPressed: () async {
-              result = await showDialog<bool>(
-                context: context,
-                builder: (context) => SurfaceConfirmationDialog(
-                  title: const Text('Replace canvas?'),
-                  content: const Text('Replace the active canvas with the imported canvas.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                    TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Replace')),
-                  ],
-                ),
-              );
-            },
-            child: const Text('Confirm'),
+        DialogTheme(
+          data: const DialogThemeData(),
+          child: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async {
+                result = await showScaleDialog<bool>(
+                  context: context,
+                  builder: (context) => SurfaceConfirmationDialog(
+                    title: const Text('Replace canvas?'),
+                    content: const Text('Replace the active canvas with the imported canvas.'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                      TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Replace')),
+                    ],
+                  ),
+                );
+              },
+              child: const Text('Confirm'),
+            ),
           ),
         ),
+        dialogTheme: const DialogThemeData(barrierColor: barrierColor),
       ),
     );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Confirm'));
     await tester.pumpAndSettle();
+    expect(tester.widget<AnimatedModalBarrier>(find.byType(AnimatedModalBarrier)).color.value, barrierColor);
     expect(find.byType(GlassSurface), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
@@ -596,8 +603,9 @@ Future<void> _wheel(WidgetTester tester, Offset position, Offset delta) async {
   expect(platformDefault, isFalse);
 }
 
-Widget _app(Widget child) => MaterialApp(
+Widget _app(Widget child, {DialogThemeData? dialogTheme}) => MaterialApp(
   theme: starlessLightThemeData.copyWith(
+    dialogTheme: dialogTheme,
     extensions: [starlessLightThemeData.extension<BTheme>()!.copyWith(surfaceStyle: SurfaceStyle.glass)],
   ),
   home: Scaffold(

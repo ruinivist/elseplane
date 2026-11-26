@@ -22,7 +22,7 @@ Future<String?> showGitHubCommitDialog(
     Navigator.pop(context, submittedValue);
   }
 
-  return await showDialog<String>(
+  return await showScaleDialog<String>(
     context: context,
     builder: (context) => SurfaceDialog(
       child: ConstrainedBox(

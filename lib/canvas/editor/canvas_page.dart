@@ -20,6 +20,7 @@ import 'package:elseplane/canvas/editor/widgets/toolbar_button.dart';
 import 'package:elseplane/library/widgets/canvas_title.dart';
 import 'package:elseplane/settings/settings_dialog.dart';
 import 'package:elseplane/theme/theme.dart';
+import 'package:elseplane/ui/common/surface_dialog.dart';
 import 'package:elseplane/ui/common/surface_icon_button.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:material_ui/material_ui.dart';
@@ -185,7 +186,7 @@ class _CanvasPageState extends State<CanvasPage> {
     input?.endInteraction();
     setState(() => _settingsOpen = true);
     try {
-      await showDialog<void>(
+      await showScaleDialog<void>(
         context: context,
         barrierColor: BTheme.of(context).colors.scrim,
         builder: (_) => SettingsDialog(

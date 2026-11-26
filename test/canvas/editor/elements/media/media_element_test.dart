@@ -13,6 +13,7 @@ import 'package:elseplane/canvas/editor/elements/media/media_link_card.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
 import 'package:elseplane/canvas/editor/media_source.dart';
 import 'package:elseplane/theme/starless.dart';
+import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -1352,6 +1353,46 @@ void main() {
     expect(persisted.position.dy, closeTo(position.dy + 20, 0.01));
     expect(persisted.rotation, model.rotation);
   });
+
+  for (final style in SurfaceStyle.values) {
+    testWidgets('floating ${style.name} media URL editor scales without fading', (tester) async {
+      const url = 'https://example.com/image.png';
+      await _cacheImage(url);
+      await pumpCanvas(
+        tester,
+        TestLibraryStore(
+          _document(MediaElementData(id: 'media', position: const Offset(120, 150), width: 400, url: url)),
+        ),
+        surfaceStyle: style,
+      );
+      await tester.pumpAndSettle();
+      final panel = find.byKey(const ValueKey('media-url-panel'));
+      final scale = find.ancestor(of: panel, matching: find.byType(ScaleTransition));
+      final fades = find.ancestor(of: panel, matching: find.byType(FadeTransition));
+      final filter = find.descendant(of: panel, matching: find.byType(BackdropFilter));
+
+      expect(panel, findsNothing);
+      await tester.tap(find.byKey(const ValueKey('media-image')), kind: PointerDeviceKind.mouse);
+      await tester.pump();
+      expect(tester.widget<ScaleTransition>(scale).scale.value, lessThan(1));
+      expect(tester.widgetList<FadeTransition>(fades).every((fade) => fade.opacity.value == 1), isTrue);
+      if (style == SurfaceStyle.glass) {
+        expect(tester.widget<BackdropFilter>(filter).enabled, isTrue);
+      } else {
+        expect(filter, findsNothing);
+      }
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(const Offset(700, 500), kind: PointerDeviceKind.mouse);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 90));
+      expect(tester.widget<ScaleTransition>(scale).scale.value, lessThan(1));
+      expect(tester.widgetList<FadeTransition>(fades).every((fade) => fade.opacity.value == 1), isTrue);
+      if (style == SurfaceStyle.glass) expect(tester.widget<BackdropFilter>(filter).enabled, isTrue);
+      await tester.pumpAndSettle();
+      expect(panel, findsNothing);
+    });
+  }
 
   testWidgets('URL-only media can be deleted from its controls', (tester) async {
     await pumpCanvas(tester, TestLibraryStore(_document()));

@@ -215,7 +215,7 @@ class _WorkspaceState extends State<Workspace> {
     try {
       await _library.flush();
       if (!mounted) return;
-      final selectedId = await showDialog<String>(
+      final selectedId = await showScaleDialog<String>(
         context: context,
         barrierColor: Colors.transparent,
         builder: (_) => CanvasFilePicker(controller: _library),
@@ -350,7 +350,7 @@ class _WorkspaceState extends State<Workspace> {
 
   Future<bool> _confirmTransferOverwrite(Set<String> paths) async {
     if (!mounted) return false;
-    return await showDialog<bool>(
+    return await showScaleDialog<bool>(
           context: context,
           builder: (context) => SurfaceConfirmationDialog(
             title: const Text('Overwrite canvases?'),
@@ -396,7 +396,7 @@ class _WorkspaceState extends State<Workspace> {
       if (!cancelled && result.failure == null && !result.metadataSaved && result.writtenImagePaths.isEmpty)
         'No changes to import.',
     ];
-    await showDialog<void>(
+    await showScaleDialog<void>(
       context: context,
       builder: (context) => SurfaceConfirmationDialog(
         title: const Text('Import result'),

@@ -86,6 +86,37 @@ void main() {
     expect(BTheme.of(context).surfaceStyle, SurfaceStyle.glass);
   });
 
+  testWidgets('Glass Settings scales without fading and dims the canvas separately', (tester) async {
+    await tester.pumpWidget(ElseplaneApp(libraryStore: TestLibraryStore()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
+    await tester.pump();
+
+    final dialog = find.byType(SettingsDialog);
+    final scale = find.ancestor(of: dialog, matching: find.byType(ScaleTransition));
+    final fades = find.ancestor(of: dialog, matching: find.byType(FadeTransition));
+    final barrier = find.byType(AnimatedModalBarrier);
+    final shownBarrier = BTheme.of(tester.element(dialog)).colors.scrim;
+    expect(tester.widget<ScaleTransition>(scale).scale.value, lessThan(1));
+    expect(tester.widgetList<FadeTransition>(fades).every((fade) => fade.opacity.value == 1), isTrue);
+    expect(tester.widget<AnimatedModalBarrier>(barrier).color.value!.a, lessThan(shownBarrier.a));
+    final glass = find.descendant(of: dialog, matching: find.byType(BackdropFilter));
+    expect(tester.widget<BackdropFilter>(glass).enabled, isTrue);
+    await tester.pumpAndSettle();
+    expect(tester.widget<AnimatedModalBarrier>(barrier).color.value, shownBarrier);
+
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 75));
+    expect(tester.widget<ScaleTransition>(scale).scale.value, lessThan(1));
+    expect(tester.widgetList<FadeTransition>(fades).every((fade) => fade.opacity.value == 1), isTrue);
+    expect(tester.widget<BackdropFilter>(glass).enabled, isTrue);
+    expect(tester.widget<AnimatedModalBarrier>(barrier).color.value!.a, lessThan(shownBarrier.a));
+    await tester.pumpAndSettle();
+    expect(dialog, findsNothing);
+  });
+
   testWidgets('theme switches live, persists, and keeps canvas content fixed', (tester) async {
     final preferences = SharedPreferencesAsync();
     expect(await loadThemeMode(preferences), ThemeMode.dark);

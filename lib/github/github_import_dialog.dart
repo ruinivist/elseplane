@@ -12,7 +12,7 @@ Future<void> showGitHubImportDialog(
   required GitHubSync sync,
   required GitHubImport attempt,
 }) async {
-  await showDialog<void>(
+  await showScaleDialog<void>(
     context: context,
     barrierDismissible: false,
     builder: (context) => _GitHubImportDialog(sync: sync, attempt: attempt),

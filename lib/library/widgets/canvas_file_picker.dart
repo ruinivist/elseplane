@@ -211,7 +211,7 @@ class _CanvasFilePickerState extends State<CanvasFilePicker> {
   }
 
   Future<void> _delete(CanvasFile file) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showScaleDialog<bool>(
       context: context,
       builder: (context) => SurfaceConfirmationDialog(
         title: Text('Delete “${file.name}”?'),

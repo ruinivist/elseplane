@@ -22,6 +22,7 @@ import 'package:elseplane/library/library_store.dart';
 import 'package:elseplane/library/transfer/canvas_project_files.dart';
 import 'package:elseplane/theme/preset_colors.dart';
 import 'package:elseplane/theme/starless.dart';
+import 'package:elseplane/theme/theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -106,10 +107,14 @@ Future<void> pumpCanvas(
   Future<CanvasClipboardSnapshot> Function()? readClipboard,
   Future<void> Function(String text)? writeClipboardText,
   TargetPlatform? platform,
+  SurfaceStyle surfaceStyle = SurfaceStyle.solid,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
-      theme: platform == null ? starlessLightThemeData : starlessLightThemeData.copyWith(platform: platform),
+      theme: starlessLightThemeData.copyWith(
+        platform: platform,
+        extensions: [starlessLightThemeData.extension<BTheme>()!.copyWith(surfaceStyle: surfaceStyle)],
+      ),
       home: Workspace(
         libraryStore: libraryStore,
         attachmentStore: attachmentStore ?? TestAttachmentStore(),

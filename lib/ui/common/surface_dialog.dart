@@ -5,6 +5,51 @@ import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/surface.dart';
 import 'package:material_ui/material_ui.dart';
 
+Future<T?> showScaleDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  Color? barrierColor,
+  bool barrierDismissible = true,
+}) {
+  final navigator = Navigator.of(context, rootNavigator: true);
+  return navigator.push(
+    _ScaleDialogRoute<T>(
+      context: context,
+      builder: builder,
+      barrierColor:
+          barrierColor ??
+          DialogTheme.of(context).barrierColor ??
+          Theme.of(context).dialogTheme.barrierColor ??
+          Colors.black54,
+      barrierDismissible: barrierDismissible,
+      themes: InheritedTheme.capture(from: context, to: navigator.context),
+      traversalEdgeBehavior: TraversalEdgeBehavior.closedLoop,
+    ),
+  );
+}
+
+class _ScaleDialogRoute<T> extends DialogRoute<T> {
+  _ScaleDialogRoute({
+    required super.context,
+    required super.builder,
+    required super.barrierColor,
+    required super.barrierDismissible,
+    required super.themes,
+    required super.traversalEdgeBehavior,
+  });
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => ScaleTransition(
+    scale: animation.drive(Tween<double>(begin: 0.94, end: 1).chain(CurveTween(curve: Curves.easeOut))),
+    child: child,
+  );
+}
+
 // ---------- Dialog shell ----------
 
 class SurfaceDialog extends StatelessWidget {
