@@ -10,7 +10,6 @@ import 'package:elseplane/canvas/editor/elements/code/code_layout.dart';
 import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/glass_surface.dart';
-import 'package:elseplane/ui/common/pointer_scroll_boundary.dart';
 import 'package:elseplane/ui/common/select.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -192,60 +191,58 @@ class _CodeElementViewState extends State<CodeElementView> {
           children: [
             Positioned.fill(
               child: _previewInteraction(
-                PointerScrollBoundary(
-                  child: CodeEditor(
-                    controller: model.controller,
-                    scrollController: model.scrollController,
-                    focusNode: model.focusNode,
-                    autofocus: false,
-                    // Enabling wrapping reintroduces re_editor 0.10.0's scroll jump after culling.
-                    wordWrap: false,
-                    readOnly: !editing,
-                    shortcutOverrideActions: editing
-                        ? {
-                            CodeShortcutPasteIntent: CallbackAction<CodeShortcutPasteIntent>(
-                              onInvoke: (_) {
-                                if (!model.controller.isComposing) unawaited(_paste());
-                                return null;
-                              },
-                            ),
-                          }
-                        : null,
-                    showCursorWhenReadOnly: false,
-                    padding: const EdgeInsets.fromLTRB(
-                      _codeEditorPadding,
-                      _codeEditorPadding,
-                      _codeEditorPadding,
-                      _codeEditorPadding,
-                    ),
-                    style: CodeEditorStyle(
-                      fontFamily: codeStyle.fontFamily,
-                      fontFamilyFallback: codeStyle.fontFamilyFallback,
-                      fontSize: codeStyle.fontSize,
-                      fontHeight: codeStyle.height,
-                      textColor: colors.textPrimary,
-                      backgroundColor: Colors.transparent,
-                      cursorColor: colors.accent,
-                      selectionColor: colors.accentSubtle,
-                      codeTheme: widget.data.language.theme(theme.syntaxTheme),
-                    ),
-                    indicatorBuilder: widget.data.showLineNumbers
-                        ? (context, controller, chunkController, notifier) => ColoredBox(
-                            key: const ValueKey('code-line-numbers'),
-                            color: card ? colors.surfaceSubtle : Colors.transparent,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
-                              child: DefaultCodeLineNumber(
-                                controller: controller,
-                                notifier: notifier,
-                                minNumberCount: 1,
-                                textStyle: codeStyle.copyWith(color: colors.textMuted),
-                                focusedTextStyle: codeStyle.copyWith(color: colors.textSecondary),
-                              ),
-                            ),
-                          )
-                        : null,
+                CodeEditor(
+                  controller: model.controller,
+                  scrollController: model.scrollController,
+                  focusNode: model.focusNode,
+                  autofocus: false,
+                  // Enabling wrapping reintroduces re_editor 0.10.0's scroll jump after culling.
+                  wordWrap: false,
+                  readOnly: !editing,
+                  shortcutOverrideActions: editing
+                      ? {
+                          CodeShortcutPasteIntent: CallbackAction<CodeShortcutPasteIntent>(
+                            onInvoke: (_) {
+                              if (!model.controller.isComposing) unawaited(_paste());
+                              return null;
+                            },
+                          ),
+                        }
+                      : null,
+                  showCursorWhenReadOnly: false,
+                  padding: const EdgeInsets.fromLTRB(
+                    _codeEditorPadding,
+                    _codeEditorPadding,
+                    _codeEditorPadding,
+                    _codeEditorPadding,
                   ),
+                  style: CodeEditorStyle(
+                    fontFamily: codeStyle.fontFamily,
+                    fontFamilyFallback: codeStyle.fontFamilyFallback,
+                    fontSize: codeStyle.fontSize,
+                    fontHeight: codeStyle.height,
+                    textColor: colors.textPrimary,
+                    backgroundColor: Colors.transparent,
+                    cursorColor: colors.accent,
+                    selectionColor: colors.accentSubtle,
+                    codeTheme: widget.data.language.theme(theme.syntaxTheme),
+                  ),
+                  indicatorBuilder: widget.data.showLineNumbers
+                      ? (context, controller, chunkController, notifier) => ColoredBox(
+                          key: const ValueKey('code-line-numbers'),
+                          color: card ? colors.surfaceSubtle : Colors.transparent,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: DefaultCodeLineNumber(
+                              controller: controller,
+                              notifier: notifier,
+                              minNumberCount: 1,
+                              textStyle: codeStyle.copyWith(color: colors.textMuted),
+                              focusedTextStyle: codeStyle.copyWith(color: colors.textSecondary),
+                            ),
+                          ),
+                        )
+                      : null,
                 ),
               ),
             ),

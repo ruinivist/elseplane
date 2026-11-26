@@ -323,7 +323,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('code scroll boundary does not pan canvas', (tester) async {
+  testWidgets('code scrolls before handing the wheel to the canvas', (tester) async {
     await tester.pumpWidget(testElseplaneApp());
     await tester.pump();
     await placeCodeBlock(tester, const Offset(120, 140));
@@ -341,18 +341,35 @@ void main() {
       greaterThan(0),
     );
 
-    model.scrollController.verticalScroller.jumpTo(
-      model.scrollController.verticalScroller.position.maxScrollExtent,
-    );
-    final pointer = TestPointer(1, PointerDeviceKind.mouse);
-    await tester.sendEventToBinding(
-      pointer.hover(tester.getCenter(block)),
-    );
-    await tester.sendEventToBinding(
-      pointer.scroll(const Offset(0, 20)),
-    );
+    final scroll = model.scrollController.verticalScroller;
+    scroll.jumpTo(scroll.position.maxScrollExtent);
     await tester.pump();
+    Future<void> wheel(double dy) async {
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: tester.getCenter(block),
+          scrollDelta: Offset(0, dy),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
 
+    await wheel(-20);
+    expect(scroll.offset, lessThan(scroll.position.maxScrollExtent));
+    expect(canvas.controller.offset, Offset.zero);
+
+    await wheel(40);
+    expect(scroll.offset, scroll.position.maxScrollExtent);
+    expect(canvas.controller.offset, Offset.zero);
+
+    await wheel(20);
+    expect(scroll.offset, scroll.position.maxScrollExtent);
+    expect(canvas.controller.offset, const Offset(0, 20));
+
+    scroll.jumpTo(scroll.position.minScrollExtent);
+    await tester.pump();
+    await wheel(-20);
+    expect(scroll.offset, scroll.position.minScrollExtent);
     expect(canvas.controller.offset, Offset.zero);
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump(const Duration(milliseconds: 100));

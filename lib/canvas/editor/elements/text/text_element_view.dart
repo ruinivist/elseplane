@@ -10,7 +10,6 @@ import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/glass_surface.dart';
 import 'package:elseplane/ui/common/icon_drag.dart';
-import 'package:elseplane/ui/common/pointer_scroll_boundary.dart';
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -87,7 +86,7 @@ class TextElementView extends StatelessWidget {
               : Scrollbar(
                   controller: model.scrollController,
                   thumbVisibility: true,
-                  child: PointerScrollBoundary(child: configuredBody),
+                  child: configuredBody,
                 );
           final resizeGestureFactory = immediateDragGestureFactory(
             (_) => CallbackDrag((delta) => onResize(context.size!, delta), onEnd: onChangeEnd),

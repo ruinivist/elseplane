@@ -73,9 +73,8 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - While focused, native selection, cut, copy, paste, delete, and local undo take
   priority. Plain-text paste inserts label text, including URL-looking content;
   it does not start media URL handling or attachment workflows. Shape copy and
-  paste use the existing element serializer and preserve the label. Editor
-  scrolling never pans the canvas, including at its boundaries or without
-  overflow.
+  paste use the existing element serializer and preserve the label. The shape
+  text editor follows the canvas wheel rules below.
 
 ### Appearance
 
@@ -174,7 +173,12 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 - Resizing affects one block and clears group selection.
 - Movement remains aligned with screen direction under canvas zoom and element rotation. Screen deltas are converted to canvas coordinates before persistence.
 - Transform controls rotate with their block and remain anchored to its top-left corner.
-- Scrolling inside bounded text, code, or tool-option panels does not pan the canvas, including at their scroll limits or when no scrolling is needed.
+- An unmodified vertical mouse wheel over a text block, code block, or shape
+  text editor scrolls its content if it can move in that direction. If there is
+  no overflow or the content is already at that edge, the wheel pans the
+  canvas instead. A single wheel event does not move both.
+- Tool-option panels contain pointer scrolling, including at their scroll
+  limits or when no scrolling is needed.
 - Focused dropdown triggers open with Up, Down, Enter, or Space. Plain dropdowns focus the selected option and use Flutter's menu navigation. Searchable dropdowns keep typing focus in the search field: Down initially highlights the first result and Up the last; subsequent arrows move one result and stop at the ends, scrolling it into view. Enter chooses the highlighted result, or the first match before navigation. Hovering results keeps search focused without moving the keyboard highlight. The search field stays visible while the results list shrinks to fit short windows. Typing resets navigation; no results makes arrows and Enter do nothing. Escape dismisses without changing the value and restores trigger focus. Open dropdowns own keyboard input before canvas commands.
 - Dropdowns, context menus, and submenus absorb pointer scrolling over their contents, search fields, and padding, including at either scroll limit or when no scrolling is needed.
 - Primary-button gestures perform block activation, editing, and movement. In the Select tool, a secondary click opens the object menu; secondary dragging still pans. Drawing tools retain their secondary-button gestures.

@@ -559,23 +559,28 @@ void main() {
 
       final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas));
       final canvasOffset = canvas.controller.offset;
-      final pointer = TestPointer(1, PointerDeviceKind.mouse);
-      await tester.sendEventToBinding(
-        pointer.hover(
-          tester.getCenter(
-            find.byKey(const ValueKey('text-markdown-preview-surface')),
-          ),
-        ),
-      );
-      model.scrollController.jumpTo(
-        model.scrollController.position.maxScrollExtent,
-      );
-      await tester.sendEventToBinding(
-        pointer.scroll(const Offset(0, 20)),
-      );
+      final scroll = model.scrollController;
+      scroll.jumpTo(scroll.position.minScrollExtent);
       await tester.pump();
+      final preview = find.byKey(const ValueKey('text-markdown-preview-surface'));
+      Future<void> wheel(double dy) async {
+        await tester.sendEventToBinding(
+          PointerScrollEvent(
+            position: tester.getCenter(preview),
+            scrollDelta: Offset(0, dy),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
 
+      await wheel(20);
+      expect(scroll.offset, greaterThan(scroll.position.minScrollExtent));
       expect(canvas.controller.offset, canvasOffset);
+      scroll.jumpTo(scroll.position.maxScrollExtent);
+      await tester.pump();
+      await wheel(20);
+      expect(scroll.offset, scroll.position.maxScrollExtent);
+      expect(canvas.controller.offset, canvasOffset + const Offset(0, 20));
     },
   );
 

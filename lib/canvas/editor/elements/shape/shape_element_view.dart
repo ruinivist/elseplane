@@ -8,7 +8,6 @@ import 'package:elseplane/canvas/editor/widgets/resize_handle.dart';
 import 'package:elseplane/canvas/geometry/shape_geometry.dart';
 import 'package:elseplane/theme/theme.dart';
 import 'package:elseplane/ui/common/icon_drag.dart';
-import 'package:elseplane/ui/common/pointer_scroll_boundary.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
@@ -116,27 +115,25 @@ class _ShapeElementViewState extends State<ShapeElementView> {
                                   widget.resources.finishEditing();
                                   return KeyEventResult.handled;
                                 },
-                                child: PointerScrollBoundary(
-                                  child: TextField(
-                                    key: const ValueKey('shape-text-editor'),
-                                    controller: widget.resources.controller,
-                                    focusNode: widget.resources.focusNode,
-                                    scrollController: widget.resources.scrollController,
-                                    contextMenuBuilder: null,
-                                    keyboardType: TextInputType.multiline,
-                                    expands: true,
-                                    maxLines: null,
-                                    scrollPadding: EdgeInsets.zero,
-                                    textAlign: TextAlign.center,
-                                    textAlignVertical: TextAlignVertical.center,
-                                    style: textStyle,
-                                    cursorColor: colors.accent,
-                                    decoration: const InputDecoration(
-                                      border: InputBorder.none,
-                                      enabledBorder: InputBorder.none,
-                                      focusedBorder: InputBorder.none,
-                                      isCollapsed: true,
-                                    ),
+                                child: TextField(
+                                  key: const ValueKey('shape-text-editor'),
+                                  controller: widget.resources.controller,
+                                  focusNode: widget.resources.focusNode,
+                                  scrollController: widget.resources.scrollController,
+                                  contextMenuBuilder: null,
+                                  keyboardType: TextInputType.multiline,
+                                  expands: true,
+                                  maxLines: null,
+                                  scrollPadding: EdgeInsets.zero,
+                                  textAlign: TextAlign.center,
+                                  textAlignVertical: TextAlignVertical.center,
+                                  style: textStyle,
+                                  cursorColor: colors.accent,
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    isCollapsed: true,
                                   ),
                                 ),
                               )

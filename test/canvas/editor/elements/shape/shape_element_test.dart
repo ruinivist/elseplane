@@ -70,6 +70,42 @@ void main() {
     });
   }
 
+  testWidgets('wheel over a fitting shape label pans the canvas without leaving editing', (tester) async {
+    final value = ShapeElementData(
+      id: 'label',
+      kind: ShapeKind.rectangle,
+      position: const Offset(140, 180),
+      size: const Size(160, 100),
+      strokeColor: const Color(0xff655a53),
+      fillColor: null,
+      strokeWidth: 2,
+      text: 'Short label',
+    );
+    await pumpCanvas(
+      tester,
+      TestLibraryStore(CanvasDocument(background: CanvasBackgroundKind.plain, elements: [value])),
+    );
+    final canvas = tester.widget<LazyCanvas>(find.byType(LazyCanvas)).controller;
+    final shape = find.byType(ShapeElementView);
+    await _doubleClick(tester, tester.getCenter(shape));
+    final resources = tester.widget<ShapeElementView>(shape).resources;
+    final position = resources.scrollController.position;
+    final canvasOffset = canvas.offset;
+    expect(position.maxScrollExtent, position.minScrollExtent);
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(find.byKey(const ValueKey('shape-text-editor'))),
+        scrollDelta: const Offset(0, 20),
+      ),
+    );
+    await tester.pump();
+
+    expect(position.pixels, position.minScrollExtent);
+    expect(canvas.offset, canvasOffset + const Offset(0, 20));
+    expect(resources.focusNode.hasFocus, isTrue);
+  });
+
   testWidgets('collapsed shape text field accepts keyboard input', (tester) async {
     final value = ShapeElementData(
       id: 'collapsed',

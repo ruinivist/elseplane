@@ -35,7 +35,10 @@ dependencies:
   perfect_freehand: ^2.5.2+1
   re_editor: ^0.10.0
   re_highlight: ^0.0.3
-  scroll_animator: 0.3.0
+  scroll_animator:
+    git:
+      url: https://github.com/ruinivist/scroll_animator.git
+      ref: main
   shared_preferences: ^2.5.5
   super_clipboard: ^0.9.1
   url_launcher: ^6.3.3
