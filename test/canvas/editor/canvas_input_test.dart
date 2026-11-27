@@ -1,7 +1,6 @@
 // Verifies pointer ownership, cancellation, and tool routing over canvas objects.
 // Uses a measured viewport substitute and focused canvas integration.
 
-
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/canvas_input.dart';
 import 'package:elseplane/canvas/editor/canvas_view.dart';
@@ -24,6 +23,8 @@ void main() {
   late CanvasInput input;
   late _Viewport viewport;
   late List<Offset> quickText;
+  late List<Offset> snapSamples;
+  late List<List<String>> removalBatches;
   var focusedEditor = false;
   var enabled = true;
   var inputDisposed = false;
@@ -57,6 +58,8 @@ void main() {
     );
     viewport = _Viewport();
     quickText = [];
+    snapSamples = [];
+    removalBatches = [];
     focusedEditor = false;
     enabled = true;
     inputDisposed = false;
@@ -78,11 +81,67 @@ void main() {
       onStroke: (_) {},
       onArrow: (_) {},
       onShape: (_) {},
+      snapArrow: (position) {
+        snapSamples.add(position);
+        return null;
+      },
+      removeElements: (ids) {
+        final batch = ids.toList();
+        removalBatches.add(batch);
+        session.remove(batch);
+      },
     );
   });
   tearDown(() {
     if (!inputDisposed) input.dispose();
     session.dispose();
+  });
+
+  test('arrow snapping receives only accepted samples in canvas coordinates', () {
+    viewport.zoom = 2;
+    input.chooseTool(CanvasTool.arrow);
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    input
+      ..pointerDown(pointer.down(const Offset(50, 60), buttons: kSecondaryButton))
+      ..pointerUp(pointer.up())
+      ..pointerDown(pointer.down(const Offset(50, 60), buttons: kPrimaryButton))
+      ..pointerMove(pointer.move(const Offset(100, 80)));
+    expect(input.arrow.preview!.geometry.end, const Offset(50, 40));
+    input.pointerUp(pointer.up());
+    expect(snapSamples, const [Offset(25, 30), Offset(50, 40), Offset(50, 40)]);
+  });
+
+  test('eraser delegates hits and groups its sweep into one undo operation', () {
+    final arrow = ArrowElementData(
+      id: 'arrow',
+      start: const Offset(100, 50),
+      end: const Offset(200, 50),
+      controls: const [Offset(150, 40)],
+      color: const Color(0xff000000),
+      strokeStyle: ArrowStrokeStyle.solid,
+      strokeWidth: 2,
+      startAttachment: const ArrowAttachment(targetId: 'a', side: ArrowAnchorSide.right),
+      endAttachment: const ArrowAttachment(targetId: 'b', side: ArrowAnchorSide.left),
+    );
+    session.insert([arrow]);
+    viewport.hits = (position) => [if (position.dx < 100) 'a' else 'b'];
+    input.chooseTool(CanvasTool.eraser);
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    input
+      ..pointerDown(pointer.down(const Offset(50, 50)))
+      ..pointerMove(pointer.move(const Offset(250, 50)))
+      ..pointerUp(pointer.up());
+    expect(removalBatches, [
+      ['a'],
+      ['b'],
+    ]);
+    final survivor = session.document.elements.single as ArrowElementData;
+    expect(survivor.id, 'arrow');
+    expect(survivor.startAttachment, isNull);
+    expect(survivor.endAttachment, isNull);
+    input.undo();
+    expect(session.document.elements.map((element) => element.id), ['a', 'b', 'arrow']);
+    expect(session.element('arrow'), arrow);
   });
 
   test('shape double-click requires one live target and preserves immediate taps', () {
@@ -854,17 +913,19 @@ void _rawTargetClick(CanvasInput input, TestPointer pointer, String id, Offset p
 
 class _Viewport implements CanvasInputViewport {
   final deltas = <Offset>[];
+  Iterable<String> Function(Offset) hits = (_) => const [];
   int ends = 0;
+  double zoom = 1;
   @override
-  double get scale => 1;
+  double get scale => zoom;
   @override
-  Offset screenToCanvas(Offset position) => position;
+  Offset screenToCanvas(Offset position) => position / zoom;
   @override
   Offset globalToScreen(Offset position) => position;
   @override
   Iterable<String> overlapping(Rect rect) => ['b'];
   @override
-  Iterable<String> hitTest(Offset position) => const [];
+  Iterable<String> hitTest(Offset position) => hits(position);
   @override
   void startPan(Offset position) {}
   @override

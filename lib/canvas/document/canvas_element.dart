@@ -23,6 +23,8 @@ enum ShapeKind {
 /// Used by arrow tools, models, and document serialization.
 enum ArrowStrokeStyle { solid, dashed }
 
+enum ArrowAnchorSide { top, right, bottom, left }
+
 /// Identifies the background treatment of text and code blocks.
 /// Used by block settings, rendering, and document serialization.
 enum BlockBackgroundKind { transparent, card, glass }
@@ -665,7 +667,33 @@ final class PenElementData extends CanvasElementData {
   );
 }
 
-/// Stores the control points that define a curved arrow.
+@_strictJson
+final class ArrowAttachment {
+  const ArrowAttachment({required this.targetId, required this.side});
+
+  const ArrowAttachment._json({required this.targetId, required this.side});
+
+  factory ArrowAttachment.fromJson(Object? json) {
+    final attachment = _decode(json, 'arrow attachment', _$ArrowAttachmentFromJson);
+    if (attachment.targetId.isEmpty) {
+      throw const FormatException('Arrow attachment targetId must not be empty');
+    }
+    return attachment;
+  }
+
+  final String targetId;
+  final ArrowAnchorSide side;
+
+  Map<String, Object?> toJson() => _$ArrowAttachmentToJson(this);
+
+  @override
+  bool operator ==(Object other) => other is ArrowAttachment && targetId == other.targetId && side == other.side;
+
+  @override
+  int get hashCode => Object.hash(targetId, side);
+}
+
+/// Stores the control points and attachments that define a curved arrow.
 /// Used by arrow models and document serialization.
 @_strictJson
 final class ArrowElementData extends CanvasElementData {
@@ -679,6 +707,8 @@ final class ArrowElementData extends CanvasElementData {
     required this.color,
     required this.strokeStyle,
     required this.strokeWidth,
+    this.startAttachment,
+    this.endAttachment,
     super.autoArrange,
   }) : controls = List.unmodifiable(controls),
        super(id, 'arrow');
@@ -692,12 +722,16 @@ final class ArrowElementData extends CanvasElementData {
     required this.color,
     required this.strokeStyle,
     required this.strokeWidth,
+    this.startAttachment,
+    this.endAttachment,
     super.autoArrange,
   }) : controls = List.unmodifiable(controls),
        super(id, type);
 
   ArrowElementData._copy(
     ArrowElementData original, {
+    required bool clearStartAttachment,
+    required bool clearEndAttachment,
     String? id,
     bool? autoArrange,
     Offset? start,
@@ -706,12 +740,16 @@ final class ArrowElementData extends CanvasElementData {
     Color? color,
     ArrowStrokeStyle? strokeStyle,
     double? strokeWidth,
+    ArrowAttachment? startAttachment,
+    ArrowAttachment? endAttachment,
   }) : start = start ?? original.start,
        controls = controls == null ? original.controls : List.unmodifiable(controls),
        end = end ?? original.end,
        color = color ?? original.color,
        strokeStyle = strokeStyle ?? original.strokeStyle,
        strokeWidth = strokeWidth ?? original.strokeWidth,
+       startAttachment = clearStartAttachment ? null : startAttachment ?? original.startAttachment,
+       endAttachment = clearEndAttachment ? null : endAttachment ?? original.endAttachment,
        super(id ?? original.id, original.type, autoArrange: autoArrange ?? original.autoArrange);
 
   factory ArrowElementData.fromJson(Object? json) => _decode(json, 'arrow element', _$ArrowElementDataFromJson)
@@ -730,6 +768,10 @@ final class ArrowElementData extends CanvasElementData {
   final Color color;
   final ArrowStrokeStyle strokeStyle;
   final double strokeWidth;
+  @JsonKey(disallowNullValue: true)
+  final ArrowAttachment? startAttachment;
+  @JsonKey(disallowNullValue: true)
+  final ArrowAttachment? endAttachment;
 
   // ---------- Serialization ----------
 
@@ -748,8 +790,14 @@ final class ArrowElementData extends CanvasElementData {
     Color? color,
     ArrowStrokeStyle? strokeStyle,
     double? strokeWidth,
+    ArrowAttachment? startAttachment,
+    ArrowAttachment? endAttachment,
+    bool clearStartAttachment = false,
+    bool clearEndAttachment = false,
   }) => ArrowElementData._copy(
     this,
+    clearStartAttachment: clearStartAttachment,
+    clearEndAttachment: clearEndAttachment,
     id: id,
     autoArrange: autoArrange,
     start: start,
@@ -758,6 +806,8 @@ final class ArrowElementData extends CanvasElementData {
     color: color,
     strokeStyle: strokeStyle,
     strokeWidth: strokeWidth,
+    startAttachment: startAttachment,
+    endAttachment: endAttachment,
   );
 }
 
@@ -811,8 +861,8 @@ bool _sameElement(CanvasElementData first, CanvasElementData second) => switch (
             (b.position, b.size, b.hitSlop, b.color, b.width, b.streamline) &&
         _valuesEqual(a.points, b.points),
   (final ArrowElementData a, final ArrowElementData b) =>
-    (a.start, a.end, a.color, a.strokeStyle, a.strokeWidth) ==
-            (b.start, b.end, b.color, b.strokeStyle, b.strokeWidth) &&
+    (a.start, a.end, a.color, a.strokeStyle, a.strokeWidth, a.startAttachment, a.endAttachment) ==
+            (b.start, b.end, b.color, b.strokeStyle, b.strokeWidth, b.startAttachment, b.endAttachment) &&
         _valuesEqual(a.controls, b.controls),
   _ => false,
 };
@@ -858,6 +908,8 @@ int _elementHash(CanvasElementData value) => switch (value) {
     a.strokeStyle,
     a.strokeWidth,
     Object.hashAll(a.controls),
+    a.startAttachment,
+    a.endAttachment,
   ),
 };
 
@@ -918,10 +970,7 @@ void _validateElement(CanvasElementData value) {
       position(a.end);
       a.controls.forEach(position);
       _validateFinite(a.strokeWidth, 'strokeWidth');
-      if (a.controls.isEmpty ||
-          (a.end - a.start).distance < arrowMinimumLength ||
-          a.strokeWidth < arrowStrokeWidthMinimum ||
-          a.strokeWidth > arrowStrokeWidthMaximum) {
+      if (a.controls.isEmpty || a.strokeWidth < arrowStrokeWidthMinimum || a.strokeWidth > arrowStrokeWidthMaximum) {
         throw const FormatException('Invalid arrow geometry');
       }
   }

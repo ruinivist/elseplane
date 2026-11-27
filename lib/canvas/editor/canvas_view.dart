@@ -35,6 +35,8 @@ import 'package:elseplane/canvas/editor/tools/pen_tool.dart';
 import 'package:elseplane/canvas/editor/tools/shape_tool.dart';
 import 'package:elseplane/canvas/editor/widgets/element_transform_controls.dart';
 import 'package:elseplane/canvas/editor/widgets/zoom_control.dart';
+import 'package:elseplane/canvas/geometry/arrow_anchor_geometry.dart';
+import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 import 'package:elseplane/canvas/geometry/element_geometry.dart';
 import 'package:elseplane/canvas/geometry/pen_geometry.dart';
 import 'package:elseplane/canvas/geometry/transforms.dart';
@@ -120,6 +122,11 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   late final void Function(Set<String>) _attachmentInvalidator = _invalidateAttachments;
   void Function(void Function(Set<String>)?)? _registeredInvalidatorCallback;
   final _declaredSizes = <String, Size>{};
+  final _arrowGeometries = <String, ArrowGeometry>{};
+  final ValueNotifier<int> _arrowLayout = ValueNotifier(0);
+  bool _arrowLayoutSyncPending = false;
+  ({String id, bool start, Offset screenPointer, Offset grabOffset})? _arrowEndpointDraft;
+  Offset? _arrowEndpointSnapPoint;
   final _backdropFootprints = <String, GlassBackdropFootprint>{};
   final _clearGlassBackdrops = ValueNotifier<Set<String>>(const {});
   late double _glassHaloOutset;
@@ -167,6 +174,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     super.initState();
     _inputViewport = (_canvasController.offset, _canvasController.scale);
     _canvasController.addListener(_closeContextMenuOnNavigation);
+    _canvasController.addListener(_scheduleArrowLayoutSync);
     _attachSession();
   }
 
@@ -192,6 +200,9 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       onStroke: _addStroke,
       onArrow: _addArrow,
       onShape: _addShape,
+      snapArrow: _snapArrow,
+      resolveArrowAnchor: _resolveArrowAnchor,
+      removeElements: _removeIds,
     )..addListener(_handleDrawingToolChanged);
     _session.addListener(_sessionChanged);
     _canvasController
@@ -216,6 +227,8 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
             ? mediaLinkCardSize(value.url, value.width)
             : const Size(mediaUrlPanelMinimumWidth, mediaUrlPanelCanvasHeight),
       ),
+      resolveArrow: _resolveArrow,
+      removeElements: _removeIds,
       mediaWidth: mediaNodeDefaultWidth,
       clearEditing: () {
         _clearTextEditing();
@@ -395,6 +408,8 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     _input.dispose();
     _detachModels(List.of(_elements));
     _targets.clear();
+    _arrowEndpointDraft = null;
+    _arrowEndpointSnapPoint = null;
     _backdropFootprints.clear();
     _projectedDocument = null;
   }
@@ -429,7 +444,9 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     _contextMenuFocusNode.dispose();
     _editingChromeModel.dispose();
     _clearGlassBackdrops.dispose();
+    _arrowLayout.dispose();
     _canvasController.removeListener(_closeContextMenuOnNavigation);
+    _canvasController.removeListener(_scheduleArrowLayoutSync);
     _canvasController.dispose();
     super.dispose();
   }
@@ -449,7 +466,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       for (final value in _elements) {
         if (!oldIds.contains(value.id)) {
           _mountElement(value);
-        } else {
+        } else if (value is! ArrowElementData) {
           _syncGeometry(value);
         }
       }
@@ -458,6 +475,11 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         _canvasController.background = document.background.build(BTheme.of(context).colors);
       }
     }
+    final discardDraft = _arrowEndpointDraft != null && _arrowEndpointDraft!.id != _session.activeId;
+    if (discardDraft) {
+      _arrowEndpointDraft = null;
+    }
+    if (documentChanged || discardDraft) _syncArrowGeometries();
     if (documentChanged) {
       _updateBackdropFootprints();
     } else if (_backdropActiveId != _session.activeId) {
@@ -470,6 +492,10 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
   // ---------- Input presentation effects ----------
 
   void _handleDrawingToolChanged() {
+    if (_arrowEndpointDraft case final draft? when _targets[draft.id]?.current != true) {
+      _arrowEndpointDraft = null;
+      _syncArrowGeometries();
+    }
     if (mounted) setState(() {});
   }
 
@@ -933,6 +959,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
           _input,
           _editingChromeModel,
           ?resource,
+          if (value is ArrowElementData) _arrowLayout,
           if (value is TextElementData || value is CodeElementData || value is MediaElementData) _clearGlassBackdrops,
         ]),
         builder: (context, _) {
@@ -957,6 +984,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         if (current == null) return;
         _syncGeometry(current);
         if (current is MediaElementData) {
+          _scheduleArrowLayoutSync();
           final footprint = _backdropFootprint(current);
           if (footprint != _backdropFootprints[current.id]) {
             _backdropFootprints[current.id] = footprint;
@@ -1043,7 +1071,12 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
         onMove: target.move,
         onChangeEnd: target.finish,
       ),
-      final ArrowElementData a => ArrowElementView(data: a, selected: selected, active: active),
+      final ArrowElementData a => ArrowElementView(
+        data: a,
+        geometry: _arrowGeometries[a.id] ?? a.geometry,
+        selected: selected,
+        active: active,
+      ),
     };
     return _CanvasElementHost(
       key: _selectionKey(value),
@@ -1055,16 +1088,128 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     );
   }
 
-  Rect _bounds(CanvasElementData value) => elementBounds(
-    value,
-    codeTitleHeight: codeTitleHeight,
-    mediaSize: value is MediaElementData
-        ? (_resources[value.id] as MediaResources?)?.canvasSize ??
-              (isLinkMediaSource(value.url)
-                  ? mediaLinkCardSize(value.url, value.width)
-                  : const Size(mediaUrlPanelMinimumWidth, mediaUrlPanelCanvasHeight))
-        : Size.zero,
+  Rect _bounds(CanvasElementData value) => value is ArrowElementData
+      ? (_arrowGeometries[value.id] ?? value.geometry).bounds
+      : elementBounds(
+          value,
+          codeTitleHeight: codeTitleHeight,
+          mediaSize: value is MediaElementData
+              ? (_resources[value.id] as MediaResources?)?.canvasSize ??
+                    (isLinkMediaSource(value.url)
+                        ? mediaLinkCardSize(value.url, value.width)
+                        : const Size(mediaUrlPanelMinimumWidth, mediaUrlPanelCanvasHeight))
+              : Size.zero,
+        );
+
+  ArrowAnchorFrame _anchorFrame(CanvasElementData value) {
+    final bounds = _bounds(value);
+    return switch (value) {
+      ShapeElementData(:final kind) => ArrowAnchorFrame(body: bounds, shape: kind),
+      CodeElementData(:final position, :final size, :final rotation) => ArrowAnchorFrame(
+        body: position & size,
+        rotation: rotation,
+      ),
+      TextElementData(height: null, :final rotation) => ArrowAnchorFrame(
+        body: bounds.topLeft & (_canvasController.getInfo(value.id).childSize ?? bounds.size),
+        rotation: rotation,
+      ),
+      MediaElementData() when (_resources[value.id] as MediaResources?)?.canRotate == false => ArrowAnchorFrame(
+        body: bounds.topLeft & (_canvasController.getInfo(value.id).childSize ?? bounds.size),
+        rotation: value.rotation,
+      ),
+      _ => ArrowAnchorFrame(body: bounds, rotation: _rotation(value)),
+    };
+  }
+
+  ArrowSnap? _snapArrow(Offset requested) {
+    ArrowSnap? best;
+    var bestDistance = double.infinity;
+    final active = _activeElement;
+    for (final value in [?active, ..._elements.reversed.where((value) => value.id != active?.id)]) {
+      if (!isArrowAttachmentTarget(value)) continue;
+      final frame = _anchorFrame(value);
+      final inside = frame.contains(requested);
+      for (final side in ArrowAnchorSide.values) {
+        final position = frame.point(side);
+        final distance = (position - requested).distance * scale;
+        if (distance < bestDistance && (inside || distance <= 12)) {
+          bestDistance = distance;
+          best = (attachment: ArrowAttachment(targetId: value.id, side: side), position: position);
+        }
+      }
+    }
+    return best;
+  }
+
+  Offset? _resolveArrowAnchor(ArrowAttachment attachment) {
+    final target = _session.element(attachment.targetId);
+    return target != null && isArrowAttachmentTarget(target) ? _anchorFrame(target).point(attachment.side) : null;
+  }
+
+  Offset _resolvedEnd(ArrowAttachment? attachment, Offset fallback) {
+    return (attachment == null ? null : _resolveArrowAnchor(attachment)) ?? fallback;
+  }
+
+  ArrowGeometry _resolveArrow(ArrowElementData arrow) => ArrowGeometry(
+    start: _resolvedEnd(arrow.startAttachment, arrow.start),
+    controls: arrow.controls,
+    end: _resolvedEnd(arrow.endAttachment, arrow.end),
   );
+
+  (ArrowGeometry, ArrowSnap?) _previewArrowEndpoint(ArrowElementData arrow) {
+    final geometry = _resolveArrow(arrow);
+    final draft = _arrowEndpointDraft;
+    if (draft == null || draft.id != arrow.id) return (geometry, null);
+    final pointer = screenToCanvas(draft.screenPointer);
+    final snap = _snapArrow(pointer);
+    final position =
+        snap?.position ??
+        minimumLengthArrowPoint(
+          pointer + draft.grabOffset,
+          draft.start ? geometry.end : geometry.start,
+          draft.start ? geometry.start : geometry.end,
+        );
+    return (
+      ArrowGeometry(
+        start: draft.start ? position : geometry.start,
+        controls: geometry.controls,
+        end: draft.start ? geometry.end : position,
+      ),
+      snap,
+    );
+  }
+
+  void _scheduleArrowLayoutSync() {
+    if (_arrowLayoutSyncPending || _arrowGeometries.isEmpty) return;
+    _arrowLayoutSyncPending = true;
+    scheduleMicrotask(() {
+      _arrowLayoutSyncPending = false;
+      if (mounted && _projectedDocument != null) _syncArrowGeometries();
+    });
+  }
+
+  void _syncArrowGeometries() {
+    var changed = false;
+    Offset? snapPoint;
+    for (final arrow in _elements.whereType<ArrowElementData>()) {
+      final (geometry, snap) = _previewArrowEndpoint(arrow);
+      if (snap != null) snapPoint = snap.position;
+      final previous = _arrowGeometries[arrow.id];
+      if (previous != null &&
+          previous.start == geometry.start &&
+          previous.end == geometry.end &&
+          listEquals(previous.controls, geometry.controls)) {
+        continue;
+      }
+      _arrowGeometries[arrow.id] = geometry;
+      _syncGeometry(arrow);
+      changed = true;
+    }
+    if (changed || snapPoint != _arrowEndpointSnapPoint) {
+      _arrowEndpointSnapPoint = snapPoint;
+      _arrowLayout.value++;
+    }
+  }
 
   void _updateBackdropFootprints() {
     final footprints = {for (final value in _elements) value.id: _backdropFootprint(value)};
@@ -1216,6 +1361,11 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
 
   void _addArrow(ArrowElementData value) {
     if (!_documentLoaded) return;
+    for (final attachment in [value.startAttachment, value.endAttachment]) {
+      if (attachment == null) continue;
+      final target = _session.element(attachment.targetId);
+      if (target == null || !isArrowAttachmentTarget(target)) return;
+    }
     _session.insert([value], returnToSelect: true);
     _setActiveElement(_elements.firstWhere((model) => model.id == value.id));
   }
@@ -1236,10 +1386,48 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     ArrowElementData model,
     int point,
     Offset position,
+    Offset globalPointer,
   ) {
     if (_canvasInputBlocked) return;
     if (!_documentLoaded || _session.activeId != model.id || _session.element(model.id) == null) return;
-    _target(model).transform(() => _session.setArrowPoint(model.id, point, position));
+    final target = _target(model);
+    if (point == 0 || point == model.pointCount - 1) {
+      if (!target.current) return;
+      final screenPointer = globalToScreen(globalPointer);
+      _arrowEndpointDraft = (
+        id: model.id,
+        start: point == 0,
+        screenPointer: screenPointer,
+        grabOffset: _arrowEndpointDraft?.grabOffset ?? position - screenToCanvas(screenPointer),
+      );
+      _syncArrowGeometries();
+      return;
+    }
+    target.transform(() => _session.setArrowPoint(model.id, point, position));
+  }
+
+  void _finishArrowPointEdit(ArrowElementData model, {required bool canceled}) {
+    final target = _target(model);
+    if (_arrowEndpointDraft case final draft? when draft.id == model.id) {
+      final live = _session.element(model.id);
+      final preview = !canceled && _session.activeId == model.id && target.current && live is ArrowElementData
+          ? _previewArrowEndpoint(live)
+          : null;
+      _arrowEndpointDraft = null;
+      if (preview case (final geometry, final snap)) {
+        target.transform(
+          () => _session.setArrowEndpoint(
+            model.id,
+            start: draft.start,
+            position: draft.start ? geometry.start : geometry.end,
+            opposite: draft.start ? geometry.end : geometry.start,
+            attachment: snap?.attachment,
+          ),
+        );
+      }
+      _syncArrowGeometries();
+    }
+    target.finish();
   }
 
   // ---------- Editing commands ----------
@@ -1303,8 +1491,22 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
     final ids = models.where((a) => _session.element(a.id) != null).map((model) => model.id).toList();
     if (ids.isEmpty) return;
     if (finishHistory) _finishHistoryOperation();
-    _session.remove(ids);
+    _removeIds(ids);
     if (finishHistory) _finishHistoryOperation();
+  }
+
+  void _removeIds(Iterable<String> ids) {
+    final removed = ids.toSet();
+    final resolvedEnds = <String, ({Offset? start, Offset? end})>{};
+    for (final arrow in _elements.whereType<ArrowElementData>()) {
+      if (removed.contains(arrow.id)) continue;
+      final start = removed.contains(arrow.startAttachment?.targetId);
+      final end = removed.contains(arrow.endAttachment?.targetId);
+      if (!start && !end) continue;
+      final geometry = _resolveArrow(arrow);
+      resolvedEnds[arrow.id] = (start: start ? geometry.start : null, end: end ? geometry.end : null);
+    }
+    _session.remove(removed, resolvedEnds: resolvedEnds);
   }
 
   void _detachModels(List<CanvasElementData> values) {
@@ -1326,6 +1528,7 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
       _targets.remove(id);
       _selectionKeys.remove(id);
       _declaredSizes.remove(id);
+      _arrowGeometries.remove(id);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       for (final resource in retired) {
@@ -1507,18 +1710,20 @@ class _CanvasViewState extends State<CanvasView> implements CanvasInputViewport 
           if (activeArrow != null)
             Positioned.fill(
               child: ListenableBuilder(
-                listenable: Listenable.merge([_session, _canvasController]),
+                listenable: Listenable.merge([_session, _canvasController, _arrowLayout]),
                 builder: (context, _) => Listener(
                   onPointerDown: _handleObjectControlPointerDown,
                   child: ArrowEditor(
-                    data: activeArrow,
-                    selected: _session.isSelected(activeArrow.id),
-                    active: true,
+                    key: ValueKey(activeArrow.id),
+                    geometry: _arrowGeometries[activeArrow.id] ?? activeArrow.geometry,
+                    snapPoint: _arrowEndpointSnapPoint,
                     canvasOffset: _canvasController.offset,
                     canvasScale: _canvasController.scale,
                     onChangeStart: _startArrowPointEdit,
-                    onPointChanged: (point, position) => _editArrowPoint(activeArrow, point, position),
-                    onChangeEnd: _target(activeArrow).finish,
+                    onPointChanged: (point, position, globalPointer) =>
+                        _editArrowPoint(activeArrow, point, position, globalPointer),
+                    onChangeEnd: () => _finishArrowPointEdit(activeArrow, canceled: false),
+                    onCancel: () => _finishArrowPointEdit(activeArrow, canceled: true),
                   ),
                 ),
               ),

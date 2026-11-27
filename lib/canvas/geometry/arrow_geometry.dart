@@ -107,8 +107,8 @@ class ArrowGeometry {
 Offset minimumLengthArrowPoint(Offset requested, Offset fixed, Offset current) {
   final vector = requested - fixed;
   if (vector.distance >= arrowMinimumLength) return requested;
-  final fallback = current - fixed;
-  final direction = vector == Offset.zero ? fallback / fallback.distance : vector / vector.distance;
+  final delta = vector == Offset.zero ? current - fixed : vector;
+  final direction = delta == Offset.zero ? const Offset(1, 0) : delta / delta.distance;
   return fixed + direction * (arrowMinimumLength + 1e-6);
 }
 

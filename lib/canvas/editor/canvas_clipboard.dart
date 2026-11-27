@@ -12,6 +12,7 @@ import 'package:elseplane/canvas/document/attachment_references.dart';
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/media_source.dart';
+import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 import 'package:elseplane/canvas/geometry/element_geometry.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:uuid/uuid.dart';
@@ -97,6 +98,7 @@ String encodeCanvasClipboard(
   if (elements.isEmpty) {
     throw const FormatException('Clipboard elements must not be empty');
   }
+  validateElementRelationships(elements);
   return (elements: elements, sourceDirectory: sourceDirectory);
 }
 
@@ -150,7 +152,11 @@ class CanvasClipboard {
     this.invalidateAttachments,
     this.readClipboard,
     this.writeClipboardText,
-  }) : _canvasDirectory = canvasDirectory {
+    ArrowGeometry Function(ArrowElementData)? resolveArrow,
+    void Function(Iterable<String>)? removeElements,
+  }) : _canvasDirectory = canvasDirectory,
+       _resolveArrow = resolveArrow ?? ((arrow) => arrow.geometry),
+       _removeElements = removeElements ?? session.remove {
     validateAttachmentDirectory(canvasDirectory);
   }
   final EditorSession session;
@@ -176,6 +182,8 @@ class CanvasClipboard {
   final void Function(Set<String>)? invalidateAttachments;
   final Future<CanvasClipboardSnapshot> Function()? readClipboard;
   final Future<void> Function(String)? writeClipboardText;
+  final ArrowGeometry Function(ArrowElementData) _resolveArrow;
+  final void Function(Iterable<String>) _removeElements;
   String? _lastPastedPayload;
   String? _cutPayload;
   Offset _pasteOffset = Offset.zero;
@@ -195,8 +203,11 @@ class CanvasClipboard {
     if (selected.isEmpty) return;
     final sourceDirectory = canvasDirectory;
     final targetLifetimes = cut ? {for (final value in selected) value.id: session.elementLifetime(value.id)} : null;
-    final payload = encodeCanvasClipboard(selected, sourceDirectory: sourceDirectory);
     try {
+      final payload = encodeCanvasClipboard([
+        for (final value in selected)
+          if (value is ArrowElementData) _captureArrow(value, ids) else value,
+      ], sourceDirectory: sourceDirectory);
       final write = writeClipboardText;
       if (write != null) {
         await write(payload);
@@ -213,7 +224,7 @@ class CanvasClipboard {
       _pointerReference = (payload, pointerPosition());
       if (cut) {
         session.finishOperation();
-        session.remove([
+        _removeElements([
           for (final entry in targetLifetimes!.entries)
             if (entry.value != null && identical(entry.value, session.elementLifetime(entry.key))) entry.key,
         ]);
@@ -225,6 +236,16 @@ class CanvasClipboard {
         cut ? 'Could not cut canvas elements' : 'Could not copy canvas elements',
       );
     }
+  }
+
+  ArrowElementData _captureArrow(ArrowElementData arrow, Set<String> ids) {
+    final geometry = _resolveArrow(arrow);
+    return arrow.copyWith(
+      start: geometry.start,
+      end: geometry.end,
+      clearStartAttachment: !ids.contains(arrow.startAttachment?.targetId),
+      clearEndAttachment: !ids.contains(arrow.endAttachment?.targetId),
+    );
   }
 
   Future<void> paste(Future<ClipboardReader>? readerFuture, {Offset? position}) async {
@@ -257,7 +278,20 @@ class CanvasClipboard {
       if (!session.isLive) return;
 
       final placeAtPointer = position != null || (pointer != null && (payload, pointer) != _pointerReference);
-      final pasted = [for (final element in elements) element.copyWith(id: const Uuid().v4())];
+      final ids = {for (final value in elements) value.id: const Uuid().v4()};
+      ArrowAttachment? remap(ArrowAttachment? attachment) =>
+          attachment == null ? null : ArrowAttachment(targetId: ids[attachment.targetId]!, side: attachment.side);
+      final pasted = [
+        for (final value in elements)
+          if (value is ArrowElementData)
+            value.copyWith(
+              id: ids[value.id],
+              startAttachment: remap(value.startAttachment),
+              endAttachment: remap(value.endAttachment),
+            )
+          else
+            value.copyWith(id: ids[value.id]),
+      ];
       session.finishOperation();
       if (placeAtPointer) {
         final bounds = pasted.map(boundsOf).reduce((bounds, next) => bounds.expandToInclude(next));

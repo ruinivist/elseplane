@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/editor_history.dart';
+import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 import 'package:elseplane/canvas/geometry/element_geometry.dart';
 import 'package:flutter/foundation.dart';
 
@@ -211,21 +212,42 @@ class EditorSession extends ChangeNotifier {
     finishOperation();
   }
 
-  void remove(Iterable<String> ids) {
+  void remove(Iterable<String> ids, {Map<String, ({Offset? start, Offset? end})> resolvedEnds = const {}}) {
     if (!_live) return;
     final removed = ids.toSet();
-    if (!document.elements.any((value) => removed.contains(value.id))) return;
+    if (!removed.any(_byId.containsKey)) return;
+    final elements = [
+      for (final value in document.elements)
+        if (!removed.contains(value.id))
+          if (value is ArrowElementData) _detachRemovedTargets(value, removed, resolvedEnds[value.id]) else value,
+    ];
     _selectedIds.removeAll(removed);
     if (removed.contains(_activeId)) _activeId = null;
     if (removed.contains(_editing?.id)) _editing = null;
-    _publish(document.copyWith(elements: document.elements.where((value) => !removed.contains(value.id)).toList()));
+    _publish(document.copyWith(elements: elements));
+  }
+
+  ArrowElementData _detachRemovedTargets(
+    ArrowElementData arrow,
+    Set<String> removed,
+    ({Offset? start, Offset? end})? resolved,
+  ) {
+    final detachStart = removed.contains(arrow.startAttachment?.targetId);
+    final detachEnd = removed.contains(arrow.endAttachment?.targetId);
+    if (!detachStart && !detachEnd) return arrow;
+    return arrow.copyWith(
+      start: detachStart ? resolved?.start : null,
+      end: detachEnd ? resolved?.end : null,
+      clearStartAttachment: detachStart,
+      clearEndAttachment: detachEnd,
+    )..validate();
   }
 
   void setBackground(CanvasBackgroundKind value) => _publish(document.copyWith(background: value));
 
   void move(Iterable<String> ids, Offset delta) {
     if (delta == Offset.zero) return;
-    _change(ids, (value) => moveElement(value, delta), promote: true);
+    _change(ids, (value) => moveElement(value, delta, keepAttachedEndpoints: true), promote: true);
   }
 
   void resizeText(String id, Size renderedSize, Offset delta) =>
@@ -253,6 +275,26 @@ class EditorSession extends ChangeNotifier {
 
   void setArrowPoint(String id, int index, Offset position) =>
       _change([id], (value) => moveArrowPoint(value as ArrowElementData, index, position), promote: true);
+
+  void setArrowEndpoint(
+    String id, {
+    required bool start,
+    required Offset position,
+    required Offset opposite,
+    ArrowAttachment? attachment,
+  }) => _change([id], (value) {
+    final arrow = value as ArrowElementData;
+    if (attachment != null) {
+      validateArrowAttachment(attachment, element(attachment.targetId));
+      if (attachment == (start ? arrow.startAttachment : arrow.endAttachment)) return arrow;
+    }
+    final point = attachment == null
+        ? minimumLengthArrowPoint(position, opposite, start ? arrow.start : arrow.end)
+        : position;
+    return start
+        ? arrow.copyWith(start: point, startAttachment: attachment, clearStartAttachment: attachment == null)
+        : arrow.copyWith(end: point, endAttachment: attachment, clearEndAttachment: attachment == null);
+  }, promote: true);
 
   void setMarkdown(String id, String markdown) =>
       _change([id], (a) => (a as TextElementData).copyWith(markdown: markdown), promote: true);
@@ -404,9 +446,12 @@ class EditorSession extends ChangeNotifier {
   }
 
   static void _validateDocument(CanvasDocument document) {
-    final ids = <String>{};
+    try {
+      validateElementRelationships(document.elements);
+    } on FormatException catch (error) {
+      throw ArgumentError(error.message);
+    }
     for (final a in document.elements) {
-      if (!ids.add(a.id)) throw ArgumentError('Duplicate element ID');
       a.validate();
     }
   }

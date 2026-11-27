@@ -14,6 +14,7 @@ import 'package:elseplane/canvas/editor/elements/media/media_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/pen/pen_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/shape/shape_element_view.dart';
 import 'package:elseplane/canvas/editor/elements/text/text_element_view.dart';
+import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 import 'package:elseplane/ui/common/notifications.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -38,6 +39,150 @@ void main() {
       restored.elements.map((element) => element.autoArrange),
       document.elements.map((element) => element.autoArrange),
     );
+  });
+
+  for (final targetCount in [0, 1, 2]) {
+    test('copy captures effective arrow points and remaps $targetCount copied targets', () async {
+      final session = testSession(_menuDocument.copyWith(elements: [_boundArrow, ..._menuDocument.elements]));
+      final projected = ArrowGeometry(
+        start: const Offset(200, 100),
+        controls: _boundArrow.controls,
+        end: const Offset(300, 100),
+      );
+      String? payload;
+      final clipboard = CanvasClipboard(
+        session: session,
+        attachments: TestAttachmentStore(),
+        enabled: () => true,
+        menuOpen: () => false,
+        editing: () => false,
+        pointerPosition: () => null,
+        scale: () => 1,
+        screenToCanvas: (position) => position,
+        viewportSize: () => const Size(800, 600),
+        boundsOf: (value) => switch (value) {
+          final ArrowElementData arrow => arrow.bounds,
+          final ShapeElementData shape => shape.position & shape.size,
+          _ => throw ArgumentError('Unexpected element'),
+        },
+        mediaWidth: 100,
+        clearEditing: () {},
+        onError: fail,
+        resolveArrow: (_) => projected,
+        writeClipboardText: (text) async => payload = text,
+        readClipboard: () async => (text: payload, image: null),
+      );
+      await clipboard.copy(
+        null,
+        targets: [
+          'arrow',
+          ...['a', 'b'].take(targetCount),
+        ],
+      );
+      final captured = decodeCanvasClipboard(payload!)!.elements.first as ArrowElementData;
+      expect(captured.start, projected.start);
+      expect(captured.end, projected.end);
+      expect(captured.startAttachment, targetCount >= 1 ? _boundArrow.startAttachment : null);
+      expect(captured.endAttachment, targetCount >= 2 ? _boundArrow.endAttachment : null);
+
+      const pointer = Offset(400, 300);
+      final targets = _menuDocument.elements.cast<ShapeElementData>().take(targetCount).toList();
+      final bounds = targets.fold(
+        projected.bounds,
+        (bounds, shape) => bounds.expandToInclude(shape.position & shape.size),
+      );
+      final delta = pointer - bounds.center;
+      await clipboard.paste(null, position: pointer);
+      final pasted = session.document.elements.skip(3).toList();
+      expect(pasted, hasLength(1 + targetCount));
+      final arrow = pasted.first as ArrowElementData;
+      _expectShifted(captured, arrow, delta);
+      expect(arrow.id, isNot(_boundArrow.id));
+      expect(
+        arrow.startAttachment,
+        targetCount >= 1 ? ArrowAttachment(targetId: pasted[1].id, side: ArrowAnchorSide.right) : null,
+      );
+      expect(
+        arrow.endAttachment,
+        targetCount >= 2 ? ArrowAttachment(targetId: pasted[2].id, side: ArrowAnchorSide.left) : null,
+      );
+      for (var i = 0; i < targetCount; i++) {
+        expect(pasted[i + 1].id, isNot(anyOf('a', 'b')));
+        _expectShifted(targets[i], pasted[i + 1], delta);
+      }
+      expect(session.selectedIds, pasted.map((value) => value.id).toSet());
+      session.undo();
+      expect(session.document.elements, [_boundArrow, ..._menuDocument.elements]);
+    });
+  }
+
+  test('invalid clipboard relationships prevent cross-folder attachment I/O', () async {
+    const path = 'attachments/11111111-1111-4111-8111-111111111111.png';
+    final attachments = _TrackedAttachmentStore({'Source/$path': onePixelPngBytes});
+    final session = testSession(_emptyDocument);
+    final errors = <String>[];
+    final clipboard = CanvasClipboard(
+      session: session,
+      attachments: attachments,
+      enabled: () => true,
+      menuOpen: () => false,
+      editing: () => false,
+      pointerPosition: () => null,
+      scale: () => 1,
+      screenToCanvas: (position) => position,
+      viewportSize: () => const Size(800, 600),
+      boundsOf: (_) => Rect.zero,
+      mediaWidth: 100,
+      canvasDirectory: 'Destination',
+      clearEditing: () {},
+      onError: errors.add,
+      readClipboard: () async => (
+        text: encodeCanvasClipboard([
+          _boundArrow,
+          MediaElementData(id: 'b', position: Offset.zero, width: 280, url: path),
+        ], sourceDirectory: 'Source'),
+        image: null,
+      ),
+    );
+    await clipboard.paste(null);
+    expect(errors, ['Could not paste canvas elements']);
+    expect(attachments.reads, 0);
+    expect(attachments.files.keys, ['Source/$path']);
+    expect(session.document.elements, isEmpty);
+  });
+
+  test('delayed Cut detaches surviving arrows at the removal-time position', () async {
+    final session = testSession(_menuDocument.copyWith(elements: [_boundArrow, ..._menuDocument.elements]));
+    final write = Completer<void>();
+    final clipboard = CanvasClipboard(
+      session: session,
+      attachments: TestAttachmentStore(),
+      enabled: () => true,
+      menuOpen: () => false,
+      editing: () => false,
+      pointerPosition: () => null,
+      scale: () => 1,
+      screenToCanvas: (position) => position,
+      viewportSize: () => const Size(800, 600),
+      boundsOf: (_) => Rect.zero,
+      mediaWidth: 100,
+      clearEditing: () {},
+      onError: fail,
+      writeClipboardText: (_) => write.future,
+      removeElements: (ids) {
+        final target = session.element('a')! as ShapeElementData;
+        session.remove(ids, resolvedEnds: {'arrow': (start: (target.position & target.size).centerRight, end: null)});
+      },
+    );
+    final cut = clipboard.copy(null, cut: true, targets: ['a']);
+    session.move(['a'], const Offset(40, 0));
+    final beforeCut = session.document;
+    write.complete();
+    await cut;
+    expect(session.element('a'), isNull);
+    expect(session.element('arrow'), _boundArrow.copyWith(start: const Offset(420, 340), clearStartAttachment: true));
+    session.undo();
+    expect(session.document, beforeCut);
   });
 
   test('clipboard preserves a media source without saved presentation state', () {
@@ -1081,6 +1226,11 @@ final _emptyDocument = CanvasDocument(
   elements: [],
 );
 
+final ArrowElementData _boundArrow = _document.elements.whereType<ArrowElementData>().single.copyWith(
+  startAttachment: const ArrowAttachment(targetId: 'a', side: ArrowAnchorSide.right),
+  endAttachment: const ArrowAttachment(targetId: 'b', side: ArrowAnchorSide.left),
+);
+
 final _menuDocument = CanvasDocument(
   background: CanvasBackgroundKind.plain,
   elements: [
@@ -1136,5 +1286,17 @@ class _FailSecondCopyWrite extends TestAttachmentStore {
   Future<void> write(String path, Uint8List bytes) async {
     if (++writes == 2) throw StateError('copy failed');
     await super.write(path, bytes);
+  }
+}
+
+class _TrackedAttachmentStore extends TestAttachmentStore {
+  _TrackedAttachmentStore(super.initial);
+
+  int reads = 0;
+
+  @override
+  Future<Uint8List?> readIfExists(String path) {
+    reads++;
+    return super.readIfExists(path);
   }
 }

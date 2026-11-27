@@ -8,6 +8,7 @@ import 'package:elseplane/canvas/editor/editor_session.dart';
 import 'package:elseplane/canvas/editor/tools/arrow_tool.dart';
 import 'package:elseplane/canvas/editor/tools/pen_tool.dart';
 import 'package:elseplane/canvas/editor/tools/shape_tool.dart';
+import 'package:elseplane/canvas/geometry/arrow_anchor_geometry.dart';
 import 'package:elseplane/canvas/geometry/pen_geometry.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -132,9 +133,18 @@ class CanvasInput extends ChangeNotifier {
     required this.onStroke,
     required this.onArrow,
     required this.onShape,
-  }) {
+    ArrowSnap? Function(Offset)? snapArrow,
+    Offset? Function(ArrowAttachment)? resolveArrowAnchor,
+    void Function(Iterable<String>)? removeElements,
+  }) : _removeElements = removeElements ?? session.remove {
     pen = PenTool(session: () => session, onStroke: onStroke);
-    arrow = ArrowTool(session: () => session, onArrow: onArrow);
+    arrow = ArrowTool(
+      session: () => session,
+      onArrow: onArrow,
+      snapArrow: snapArrow,
+      resolveAnchor: resolveArrowAnchor,
+      screenToCanvas: viewport.screenToCanvas,
+    );
     shape = ShapeTool(session: () => session, onShape: onShape);
     arrow.addListener(notifyListeners);
     shape.addListener(notifyListeners);
@@ -160,6 +170,7 @@ class CanvasInput extends ChangeNotifier {
   final ValueChanged<RawPenStroke> onStroke;
   final ValueChanged<ArrowElementData> onArrow;
   final ValueChanged<ShapeElementData> onShape;
+  final void Function(Iterable<String>) _removeElements;
   late final PenTool pen;
   late final ArrowTool arrow;
   late final ShapeTool shape;
@@ -508,7 +519,7 @@ class CanvasInput extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _erase(Offset globalPosition) => session.remove(viewport.hitTest(globalPosition));
+  void _erase(Offset globalPosition) => _removeElements(viewport.hitTest(globalPosition));
 
   void _resolveQuickTextTarget(CanvasInputTarget target, PointerDownEvent event, {required bool control}) {
     if (control) {

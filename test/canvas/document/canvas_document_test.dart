@@ -648,6 +648,95 @@ void main() {
     }
   });
 
+  test('arrow attachments round trip with targets on either side of the arrow', () {
+    final shape = _encodedShape();
+    final code = _encodedCode();
+    final document = CanvasDocument.fromJson(
+      _document(
+        elements: [
+          shape,
+          _encodedArrow()
+            ..['startAttachment'] = {'targetId': shape['id'], 'side': 'left'}
+            ..['endAttachment'] = {'targetId': code['id'], 'side': 'top'}
+            ..['end'] = {'x': 0.0, 'y': 0.0},
+          code,
+        ],
+      ),
+    );
+    final arrow = document.elements[1] as ArrowElementData;
+    expect(arrow.start, arrow.end);
+    expect(arrow.startAttachment, ArrowAttachment(targetId: shape['id']! as String, side: ArrowAnchorSide.left));
+    expect(arrow.endAttachment, const ArrowAttachment(targetId: 'code-1', side: ArrowAnchorSide.top));
+    final decoded = CanvasDocument.fromJson(jsonDecode(jsonEncode(document.toJson())));
+    expect(decoded, document);
+    expect(decoded.hashCode, document.hashCode);
+
+    const replacement = ArrowAttachment(targetId: 'code-1', side: ArrowAnchorSide.bottom);
+    final changed = arrow.copyWith(startAttachment: replacement, clearEndAttachment: true);
+    expect(changed.startAttachment, replacement);
+    expect(changed.endAttachment, isNull);
+    expect(changed, isNot(arrow));
+    expect(changed.toJson(), isNot(contains('endAttachment')));
+    expect(arrow.copyWith(clearStartAttachment: true).endAttachment, arrow.endAttachment);
+  });
+
+  test('every eligible target type accepts a relationship', () {
+    for (final target in [_encodedShape(), _encodedText(), _encodedCode(), _encodedMedia()]) {
+      final document = CanvasDocument.fromJson(
+        _document(
+          elements: [
+            _encodedArrow()..['endAttachment'] = {'targetId': target['id'], 'side': 'right'},
+            target,
+          ],
+        ),
+      );
+      expect(isArrowAttachmentTarget(document.elements.last), isTrue);
+    }
+  });
+
+  test('legacy free arrows omit attachment keys and accept coincident endpoints', () {
+    final encoded = _encodedArrow()..['end'] = {'x': 0.0, 'y': 0.0};
+    final arrow = ArrowElementData.fromJson(encoded);
+    expect(arrow.startAttachment, isNull);
+    expect(arrow.endAttachment, isNull);
+    expect(arrow.start, arrow.end);
+    expect(arrow.toJson(), allOf(isNot(contains('startAttachment')), isNot(contains('endAttachment'))));
+  });
+
+  test('attachment fields reject invalid values and relationships', () {
+    final shape = _encodedShape();
+    for (final invalid in [
+      null,
+      'shape',
+      {'targetId': 1, 'side': 'top'},
+      {'targetId': '', 'side': 'top'},
+      {'targetId': shape['id']},
+      {'side': 'top'},
+      {'targetId': shape['id'], 'side': 'middle'},
+      {'targetId': shape['id'], 'side': 'top', 'extra': true},
+      {'targetId': 'missing', 'side': 'top'},
+      {'targetId': 'pen-1', 'side': 'top'},
+      {'targetId': 'arrow-1', 'side': 'top'},
+    ]) {
+      for (final key in ['startAttachment', 'endAttachment']) {
+        expect(
+          () => CanvasDocument.fromJson(
+            _document(elements: [_encodedArrow()..[key] = invalid, shape, _encodedPen()]),
+          ),
+          throwsFormatException,
+          reason: '$key: $invalid',
+        );
+      }
+    }
+    expect(
+      () => validateArrowAttachment(
+        const ArrowAttachment(targetId: 'different-id', side: ArrowAnchorSide.left),
+        ShapeElementData.fromJson(shape),
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('malformed non-text elements are rejected', () {
     final code = _encodedCode();
     expect(
@@ -673,17 +762,6 @@ void main() {
       );
     }
 
-    final arrow = _encodedArrow();
-    expect(
-      () => CanvasDocument.fromJson(
-        _document(
-          elements: [
-            arrow..['end'] = {'x': 1.0, 'y': 1.0},
-          ],
-        ),
-      ),
-      throwsA(isA<FormatException>()),
-    );
     for (final invalid in [
       _encodedArrow()..['controls'] = [],
       _encodedArrow()

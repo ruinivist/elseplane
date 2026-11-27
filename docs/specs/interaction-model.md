@@ -154,6 +154,7 @@ Shapes follow the same state separation: clicking or creating a shape makes it a
 
 ### Arrows
 
+- Arrow endpoints can attach to blocks and follow their geometry. See [arrow attachments](arrow-attachments.md) for snapping, editing, and clipboard behavior.
 - Drawing an arrow makes it active and returns to the select tool.
 - Arrow options set the color, solid or dashed shaft style, and width for newly drawn arrows.
 - Activating an existing arrow exposes the same options; edits affect only that arrow and keep its arrowhead solid.

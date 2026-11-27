@@ -16,24 +16,32 @@ import 'package:flutter/widgets.dart';
 /// Renders and exposes semantics for a persisted arrow data.
 /// Used by the canvas element stack.
 class ArrowElementView extends StatelessWidget {
-  const ArrowElementView({required this.data, required this.selected, required this.active, super.key});
+  const ArrowElementView({
+    required this.data,
+    required this.geometry,
+    required this.selected,
+    required this.active,
+    super.key,
+  });
 
   final ArrowElementData data;
+  final ArrowGeometry geometry;
   final bool selected;
   final bool active;
 
   @override
   Widget build(BuildContext context) {
     final colors = BTheme.of(context).colors;
+    final bounds = geometry.bounds;
     return SizedBox.fromSize(
-      size: data.bounds.size,
+      size: bounds.size,
       child: Semantics(
         container: true,
         label: 'Arrow',
         selected: selected,
         child: CustomPaint(
           foregroundPainter: _ArrowPainter(
-            geometry: data.localGeometry,
+            geometry: geometry.shift(-bounds.topLeft),
             color: selected && !active ? colors.accent : data.color,
             strokeStyle: data.strokeStyle,
             strokeWidth: data.strokeWidth,
@@ -48,32 +56,33 @@ class ArrowElementView extends StatelessWidget {
 /// Draws and handles every editable point of an active arrow.
 class ArrowEditor extends StatelessWidget {
   const ArrowEditor({
-    required this.data,
-    required this.selected,
-    required this.active,
+    required this.geometry,
+    required this.snapPoint,
     required this.canvasOffset,
     required this.canvasScale,
     required this.onChangeStart,
     required this.onPointChanged,
     required this.onChangeEnd,
+    required this.onCancel,
     super.key,
   });
 
-  final ArrowElementData data;
-  final bool selected;
-  final bool active;
+  final ArrowGeometry geometry;
+  final Offset? snapPoint;
   final Offset canvasOffset;
   final double canvasScale;
   final VoidCallback onChangeStart;
-  final void Function(int point, Offset position) onPointChanged;
+  final void Function(int point, Offset position, Offset globalPointer) onPointChanged;
   final VoidCallback onChangeEnd;
+  final VoidCallback onCancel;
 
   Offset _toScreen(Offset point) => (point - canvasOffset) * canvasScale;
 
   @override
   Widget build(BuildContext context) {
     final colors = BTheme.of(context).colors;
-    final points = [for (var point = 0; point < data.pointCount; point++) _toScreen(data.point(point))];
+    final canvasPoints = [geometry.start, ...geometry.controls, geometry.end];
+    final points = canvasPoints.map(_toScreen).toList();
     return Stack(
       children: [
         Positioned.fill(
@@ -83,6 +92,8 @@ class ArrowEditor extends StatelessWidget {
               painter: _ArrowGuidePainter(
                 points: points,
                 color: colors.accent.withValues(alpha: 0.55),
+                snapPoint: snapPoint == null ? null : _toScreen(snapPoint!),
+                snapColor: colors.accent,
               ),
             ),
           ),
@@ -105,11 +116,12 @@ class ArrowEditor extends StatelessWidget {
                   ? 'end'
                   : 'control $point',
               isControl: point > 0 && point < points.length - 1,
-              position: data.point(point),
+              position: canvasPoints[point],
               canvasScale: canvasScale,
               onChangeStart: onChangeStart,
-              onChanged: (position) => onPointChanged(point, position),
+              onChanged: (position, pointer) => onPointChanged(point, position, pointer),
               onChangeEnd: onChangeEnd,
+              onCancel: onCancel,
             ),
           ),
       ],
@@ -126,6 +138,7 @@ class _ArrowPointHandle extends StatefulWidget {
     required this.onChangeStart,
     required this.onChanged,
     required this.onChangeEnd,
+    required this.onCancel,
     super.key,
   });
 
@@ -137,8 +150,9 @@ class _ArrowPointHandle extends StatefulWidget {
   final Offset position;
   final double canvasScale;
   final VoidCallback onChangeStart;
-  final ValueChanged<Offset> onChanged;
+  final void Function(Offset position, Offset globalPointer) onChanged;
   final VoidCallback onChangeEnd;
+  final VoidCallback onCancel;
 
   @override
   State<_ArrowPointHandle> createState() => _ArrowPointHandleState();
@@ -170,10 +184,16 @@ class _ArrowPointHandleState extends State<_ArrowPointHandle> {
           onPanUpdate: (details) {
             final position = _requestedPosition! + details.delta / widget.canvasScale;
             _requestedPosition = position;
-            widget.onChanged(position);
+            widget.onChanged(position, details.globalPosition);
           },
-          onPanEnd: (_) => _finishDrag(),
-          onPanCancel: _finishDrag,
+          onPanEnd: (_) {
+            _requestedPosition = null;
+            widget.onChangeEnd();
+          },
+          onPanCancel: () {
+            _requestedPosition = null;
+            widget.onCancel();
+          },
           child: SizedBox.square(
             dimension: _ArrowPointHandle.size,
             child: Center(
@@ -191,21 +211,20 @@ class _ArrowPointHandleState extends State<_ArrowPointHandle> {
       ),
     );
   }
-
-  void _finishDrag() {
-    _requestedPosition = null;
-    widget.onChangeEnd();
-  }
 }
 
 class _ArrowGuidePainter extends CustomPainter {
   const _ArrowGuidePainter({
     required this.points,
     required this.color,
+    this.snapPoint,
+    this.snapColor,
   });
 
   final List<Offset> points;
   final Color color;
+  final Offset? snapPoint;
+  final Color? snapColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -215,11 +234,26 @@ class _ArrowGuidePainter extends CustomPainter {
     for (var index = 1; index < points.length; index++) {
       canvas.drawLine(points[index - 1], points[index], paint);
     }
+    if (snapPoint case final point?) _paintSnapRing(canvas, point, snapColor!);
   }
 
   @override
   bool shouldRepaint(_ArrowGuidePainter oldDelegate) =>
-      !listEquals(points, oldDelegate.points) || color != oldDelegate.color;
+      !listEquals(points, oldDelegate.points) ||
+      color != oldDelegate.color ||
+      snapPoint != oldDelegate.snapPoint ||
+      snapColor != oldDelegate.snapColor;
+}
+
+void _paintSnapRing(Canvas canvas, Offset center, Color color) {
+  canvas.drawCircle(
+    center,
+    6,
+    Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5,
+  );
 }
 
 // ---------- Painter ----------
@@ -360,6 +394,9 @@ class ArrowPreviewPainter extends CustomPainter {
       strokeWidth: preview.strokeWidth * canvasScale,
       dashScale: canvasScale,
     );
+    for (final point in preview.snapPoints) {
+      _paintSnapRing(canvas, _toScreen(point), guideColor);
+    }
   }
 
   Offset _toScreen(Offset point) => (point - canvasOffset) * canvasScale;
@@ -375,6 +412,7 @@ class ArrowPreviewPainter extends CustomPainter {
         oldDelegate.preview.strokeStyle != preview.strokeStyle ||
         oldDelegate.preview.strokeWidth != preview.strokeWidth ||
         oldDelegate.preview.showControls != preview.showControls ||
+        !listEquals(oldDelegate.preview.snapPoints, preview.snapPoints) ||
         oldDelegate.guideColor != guideColor;
   }
 }

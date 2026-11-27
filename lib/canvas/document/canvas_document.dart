@@ -53,12 +53,7 @@ final class CanvasDocument {
     if (document.schemaVersion != version) {
       throw const FormatException('document.version must be $version');
     }
-    final ids = <String>{};
-    for (final element in document.elements) {
-      if (!ids.add(element.id)) {
-        throw FormatException('Duplicate canvas element id: ${element.id}');
-      }
-    }
+    validateElementRelationships(document.elements);
     return document;
   }
 
@@ -91,4 +86,36 @@ final class CanvasDocument {
     background: background ?? this.background,
     elements: elements ?? this.elements,
   );
+}
+
+bool isArrowAttachmentTarget(CanvasElementData value) => switch (value) {
+  ShapeElementData() || TextElementData() || CodeElementData() || MediaElementData() => true,
+  ArrowElementData() || PenElementData() => false,
+};
+
+void validateArrowAttachment(ArrowAttachment attachment, CanvasElementData? target) {
+  if (attachment.targetId.isEmpty) {
+    throw const FormatException('Arrow attachment targetId must not be empty');
+  }
+  if (target == null || target.id != attachment.targetId || !isArrowAttachmentTarget(target)) {
+    throw FormatException('Invalid arrow attachment target: ${attachment.targetId}');
+  }
+}
+
+void validateElementRelationships(Iterable<CanvasElementData> elements) {
+  final byId = <String, CanvasElementData>{};
+  for (final element in elements) {
+    if (byId.containsKey(element.id)) {
+      throw FormatException('Duplicate canvas element id: ${element.id}');
+    }
+    byId[element.id] = element;
+  }
+  for (final arrow in byId.values.whereType<ArrowElementData>()) {
+    if (arrow.startAttachment case final attachment?) {
+      validateArrowAttachment(attachment, byId[attachment.targetId]);
+    }
+    if (arrow.endAttachment case final attachment?) {
+      validateArrowAttachment(attachment, byId[attachment.targetId]);
+    }
+  }
 }

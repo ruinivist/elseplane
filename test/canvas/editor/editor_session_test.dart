@@ -25,6 +25,21 @@ ShapeElementData _shape(String id, {bool auto = false}) => ShapeElementData(
 CanvasDocument _document(List<CanvasElementData> elements) =>
     CanvasDocument(background: CanvasBackgroundKind.plain, elements: elements);
 
+const _startAttachment = ArrowAttachment(targetId: 'a', side: ArrowAnchorSide.right);
+const _endAttachment = ArrowAttachment(targetId: 'b', side: ArrowAnchorSide.left);
+
+final _attachedArrow = ArrowElementData(
+  id: 'arrow',
+  start: const Offset(100, 50),
+  controls: const [Offset(150, 75)],
+  end: const Offset(200, 50),
+  color: const Color(0xff000000),
+  strokeStyle: ArrowStrokeStyle.solid,
+  strokeWidth: 2,
+  startAttachment: _startAttachment,
+  endAttachment: _endAttachment,
+);
+
 EditorSession _session(List<CanvasElementData> elements) {
   final session = EditorSession(_document(elements), initialColor: const Color(0xff000000));
   addTearDown(session.dispose);
@@ -34,6 +49,102 @@ EditorSession _session(List<CanvasElementData> elements) {
 // ---------- Operations and history ----------
 
 void main() {
+  test('insertion validates relationships against the prospective document', () {
+    final session = _session([_shape('a')]);
+    final original = session.document;
+    expect(() => _session([_attachedArrow]), throwsArgumentError);
+    expect(() => session.insert([_attachedArrow]), throwsArgumentError);
+    expect(session.document, same(original));
+    session.insert([_attachedArrow, _shape('b')]);
+    expect(session.document.elements.map((value) => value.id), ['a', 'arrow', 'b']);
+  });
+
+  test('endpoint edits validate before publishing and preserve the opposite binding and controls', () {
+    final session = _session([_attachedArrow, _shape('a'), _shape('b')]);
+    final original = session.document;
+    var publications = 0;
+    session.documentChanges.addListener(() => publications++);
+    expect(
+      () => session.setArrowEndpoint(
+        'arrow',
+        start: false,
+        position: Offset.zero,
+        opposite: Offset.zero,
+        attachment: const ArrowAttachment(targetId: 'arrow', side: ArrowAnchorSide.left),
+      ),
+      throwsFormatException,
+    );
+    expect(session.document, same(original));
+    expect(publications, 0);
+
+    session.setArrowEndpoint(
+      'arrow',
+      start: false,
+      position: const Offset(220, 50),
+      opposite: const Offset(90, 50),
+      attachment: _endAttachment,
+    );
+    expect(session.document, same(original));
+    expect(publications, 0);
+
+    const resolvedStart = Offset(190, 50);
+    session.setArrowEndpoint(
+      'arrow',
+      start: false,
+      position: resolvedStart,
+      opposite: resolvedStart,
+      attachment: _startAttachment,
+    );
+    final attached = session.element('arrow')! as ArrowElementData;
+    expect(attached, _attachedArrow.copyWith(end: resolvedStart, endAttachment: _startAttachment));
+    expect(session.document.elements.last, attached);
+    session
+      ..finishOperation()
+      ..setArrowEndpoint('arrow', start: false, position: resolvedStart, opposite: resolvedStart);
+    final detached = session.element('arrow')! as ArrowElementData;
+    expect((detached.end - resolvedStart).distance, closeTo(arrowMinimumLength, 0.001));
+    expect(detached, attached.copyWith(end: detached.end, clearEndAttachment: true));
+    expect(publications, 2);
+    session
+      ..finishOperation()
+      ..undo();
+    expect(session.element('arrow'), attached);
+    session.undo();
+    expect(session.document, original);
+  });
+
+  test('removal frees only affected ends and groups resolved positions and fallbacks into one undo', () {
+    final session = _session([_attachedArrow, _shape('a'), _shape('b')]);
+    final original = session.document;
+    final snapshots = <CanvasDocument>[];
+    session.documentChanges.addListener(() => snapshots.add(session.document));
+    const resolved = Offset(123, 45);
+    session
+      ..remove(['a'], resolvedEnds: {'arrow': (start: resolved, end: Offset.zero)})
+      ..remove(['b'])
+      ..finishOperation();
+    final detachedStart = _attachedArrow.copyWith(start: resolved, clearStartAttachment: true);
+    expect(snapshots[0].elements, [detachedStart, _shape('b')]);
+    expect(snapshots[1].elements, [detachedStart.copyWith(clearEndAttachment: true)]);
+    session.undo();
+    expect(session.document, original);
+    session.redo();
+    expect(session.document, snapshots[1]);
+  });
+
+  test('moving a target leaves its arrow unchanged and explicit arrow moves keep bound fallbacks', () {
+    final arrow = _attachedArrow.copyWith(clearEndAttachment: true);
+    final session = _session([arrow, _shape('a')]);
+    const delta = Offset(12, 7);
+    session.move(['a'], delta);
+    expect(session.document.elements.first, same(arrow));
+    session.move(['a', 'arrow'], delta);
+    expect(
+      session.element('arrow'),
+      arrow.copyWith(end: arrow.end + delta, controls: [arrow.controls.single + delta]),
+    );
+  });
+
   test('shape text edits validate fields, promote, and group history', () {
     final shape = _shape('shape', auto: true);
     final other = _shape('other');

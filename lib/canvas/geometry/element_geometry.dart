@@ -9,18 +9,19 @@ import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 
 // ---------- Transforms ----------
 
-CanvasElementData moveElement(CanvasElementData value, Offset delta) => switch (value) {
-  final TextElementData a => a.copyWith(position: a.position + delta),
-  final CodeElementData a => a.copyWith(position: a.position + delta),
-  final MediaElementData a => a.copyWith(position: a.position + delta),
-  final ShapeElementData a => a.copyWith(position: a.position + delta),
-  final PenElementData a => a.copyWith(position: a.position + delta),
-  final ArrowElementData a => a.copyWith(
-    start: a.start + delta,
-    controls: [for (final point in a.controls) point + delta],
-    end: a.end + delta,
-  ),
-};
+CanvasElementData moveElement(CanvasElementData value, Offset delta, {bool keepAttachedEndpoints = false}) =>
+    switch (value) {
+      final TextElementData a => a.copyWith(position: a.position + delta),
+      final CodeElementData a => a.copyWith(position: a.position + delta),
+      final MediaElementData a => a.copyWith(position: a.position + delta),
+      final ShapeElementData a => a.copyWith(position: a.position + delta),
+      final PenElementData a => a.copyWith(position: a.position + delta),
+      final ArrowElementData a => a.copyWith(
+        start: keepAttachedEndpoints && a.startAttachment != null ? a.start : a.start + delta,
+        controls: [for (final point in a.controls) point + delta],
+        end: keepAttachedEndpoints && a.endAttachment != null ? a.end : a.end + delta,
+      ),
+    };
 
 Rect elementBounds(CanvasElementData value, {required double codeTitleHeight, required Size mediaSize}) =>
     switch (value) {

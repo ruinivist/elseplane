@@ -20,6 +20,9 @@ then read the authority relevant to the work. Do not create a separate
   superseded by ADR 0005.
 - [GitHub sync UX](specs/github-sync-ux.md) covers Sync settings and
   the canvas title's uncommitted-changes marker and commit action.
+- [Arrow attachments](specs/arrow-attachments.md) defines how
+  arrows connect to blocks. The [implementation plan](plans/arrow-attachments.md)
+  covers geometry, editor changes, and verification.
 - [Notifications](specs/notifications.md) defines workspace feedback cards.
   The [implementation plan](plans/notifications.md) covers the pilot and rollout.
 - [Surface animations](specs/surface-animations.md) defines shared Glass and

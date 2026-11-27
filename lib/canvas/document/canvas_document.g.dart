@@ -422,6 +422,32 @@ Map<String, dynamic> _$PenElementDataToJson(PenElementData instance) =>
       'streamline': instance.streamline,
     };
 
+ArrowAttachment _$ArrowAttachmentFromJson(Map<String, dynamic> json) =>
+    $checkedCreate('ArrowAttachment', json, ($checkedConvert) {
+      $checkKeys(json, allowedKeys: const ['targetId', 'side']);
+      final val = ArrowAttachment._json(
+        targetId: $checkedConvert('targetId', (v) => v as String),
+        side: $checkedConvert(
+          'side',
+          (v) => $enumDecode(_$ArrowAnchorSideEnumMap, v),
+        ),
+      );
+      return val;
+    });
+
+Map<String, dynamic> _$ArrowAttachmentToJson(ArrowAttachment instance) =>
+    <String, dynamic>{
+      'targetId': instance.targetId,
+      'side': _$ArrowAnchorSideEnumMap[instance.side]!,
+    };
+
+const _$ArrowAnchorSideEnumMap = {
+  ArrowAnchorSide.top: 'top',
+  ArrowAnchorSide.right: 'right',
+  ArrowAnchorSide.bottom: 'bottom',
+  ArrowAnchorSide.left: 'left',
+};
+
 ArrowElementData _$ArrowElementDataFromJson(
   Map<String, dynamic> json,
 ) => $checkedCreate('ArrowElementData', json, ($checkedConvert) {
@@ -437,7 +463,10 @@ ArrowElementData _$ArrowElementDataFromJson(
       'color',
       'strokeStyle',
       'strokeWidth',
+      'startAttachment',
+      'endAttachment',
     ],
+    disallowNullValues: const ['startAttachment', 'endAttachment'],
   );
   final val = ArrowElementData._json(
     id: $checkedConvert('id', (v) => v as String),
@@ -467,6 +496,14 @@ ArrowElementData _$ArrowElementDataFromJson(
       (v) => $enumDecode(_$ArrowStrokeStyleEnumMap, v),
     ),
     strokeWidth: $checkedConvert('strokeWidth', (v) => (v as num).toDouble()),
+    startAttachment: $checkedConvert(
+      'startAttachment',
+      (v) => v == null ? null : ArrowAttachment.fromJson(v),
+    ),
+    endAttachment: $checkedConvert(
+      'endAttachment',
+      (v) => v == null ? null : ArrowAttachment.fromJson(v),
+    ),
     autoArrange: $checkedConvert('autoArrange', (v) => v as bool? ?? true),
   );
   return val;
@@ -484,6 +521,8 @@ Map<String, dynamic> _$ArrowElementDataToJson(
   'color': ?const _ArgbColorConverter().toJson(instance.color),
   'strokeStyle': _$ArrowStrokeStyleEnumMap[instance.strokeStyle]!,
   'strokeWidth': instance.strokeWidth,
+  'startAttachment': ?instance.startAttachment?.toJson(),
+  'endAttachment': ?instance.endAttachment?.toJson(),
 };
 
 const _$ArrowStrokeStyleEnumMap = {

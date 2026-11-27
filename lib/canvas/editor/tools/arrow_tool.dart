@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'package:elseplane/canvas/document/canvas_document.dart';
 import 'package:elseplane/canvas/editor/editor_session.dart';
+import 'package:elseplane/canvas/geometry/arrow_anchor_geometry.dart';
 import 'package:elseplane/canvas/geometry/arrow_geometry.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -17,15 +18,37 @@ import 'package:uuid/uuid.dart';
 class ArrowTool extends ChangeNotifier {
   // ---------- Construction ----------
 
-  ArrowTool({required this.session, required this.onArrow});
+  ArrowTool({
+    required this.session,
+    required this.onArrow,
+    this.snapArrow,
+    this.resolveAnchor,
+    this.screenToCanvas,
+  });
 
   final EditorSession Function() session;
   final ValueChanged<ArrowElementData> onArrow;
+  final ArrowSnap? Function(Offset)? snapArrow;
+  final Offset? Function(ArrowAttachment)? resolveAnchor;
+  final Offset Function(Offset)? screenToCanvas;
   final _uuid = const Uuid();
   int? _pointer;
   String? _id;
-  Offset? _start;
-  Offset? _end;
+  Offset? _rawStart;
+  Offset? _rawEnd;
+  Offset? _screenStart;
+  Offset? _screenEnd;
+  ArrowSnap? _startSnap;
+  Offset? get _start {
+    final snap = _startSnap;
+    return snap == null ? _rawStart : resolveAnchor?.call(snap.attachment) ?? snap.position;
+  }
+
+  Offset? get _requestedEnd {
+    final screen = _screenEnd;
+    return screen == null ? _rawEnd : screenToCanvas?.call(screen) ?? _rawEnd;
+  }
+
   final _controls = <Offset>[];
   int _buttons = 0;
   Color get _color => session().defaults.arrowColor;
@@ -41,8 +64,11 @@ class ArrowTool extends ChangeNotifier {
 
   ArrowPreview? get preview {
     final start = _start;
-    final end = _end;
-    if (start == null || end == null) return null;
+    final requested = _requestedEnd;
+    if (start == null || requested == null) return null;
+    final initial = _screenEnd == null;
+    final snap = initial ? _startSnap : snapArrow?.call(requested);
+    final end = initial ? start : snap?.position ?? requested;
     return (
       geometry: ArrowGeometry(
         start: start,
@@ -53,6 +79,7 @@ class ArrowTool extends ChangeNotifier {
       strokeStyle: _strokeStyle,
       strokeWidth: _strokeWidth,
       showControls: _controls.isNotEmpty,
+      snapPoints: [if (snap != null) end],
     );
   }
 
@@ -82,15 +109,16 @@ class ArrowTool extends ChangeNotifier {
     if (event.buttons != kPrimaryButton || isDrawing) return;
     _pointer = event.pointer;
     _id = _uuid.v4();
-    _start = canvasPosition;
-    _end = canvasPosition;
+    _rawStart = _rawEnd = canvasPosition;
+    _screenStart = event.localPosition;
+    _startSnap = snapArrow?.call(canvasPosition);
     _buttons = event.buttons;
     notifyListeners();
   }
 
   void onPointerMove(PointerMoveEvent event, Offset canvasPosition) {
     if (!ownsPointer(event.pointer)) return;
-    _end = canvasPosition;
+    _sampleEnd(event.localPosition, canvasPosition);
     if (event.kind == PointerDeviceKind.mouse) {
       if (event.buttons & kPrimaryButton == 0) {
         _finish();
@@ -106,15 +134,15 @@ class ArrowTool extends ChangeNotifier {
 
   void onPointerUp(PointerUpEvent event, Offset canvasPosition) {
     if (!ownsPointer(event.pointer)) return;
-    _end = canvasPosition;
+    _sampleEnd(event.localPosition, canvasPosition);
     _finish();
   }
 
   void _finish() {
     final id = _id;
     final start = _start;
-    final end = _end;
-    final arrow = id != null && start != null && end != null ? _newArrow(id, start, end) : null;
+    final requested = _requestedEnd;
+    final arrow = id != null && start != null && requested != null ? _newArrow(id, start, requested) : null;
     _clearPreview();
     if (arrow != null) onArrow(arrow);
   }
@@ -131,13 +159,26 @@ class ArrowTool extends ChangeNotifier {
 
   // ---------- Private helpers ----------
 
-  ArrowElementData? _newArrow(String id, Offset start, Offset end) {
-    if ((end - start).distance < arrowMinimumLength) return null;
+  void _sampleEnd(Offset screen, Offset position) {
+    _screenEnd = screen;
+    _rawEnd = position;
+  }
+
+  ArrowElementData? _newArrow(String id, Offset start, Offset requested) {
+    final dragStart = screenToCanvas?.call(_screenStart!) ?? _rawStart!;
+    if ((requested - dragStart).distance < arrowMinimumLength) return null;
+    final snap = snapArrow?.call(requested);
+    final end = snap?.position ?? requested;
+    if ((end - start).distance < arrowMinimumLength) {
+      return null;
+    }
     return ArrowElementData(
       id: id,
       start: start,
       controls: _curveControls(start, end),
       end: end,
+      startAttachment: _startSnap?.attachment,
+      endAttachment: snap?.attachment,
       color: _color,
       strokeStyle: _strokeStyle,
       strokeWidth: _strokeWidth,
@@ -150,8 +191,11 @@ class ArrowTool extends ChangeNotifier {
   void _clearPreview() {
     _pointer = null;
     _id = null;
-    _start = null;
-    _end = null;
+    _rawStart = null;
+    _rawEnd = null;
+    _screenStart = null;
+    _screenEnd = null;
+    _startSnap = null;
     _controls.clear();
     _buttons = 0;
     notifyListeners();
@@ -182,4 +226,5 @@ typedef ArrowPreview = ({
   ArrowStrokeStyle strokeStyle,
   double strokeWidth,
   bool showControls,
+  List<Offset> snapPoints,
 });
